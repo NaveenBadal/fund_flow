@@ -1,63 +1,209 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/ai_provider.dart';
+import '../models/budget.dart';
+import '../models/custom_category.dart';
 import '../models/expense.dart';
 import '../models/ai_log.dart';
+import '../models/financial_health_score.dart';
+import '../models/flutter_gemma_model_info.dart';
+import '../models/merchant_stats.dart';
+import '../models/spending_insight.dart';
+import '../services/anomaly_detector.dart';
 import '../services/database_helper.dart';
+import '../services/export_service.dart';
+import '../services/flutter_gemma_service.dart';
 import '../services/gemini_model_catalog_service.dart';
+import '../services/insights_service.dart';
+import '../services/notification_service.dart';
+import '../services/offline_model_service.dart';
+import '../services/recurring_detector.dart';
 import '../services/sms_service.dart';
 import '../services/categorization_service.dart';
+import '../utils/category_utils.dart';
 
-// Secure Storage for API Key and Settings
+// ─── Infrastructure ────────────────────────────────────────────────────────
+
 final secureStorageProvider = Provider((ref) => const FlutterSecureStorage());
-const geminiModelStorageKey = 'gemini_model';
-final geminiModelCatalogServiceProvider = Provider((ref) => const GeminiModelCatalogService());
+final geminiModelCatalogServiceProvider =
+    Provider((ref) => const GeminiModelCatalogService());
+final offlineModelServiceProvider =
+    Provider((ref) => const OfflineModelService());
+final flutterGemmaServiceProvider =
+    Provider((ref) => const FlutterGemmaService());
+final exportServiceProvider = Provider((ref) => const ExportService());
 
-// API Key Provider
-class ApiKeyNotifier extends Notifier<String?> {
+// ─── AI Provider selection ─────────────────────────────────────────────────
+
+class ProviderApiKeysNotifier extends Notifier<Map<AiProviderType, String>> {
   @override
-  String? build() => null;
-  void setKey(String? key) => state = key;
-}
-final apiKeyProvider = NotifierProvider<ApiKeyNotifier, String?>(ApiKeyNotifier.new);
+  Map<AiProviderType, String> build() =>
+      {for (final p in AiProviderType.values) p: ''};
 
-// Sync Lookback Days Provider
+  void setKey(AiProviderType provider, String key) =>
+      state = {...state, provider: key};
+}
+
+final providerApiKeysProvider =
+    NotifierProvider<ProviderApiKeysNotifier, Map<AiProviderType, String>>(
+        ProviderApiKeysNotifier.new);
+
+class SelectedAiProviderNotifier extends Notifier<AiProviderType> {
+  @override
+  AiProviderType build() => AiProviderType.gemini;
+  void setProvider(AiProviderType p) => state = p;
+}
+
+final selectedAiProviderProvider =
+    NotifierProvider<SelectedAiProviderNotifier, AiProviderType>(
+        SelectedAiProviderNotifier.new);
+
 class SyncLookbackNotifier extends Notifier<int> {
   @override
   int build() => 1;
   void setDays(int days) => state = days;
 }
-final syncLookbackProvider = NotifierProvider<SyncLookbackNotifier, int>(SyncLookbackNotifier.new);
 
-// Gemini Model Provider
-class GeminiModelNotifier extends Notifier<String> {
+final syncLookbackProvider =
+    NotifierProvider<SyncLookbackNotifier, int>(SyncLookbackNotifier.new);
+
+const onDeviceMaxTokensStorageKey = 'on_device_max_tokens';
+const onDeviceMaxTokensDefault = 4096;
+
+class OnDeviceMaxTokensNotifier extends Notifier<int> {
   @override
-  String build() => defaultGeminiModel;
-
-  void setModel(String model) => state = model;
+  int build() => onDeviceMaxTokensDefault;
+  void setTokens(int tokens) => state = tokens;
 }
-final geminiModelProvider = NotifierProvider<GeminiModelNotifier, String>(GeminiModelNotifier.new);
-final availableGeminiModelsProvider = FutureProvider.family<List<GeminiModelCatalogItem>, String>((ref, apiKey) async {
-  if (apiKey.trim().isEmpty) return const [];
-  final service = ref.watch(geminiModelCatalogServiceProvider);
-  return service.fetchModels(apiKey.trim());
+
+final onDeviceMaxTokensProvider =
+    NotifierProvider<OnDeviceMaxTokensNotifier, int>(
+        OnDeviceMaxTokensNotifier.new);
+
+class ProviderModelsNotifier extends Notifier<Map<AiProviderType, String>> {
+  @override
+  Map<AiProviderType, String> build() =>
+      {for (final p in AiProviderType.values) p: defaultModelFor(p)};
+
+  void setModel(AiProviderType provider, String model) =>
+      state = {...state, provider: model};
+}
+
+final providerModelsProvider =
+    NotifierProvider<ProviderModelsNotifier, Map<AiProviderType, String>>(
+        ProviderModelsNotifier.new);
+
+final activeApiKeyProvider = Provider<String?>((ref) {
+  final provider = ref.watch(selectedAiProviderProvider);
+  final apiKeys = ref.watch(providerApiKeysProvider);
+  final key = apiKeys[provider]?.trim();
+  return (key == null || key.isEmpty) ? null : key;
 });
 
-// Theme Mode Provider
+final activeModelProvider = Provider<String>((ref) {
+  final provider = ref.watch(selectedAiProviderProvider);
+  final models = ref.watch(providerModelsProvider);
+  final model = models[provider]?.trim();
+  return (model == null || model.isEmpty) ? defaultModelFor(provider) : model;
+});
+
+// ─── Model catalog providers ───────────────────────────────────────────────
+
+final availableGeminiModelsProvider =
+    FutureProvider.family<List<GeminiModelCatalogItem>, String>(
+        (ref, apiKey) async {
+  if (apiKey.trim().isEmpty) return const [];
+  return ref.watch(geminiModelCatalogServiceProvider).fetchModels(apiKey.trim());
+});
+
+final availableOfflineModelsProvider =
+    FutureProvider<List<OfflineModelInfo>>((ref) async {
+  return ref.watch(offlineModelServiceProvider).listModels();
+});
+
+final availableFlutterGemmaModelsProvider =
+    FutureProvider<List<FlutterGemmaModelInfo>>((ref) async {
+  return ref.watch(flutterGemmaServiceProvider).listModels();
+});
+
+// ─── Theme ────────────────────────────────────────────────────────────────
+
 class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
   ThemeMode build() => ThemeMode.system;
   void setThemeMode(ThemeMode mode) => state = mode;
 }
-final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
-// Initialize settings from storage
+final themeModeProvider =
+    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+// ─── Privacy / App lock ────────────────────────────────────────────────────
+
+class PrivateModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  
+  void toggle() {
+    state = !state;
+  }
+  
+  void set(bool v) {
+    state = v;
+  }
+}
+
+final privateModeProvider =
+    NotifierProvider<PrivateModeNotifier, bool>(PrivateModeNotifier.new);
+
+class AppLockNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  
+  Future<void> toggle() async {
+    state = !state;
+    await ref.read(secureStorageProvider).write(key: 'app_lock_enabled', value: state.toString());
+  }
+  
+  void set(bool v) => state = v;
+}
+
+final appLockEnabledProvider =
+    NotifierProvider<AppLockNotifier, bool>(AppLockNotifier.new);
+
+// ─── Notification settings ─────────────────────────────────────────────────
+
+class DailyDigestNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  
+  Future<void> toggle() async {
+    state = !state;
+    await ref.read(secureStorageProvider).write(key: 'daily_digest_enabled', value: state.toString());
+  }
+  
+  void set(bool v) => state = v;
+}
+
+final dailyDigestEnabledProvider =
+    NotifierProvider<DailyDigestNotifier, bool>(DailyDigestNotifier.new);
+
+// ─── Settings initializer ──────────────────────────────────────────────────
+
 final settingsInitializer = FutureProvider<void>((ref) async {
   final storage = ref.watch(secureStorageProvider);
-  
-  final apiKey = await storage.read(key: 'gemini_api_key');
-  if (apiKey != null) {
-    ref.read(apiKeyProvider.notifier).setKey(apiKey);
+
+  for (final provider in AiProviderType.values) {
+    final apiKey = await storage.read(key: provider.apiKeyStorageKey);
+    if (apiKey != null) {
+      ref.read(providerApiKeysProvider.notifier).setKey(provider, apiKey);
+    }
+    final savedModel = await storage.read(key: provider.modelStorageKey);
+    if (savedModel != null && savedModel.trim().isNotEmpty) {
+      ref.read(providerModelsProvider.notifier).setModel(provider, savedModel.trim());
+    }
   }
 
   final lookback = await storage.read(key: 'sync_lookback_days');
@@ -65,9 +211,29 @@ final settingsInitializer = FutureProvider<void>((ref) async {
     ref.read(syncLookbackProvider.notifier).setDays(int.tryParse(lookback) ?? 1);
   }
 
-  final geminiModel = await storage.read(key: geminiModelStorageKey);
-  if (geminiModel != null && geminiModel.trim().isNotEmpty) {
-    ref.read(geminiModelProvider.notifier).setModel(geminiModel.trim());
+  final maxTokens = await storage.read(key: onDeviceMaxTokensStorageKey);
+  if (maxTokens != null) {
+    ref.read(onDeviceMaxTokensProvider.notifier)
+        .setTokens(int.tryParse(maxTokens) ?? onDeviceMaxTokensDefault);
+  }
+
+  final selectedProvider = await storage.read(key: selectedAiProviderStorageKey);
+  ref
+      .read(selectedAiProviderProvider.notifier)
+      .setProvider(aiProviderFromId(selectedProvider));
+
+  final legacyGeminiModel = await storage.read(key: 'gemini_model');
+  if (legacyGeminiModel != null && legacyGeminiModel.trim().isNotEmpty) {
+    ref
+        .read(providerModelsProvider.notifier)
+        .setModel(AiProviderType.gemini, legacyGeminiModel.trim());
+  }
+
+  final legacyGeminiKey = await storage.read(key: 'gemini_api_key');
+  if (legacyGeminiKey != null && legacyGeminiKey.trim().isNotEmpty) {
+    ref
+        .read(providerApiKeysProvider.notifier)
+        .setKey(AiProviderType.gemini, legacyGeminiKey.trim());
   }
 
   final theme = await storage.read(key: 'theme_mode');
@@ -78,90 +244,318 @@ final settingsInitializer = FutureProvider<void>((ref) async {
     );
     ref.read(themeModeProvider.notifier).setThemeMode(mode);
   }
+
+  final appLock = await storage.read(key: 'app_lock_enabled');
+  ref.read(appLockEnabledProvider.notifier).set(appLock == 'true');
+
+  final dailyDigest = await storage.read(key: 'daily_digest_enabled');
+  ref.read(dailyDigestEnabledProvider.notifier).set(dailyDigest == 'true');
 });
 
-// Database Provider
+// ─── Database ─────────────────────────────────────────────────────────────
+
 final databaseProvider = Provider((ref) => DatabaseHelper.instance);
 
-// Expense List Notifier
+// ─── Expenses ─────────────────────────────────────────────────────────────
+
 class ExpenseListNotifier extends AsyncNotifier<List<Expense>> {
   @override
   Future<List<Expense>> build() async {
-    final db = ref.watch(databaseProvider);
-    return await db.getAllExpenses();
+    return await ref.watch(databaseProvider).getAllExpenses();
   }
 
   Future<void> refreshExpenses() async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final db = ref.read(databaseProvider);
-      return await db.getAllExpenses();
-    });
+    state = await AsyncValue.guard(
+        () => ref.read(databaseProvider).getAllExpenses());
   }
 
   Future<void> addExpense(Expense expense) async {
-    final db = ref.read(databaseProvider);
-    await db.insertExpense(expense);
+    await ref.read(databaseProvider).insertExpense(expense);
+    await refreshExpenses();
+  }
+
+  Future<void> updateExpense(Expense expense) async {
+    await ref.read(databaseProvider).updateExpense(expense);
+    // Learn category correction
+    try {
+      final key = (expense.normalizedMerchant ?? expense.merchant).toLowerCase().trim();
+      await ref.read(databaseProvider).upsertMerchantCategory(key, expense.category);
+    } catch (_) {}
+    await refreshExpenses();
+  }
+
+  Future<void> deleteExpense(int id) async {
+    await ref.read(databaseProvider).deleteExpense(id);
     await refreshExpenses();
   }
 }
-final expenseListProvider = AsyncNotifierProvider<ExpenseListNotifier, List<Expense>>(ExpenseListNotifier.new);
 
-// AI Logs Notifier
+final expenseListProvider =
+    AsyncNotifierProvider<ExpenseListNotifier, List<Expense>>(
+        ExpenseListNotifier.new);
+
+// ─── Custom categories ─────────────────────────────────────────────────────
+
+class CustomCategoryNotifier extends AsyncNotifier<List<CustomCategory>> {
+  @override
+  Future<List<CustomCategory>> build() async {
+    return await ref.watch(databaseProvider).getAllCustomCategories();
+  }
+
+  Future<void> _reload() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+        () => ref.read(databaseProvider).getAllCustomCategories());
+  }
+
+  Future<void> upsert(CustomCategory cat) async {
+    await ref.read(databaseProvider).insertOrUpdateCustomCategory(cat);
+    await _reload();
+  }
+
+  Future<void> remove(int id) async {
+    await ref.read(databaseProvider).deleteCustomCategory(id);
+    await _reload();
+  }
+}
+
+final customCategoryListProvider =
+    AsyncNotifierProvider<CustomCategoryNotifier, List<CustomCategory>>(
+        CustomCategoryNotifier.new);
+
+/// All category names: builtins + custom
+final allCategoryNamesProvider = Provider<List<String>>((ref) {
+  final custom = ref.watch(customCategoryListProvider).asData?.value ?? [];
+  return [...kBuiltinCategories, ...custom.map((c) => c.name)];
+});
+
+// ─── Budget ───────────────────────────────────────────────────────────────
+
+class BudgetNotifier extends AsyncNotifier<List<Budget>> {
+  @override
+  Future<List<Budget>> build() async {
+    return await ref.watch(databaseProvider).getAllBudgets();
+  }
+
+  Future<void> _reload() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+        () => ref.read(databaseProvider).getAllBudgets());
+  }
+
+  Future<void> upsert(Budget budget) async {
+    await ref.read(databaseProvider).insertOrUpdateBudget(budget);
+    await _reload();
+  }
+
+  Future<void> remove(String category) async {
+    await ref.read(databaseProvider).deleteBudget(category);
+    await _reload();
+  }
+}
+
+final budgetListProvider =
+    AsyncNotifierProvider<BudgetNotifier, List<Budget>>(BudgetNotifier.new);
+
+final budgetProgressProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  ref.watch(budgetListProvider);
+  ref.watch(expenseListProvider);
+  final now = DateTime.now();
+  return ref.read(databaseProvider).getBudgetProgress(now.year, now.month);
+});
+
+// ─── Analytics ────────────────────────────────────────────────────────────
+
+class AnalyticsPeriodNotifier extends Notifier<int> {
+  @override
+  int build() => 6;
+  void setPeriod(int months) => state = months;
+}
+
+final analyticsPeriodProvider =
+    NotifierProvider<AnalyticsPeriodNotifier, int>(AnalyticsPeriodNotifier.new);
+
+final monthlyTotalsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final months = ref.watch(analyticsPeriodProvider);
+  ref.watch(expenseListProvider);
+  return ref.read(databaseProvider).getMonthlyTotals(months: months);
+});
+
+final categoryTotalsForPeriodProvider =
+    FutureProvider<Map<String, double>>((ref) async {
+  final months = ref.watch(analyticsPeriodProvider);
+  ref.watch(expenseListProvider);
+  final to = DateTime.now();
+  final from = DateTime(to.year, to.month - months + 1, 1);
+  return ref.read(databaseProvider).getCategoryTotals(from, to);
+});
+
+final topMerchantsForPeriodProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final months = ref.watch(analyticsPeriodProvider);
+  ref.watch(expenseListProvider);
+  final to = DateTime.now();
+  final from = DateTime(to.year, to.month - months + 1, 1);
+  return ref.read(databaseProvider).getTopMerchants(from, to);
+});
+
+final currentMonthBalanceProvider =
+    FutureProvider<Map<String, double>>((ref) async {
+  ref.watch(expenseListProvider);
+  final now = DateTime.now();
+  return ref.read(databaseProvider).getMonthlyBalance(now.year, now.month);
+});
+
+// ─── Spending insights & anomalies ────────────────────────────────────────
+
+final spendingInsightsProvider = FutureProvider<List<SpendingInsight>>((ref) async {
+  final expenses = ref.watch(expenseListProvider).asData?.value ?? [];
+  return InsightsService.compute(expenses);
+});
+
+final anomalyAlertsProvider = FutureProvider<List<SpendingInsight>>((ref) async {
+  final expenses = ref.watch(expenseListProvider).asData?.value ?? [];
+  return AnomalyDetector.detect(expenses);
+});
+
+// ─── Financial health score ────────────────────────────────────────────────
+
+final financialHealthScoreProvider = FutureProvider<FinancialHealthScore>((ref) async {
+  final balance = await ref.watch(currentMonthBalanceProvider.future);
+  final budgetProg = await ref.watch(budgetProgressProvider.future);
+  final now = DateTime.now();
+  final prevMonth = now.month == 1
+      ? DateTime(now.year - 1, 12)
+      : DateTime(now.year, now.month - 1);
+  final prevBalance = await ref
+      .read(databaseProvider)
+      .getMonthlyBalance(prevMonth.year, prevMonth.month);
+
+  return FinancialHealthScore.compute(
+    totalIncome: balance['income'] ?? 0,
+    totalExpense: balance['expense'] ?? 0,
+    budgetProgress: budgetProg,
+    previousMonthExpense: prevBalance['expense'] ?? 0,
+  );
+});
+
+// ─── Merchant stats ────────────────────────────────────────────────────────
+
+final merchantStatsProvider =
+    FutureProvider.family<MerchantStats, String>((ref, merchant) async {
+  return ref.read(databaseProvider).getMerchantStats(merchant);
+});
+
+// ─── Heatmap data ──────────────────────────────────────────────────────────
+
+final heatmapDataProvider = FutureProvider<Map<DateTime, double>>((ref) async {
+  ref.watch(expenseListProvider);
+  final to = DateTime.now();
+  final from = to.subtract(const Duration(days: 364));
+  return ref.read(databaseProvider).getDailyTotals(from, to);
+});
+
+// ─── Year in review ────────────────────────────────────────────────────────
+
+final yearInReviewProvider =
+    FutureProvider.family<Map<String, dynamic>, int>((ref, year) async {
+  ref.watch(expenseListProvider);
+  return ref.read(databaseProvider).getYearInReview(year);
+});
+
+// ─── Parsed SMS audit ─────────────────────────────────────────────────────
+
+final parsedSmsAuditProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return ref.read(databaseProvider).getParsedSmsAudit();
+});
+
+// ─── AI Logs ──────────────────────────────────────────────────────────────
+
 class AiLogNotifier extends AsyncNotifier<List<AiLog>> {
   @override
   Future<List<AiLog>> build() async {
-    final db = ref.watch(databaseProvider);
-    return await db.getAllAiLogs();
+    return await ref.watch(databaseProvider).getAllAiLogs();
   }
 
   Future<void> refreshLogs() async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final db = ref.read(databaseProvider);
-      return await db.getAllAiLogs();
-    });
+    state = await AsyncValue.guard(
+        () => ref.read(databaseProvider).getAllAiLogs());
   }
 
   Future<void> clearLogs() async {
-    final db = ref.read(databaseProvider);
-    await db.clearAiLogs();
+    await ref.read(databaseProvider).clearAiLogs();
     await refreshLogs();
   }
 }
-final aiLogProvider = AsyncNotifierProvider<AiLogNotifier, List<AiLog>>(AiLogNotifier.new);
 
-// Sync Status Notifier
-enum SyncStatus { idle, requestingPermissions, fetchingSms, analyzing, complete, error }
+final aiLogProvider =
+    AsyncNotifierProvider<AiLogNotifier, List<AiLog>>(AiLogNotifier.new);
 
-class SyncNotifier extends Notifier<SyncStatus> {
+// ─── Sync ─────────────────────────────────────────────────────────────────
+
+enum SyncPhase { idle, requestingPermissions, fetchingSms, analyzing, complete, error }
+
+class SyncState {
+  const SyncState({this.phase = SyncPhase.idle, this.errorMessage});
+  final SyncPhase phase;
+  final String? errorMessage;
+
+  SyncState copyWith({SyncPhase? phase, String? errorMessage}) =>
+      SyncState(phase: phase ?? this.phase, errorMessage: errorMessage);
+
+  static const idle = SyncState();
+}
+
+class SyncNotifier extends Notifier<SyncState> {
   final SmsService _smsService = SmsService();
 
   @override
-  SyncStatus build() => SyncStatus.idle;
+  SyncState build() => SyncState.idle;
+
+  void _error(String message) {
+    state = SyncState(phase: SyncPhase.error, errorMessage: message);
+  }
 
   Future<void> sync() async {
-    final apiKey = ref.read(apiKeyProvider);
-    if (apiKey == null || apiKey.isEmpty) {
-      state = SyncStatus.error;
+    final provider = ref.read(selectedAiProviderProvider);
+    final needsApiKey = provider != AiProviderType.offline &&
+        provider != AiProviderType.flutterGemma;
+    final apiKey = needsApiKey ? ref.read(activeApiKeyProvider) : '';
+    final modelName = ref.read(activeModelProvider);
+
+    if (needsApiKey && (apiKey == null || apiKey.isEmpty)) {
+      _error('No API key configured for ${provider.displayName}. Go to Settings.');
+      return;
+    }
+    if (modelName.trim().isEmpty) {
+      _error('No model selected for ${provider.displayName}. Go to Settings and choose a model.');
       return;
     }
 
-    state = SyncStatus.requestingPermissions;
+    state = const SyncState(phase: SyncPhase.requestingPermissions);
     final hasPermission = await _smsService.requestPermissions();
     if (!hasPermission) {
-      state = SyncStatus.error;
+      _error('SMS permission denied. Grant SMS access in system settings.');
       return;
     }
 
-    state = SyncStatus.fetchingSms;
+    state = const SyncState(phase: SyncPhase.fetchingSms);
     final messages = await _smsService.getMessages();
     final db = ref.read(databaseProvider);
-    final modelName = ref.read(geminiModelProvider);
-    final catService = CategorizationService(apiKey, modelName: modelName);
+    final maxTokens = ref.read(onDeviceMaxTokensProvider);
+    final catService = CategorizationService(
+      apiKey ?? '',
+      provider: provider,
+      modelName: modelName,
+      onDeviceMaxTokens: maxTokens,
+    );
     final lookbackDays = ref.read(syncLookbackProvider);
 
-    state = SyncStatus.analyzing;
+    state = const SyncState(phase: SyncPhase.analyzing);
 
     final List<Map<String, dynamic>> unparsedSms = [];
     final Set<String> seenBodies = {};
@@ -173,41 +567,114 @@ class SyncNotifier extends Notifier<SyncStatus> {
     for (var msg in messages) {
       final msgBody = msg.body;
       final msgDate = msg.date ?? now;
+      final sender = msg.address ?? 'Unknown';
+      final timestamp = msg.date?.millisecondsSinceEpoch ?? 0;
 
       if (msgBody == null || msgDate.isBefore(cutoffDate)) continue;
-      if (seenBodies.contains(msgBody)) continue;
+      
+      // Use a compound key to track seen messages in this run
+      final seenKey = '$sender|$msgBody|$timestamp';
+      if (seenBodies.contains(seenKey)) continue;
 
       if (_smsService.isFinancialSms(msgBody)) {
-        final exists = await db.smsExists(msgBody);
-        if (!exists) {
+        final alreadyParsed = await db.isSmsParsed(msgBody, sender, timestamp);
+        if (!alreadyParsed) {
           unparsedSms.add({
             'body': msgBody,
             'date': msgDate.toIso8601String(),
+            'address': sender,
+            'timestamp': timestamp,
           });
-          seenBodies.add(msgBody);
+          seenBodies.add(seenKey);
         }
       }
     }
 
     if (unparsedSms.isNotEmpty) {
-      // Process in batches of 20
       const batchSize = 20;
       for (var i = 0; i < unparsedSms.length; i += batchSize) {
-        final end = (i + batchSize < unparsedSms.length) ? i + batchSize : unparsedSms.length;
+        final end =
+            (i + batchSize < unparsedSms.length) ? i + batchSize : unparsedSms.length;
         final batch = unparsedSms.sublist(i, end);
-        
-        final newExpenses = await catService.parseSmsBatch(batch);
-        for (var expense in newExpenses) {
-          await ref.read(expenseListProvider.notifier).addExpense(expense);
+
+        try {
+          final newExpenses = await compute(_parseBatchInIsolate, {
+            'catService': catService,
+            'batch': batch,
+          });
+          for (var expense in newExpenses) {
+            await ref.read(expenseListProvider.notifier).addExpense(expense);
+          }
+          // Only mark SMS as parsed when the AI actually extracted expenses.
+          // Otherwise the same SMS can be retried on the next sync.
+          if (newExpenses.isNotEmpty) {
+            await db.markSmsBatchParsed(batch);
+          }
+        } catch (_) {
+          // One bad batch must not abort the entire sync; the AI log is
+          // already written (or swallowed) inside parseSmsBatch.
         }
-        await ref.read(aiLogProvider.notifier).refreshLogs();
       }
+
+      // Detect recurring transactions after sync
+      try {
+        final all = await db.getAllExpenses();
+        final recurringFlags = RecurringDetector.detect(all);
+        await db.markRecurring(recurringFlags);
+      } catch (_) {}
     }
 
-    state = SyncStatus.complete;
+    // Always refresh the AI log list so the UI reflects the current DB state
+    // regardless of whether there were new SMS to process this run.
+    try {
+      await ref.read(aiLogProvider.notifier).refreshLogs();
+    } catch (_) {}
+
+    // Save last sync timestamp
+    await db.setAppMetadata('last_sync_at', DateTime.now().toIso8601String());
+
+    // Haptic feedback
+    HapticFeedback.mediumImpact();
+
+    // Check budget proximity
+    try {
+      final budgetProgress = await db.getBudgetProgress(now.year, now.month);
+      for (final b in budgetProgress) {
+        final spent = (b['spent'] as num).toDouble();
+        final limit = (b['limit_amount'] as num).toDouble();
+        if (limit > 0 && spent / limit >= 0.8) {
+          await NotificationService.instance.sendBudgetProximityAlert(
+            b['category'] as String,
+            spent / limit * 100,
+          );
+        }
+      }
+    } catch (_) {}
+
+    state = const SyncState(phase: SyncPhase.complete);
     Future.delayed(const Duration(seconds: 2), () {
-      if (state == SyncStatus.complete) state = SyncStatus.idle;
+      if (state.phase == SyncPhase.complete) state = SyncState.idle;
     });
   }
 }
-final syncProvider = NotifierProvider<SyncNotifier, SyncStatus>(SyncNotifier.new);
+
+Future<List<Expense>> _parseBatchInIsolate(Map<String, dynamic> params) async {
+  final CategorizationService catService = params['catService'];
+  final List<Map<String, dynamic>> batch = params['batch'];
+  return await catService.parseSmsBatch(batch);
+}
+
+final syncProvider =
+    NotifierProvider<SyncNotifier, SyncState>(SyncNotifier.new);
+
+// ─── Onboarding ────────────────────────────────────────────────────────────
+
+final onboardingDoneProvider = FutureProvider<bool>((ref) async {
+  final storage = ref.watch(secureStorageProvider);
+  final done = await storage.read(key: 'onboarding_done');
+  return done == 'true';
+});
+
+Future<void> markOnboardingDone(FlutterSecureStorage storage) async {
+  await storage.write(key: 'onboarding_done', value: 'true');
+}

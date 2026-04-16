@@ -18,8 +18,32 @@ class SmsService {
     );
   }
 
-  // All messages in the lookback period will be sent to AI for validation.
+  // Filters for messages that look like financial transactions (debit, credit, spent, etc.)
   bool isFinancialSms(String body) {
-    return true; 
+    final lowerBody = body.toLowerCase();
+    
+    // OTPs should be excluded first for security
+    if (lowerBody.contains('otp') || lowerBody.contains('verification code')) {
+      return false;
+    }
+
+    // Key terms indicating a transaction. 
+    // We include currency symbols and abbreviations.
+    final financialKeywords = [
+      'spent', 'debited', 'credited', 'paid', 'transaction', 'txn', 
+      'purchase', 'vpa', 'upi', 'bank', 'card', 'account', 'amt', 'amount',
+      'rs', 'inr', 'usd', 'balance', 'stmt', 'statement',
+      'transferred', 'received', 'sent', 'cr', 'dr', 'a/c', 'acct',
+      '₹', r'\$', '€'
+    ];
+
+    // We use a more relaxed regex that doesn't strictly require word boundaries 
+    // for symbols like ₹ or $. 
+    final pattern = RegExp(
+      '(${financialKeywords.join('|')})',
+      caseSensitive: false,
+    );
+
+    return pattern.hasMatch(lowerBody);
   }
 }
