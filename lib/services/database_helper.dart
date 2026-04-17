@@ -5,6 +5,7 @@ import '../models/custom_category.dart';
 import '../models/expense.dart';
 import '../models/ai_log.dart';
 import '../models/merchant_stats.dart';
+import '../models/savings_goal.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -24,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 10,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -38,6 +39,7 @@ class DatabaseHelper {
     await _createCustomCategoriesTable(db);
     await _createMerchantCategoryMapTable(db);
     await _createAppMetadataTable(db);
+    await _createSavingsGoalsTable(db);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -45,8 +47,8 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await _createParsedSmsTable(db);
       await db.execute('''
-        INSERT OR IGNORE INTO parsed_sms (body, parsed_at)
-        SELECT originalSms, date FROM expenses
+        INSERT OR IGNORE INTO parsed_sms (body, sender, date, parsed_at)
+        SELECT originalSms, '', 0, date FROM expenses
       ''');
     }
     if (oldVersion < 4) {
@@ -68,11 +70,22 @@ class DatabaseHelper {
       await _createAppMetadataTable(db);
     }
     if (oldVersion < 8) {
-      await db.execute("ALTER TABLE parsed_sms ADD COLUMN sender TEXT DEFAULT ''");
-      await db.execute("ALTER TABLE parsed_sms ADD COLUMN date INTEGER DEFAULT 0");
-      // Add unique constraint on (body, sender, date) if needed, 
-      // but for now we just add the columns. 
-      // sqlite doesn't support easy 'ALTER TABLE ADD UNIQUE'
+      // Columns may already exist if the DB was created at v3+ with the updated
+      // _createParsedSmsTable schema. Ignore "duplicate column" errors.
+      try {
+        await db.execute("ALTER TABLE parsed_sms ADD COLUMN sender TEXT DEFAULT ''");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE parsed_sms ADD COLUMN date INTEGER DEFAULT 0");
+      } catch (_) {}
+    }
+    if (oldVersion < 9) {
+      await _createSavingsGoalsTable(db);
+    }
+    if (oldVersion < 10) {
+      try {
+        await db.execute("ALTER TABLE parsed_sms ADD COLUMN skip_reason TEXT NOT NULL DEFAULT ''");
+      } catch (_) {}
     }
   }
 
@@ -112,11 +125,12 @@ CREATE TABLE ai_logs (
   Future _createParsedSmsTable(Database db) async {
     await db.execute('''
 CREATE TABLE parsed_sms (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  body      TEXT    NOT NULL,
-  sender    TEXT    NOT NULL,
-  date      INTEGER NOT NULL,
-  parsed_at TEXT    NOT NULL,
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  body        TEXT    NOT NULL,
+  sender      TEXT    NOT NULL DEFAULT '',
+  date        INTEGER NOT NULL DEFAULT 0,
+  parsed_at   TEXT    NOT NULL,
+  skip_reason TEXT    NOT NULL DEFAULT '',
   UNIQUE(body, sender, date)
 )
 ''');
@@ -155,6 +169,19 @@ CREATE TABLE IF NOT EXISTS merchant_category_map (
 ''');
   }
 
+  Future _createSavingsGoalsTable(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS savings_goals (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT    NOT NULL,
+  target_amount  REAL    NOT NULL,
+  current_amount REAL    NOT NULL DEFAULT 0,
+  deadline       TEXT    DEFAULT NULL,
+  color_value    INTEGER NOT NULL DEFAULT ${0xFF6750A4}
+)
+''');
+  }
+
   Future _createAppMetadataTable(Database db) async {
     await db.execute('''
 CREATE TABLE IF NOT EXISTS app_metadata (
@@ -173,6 +200,16 @@ CREATE TABLE IF NOT EXISTS app_metadata (
     return await db.insert('expenses', expense.toMap());
   }
 
+  Future<void> insertExpenses(List<Expense> expenses) async {
+    if (expenses.isEmpty) return;
+    final db = await instance.database;
+    final batch = db.batch();
+    for (final e in expenses) {
+      batch.insert('expenses', e.toMap());
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<int> updateExpense(Expense expense) async {
     final db = await instance.database;
     return await db.update(
@@ -181,6 +218,22 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       where: 'id = ?',
       whereArgs: [expense.id],
     );
+  }
+
+  /// Batch-update the is_recurring flag for a set of expenses.
+  Future<void> updateRecurringFlags(Map<int, bool> flags) async {
+    if (flags.isEmpty) return;
+    final db = await instance.database;
+    final batch = db.batch();
+    for (final entry in flags.entries) {
+      batch.update(
+        'expenses',
+        {'is_recurring': entry.value ? 1 : 0},
+        where: 'id = ?',
+        whereArgs: [entry.key],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<int> deleteExpense(int id) async {
@@ -257,21 +310,37 @@ CREATE TABLE IF NOT EXISTS app_metadata (
     return result.isNotEmpty;
   }
 
-  Future<void> markSmsBatchParsed(List<Map<String, dynamic>> smsList) async {
+  Future<Set<String>> getParsedSmsKeys(int sinceTimestamp) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'parsed_sms',
+      columns: ['body', 'sender', 'date'],
+      where: 'date >= ?',
+      whereArgs: [sinceTimestamp],
+    );
+    return rows.map((r) => '${r['sender']}|${r['body']}|${r['date']}').toSet();
+  }
+
+  Future<void> markSmsBatchParsed(
+    List<Map<String, dynamic>> smsList, {
+    Map<String, String> skipReasons = const {},
+  }) async {
     if (smsList.isEmpty) return;
     final db = await instance.database;
     final now = DateTime.now().toIso8601String();
     final batch = db.batch();
     for (final sms in smsList) {
+      final body = sms['body'] as String;
       batch.insert(
         'parsed_sms',
         {
-          'body': sms['body'],
+          'body': body,
           'sender': sms['address'],
           'date': sms['timestamp'],
           'parsed_at': now,
+          'skip_reason': skipReasons[body] ?? '',
         },
-        conflictAlgorithm: ConflictAlgorithm.ignore,
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
     await batch.commit(noResult: true);
@@ -284,6 +353,7 @@ CREATE TABLE IF NOT EXISTS app_metadata (
         p.id,
         p.body,
         p.parsed_at,
+        p.skip_reason,
         CASE WHEN e.id IS NOT NULL THEN 1 ELSE 0 END AS has_expense
       FROM parsed_sms p
       LEFT JOIN expenses e ON e.originalSms = p.body
@@ -626,6 +696,40 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   Future<void> clearAiLogs() async {
     final db = await instance.database;
     await db.delete('ai_logs');
+  }
+
+  // ─── Savings Goals CRUD ──────────────────────────────────────────────────
+
+  Future<int> insertOrUpdateSavingsGoal(SavingsGoal goal) async {
+    final db = await instance.database;
+    return await db.insert(
+      'savings_goals',
+      goal.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<SavingsGoal>> getAllSavingsGoals() async {
+    final db = await instance.database;
+    final result = await db.query('savings_goals', orderBy: 'name ASC');
+    return result.map(SavingsGoal.fromMap).toList();
+  }
+
+  Future<void> deleteSavingsGoal(int id) async {
+    final db = await instance.database;
+    await db.delete('savings_goals', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ─── Parsed SMS retry ────────────────────────────────────────────────────
+
+  Future<void> unmarkSmsParsed(List<String> bodies) async {
+    if (bodies.isEmpty) return;
+    final db = await instance.database;
+    final placeholders = List.filled(bodies.length, '?').join(', ');
+    await db.rawDelete(
+      'DELETE FROM parsed_sms WHERE body IN ($placeholders)',
+      bodies,
+    );
   }
 
   Future close() async {

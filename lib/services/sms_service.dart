@@ -27,14 +27,18 @@ class SmsService {
       return false;
     }
 
-    // Key terms indicating a transaction. 
-    // We include currency symbols and abbreviations.
+    // Key terms indicating a transaction.
+    // We include currency symbols, abbreviations, and short forms used by Indian banks.
     final financialKeywords = [
-      'spent', 'debited', 'credited', 'paid', 'transaction', 'txn', 
-      'purchase', 'vpa', 'upi', 'bank', 'card', 'account', 'amt', 'amount',
-      'rs', 'inr', 'usd', 'balance', 'stmt', 'statement',
-      'transferred', 'received', 'sent', 'cr', 'dr', 'a/c', 'acct',
-      '₹', r'\$', '€'
+      'spent', 'debited', 'credited', 'debit', 'credit', 'paid', 'txn',
+      'purchase', 'vpa', 'upi', 'bank', 'amt', 'amount',
+      'rs.', 'inr', 'rs ', '₹', r'\$', '€', 'withdrawn', 'deducted', 'avail bal',
+      'refunded', 'reversed', 'collected', 'payment', 'bill', 'due', 'money transfer',
+      // Short forms heavily used by HDFC, SBI, ICICI, Axis
+      ' dr ', ' cr ', 'dr.', 'cr.', 'dr-', 'cr-',
+      // Transfer/wallet keywords
+      'transferred', 'received', 'imps', 'neft', 'rtgs', 'mandate',
+      'a/c', 'acct', 'account', 'wallet', 'cashback',
     ];
 
     // We use a more relaxed regex that doesn't strictly require word boundaries 

@@ -49,7 +49,7 @@ class AnomalyDetector {
         insights.add(SpendingInsight(
           type: SpendingInsightType.anomaly,
           title: 'High spending at $merchant',
-          body: '₹${thisWeekAmt.toStringAsFixed(0)} this week — ${multiplier}× your usual ₹${weeklyAvg.toStringAsFixed(0)}',
+          body: '₹${thisWeekAmt.toStringAsFixed(0)} this week — $multiplier× your usual ₹${weeklyAvg.toStringAsFixed(0)}',
           icon: Icons.warning_amber_rounded,
           isWarning: true,
         ));

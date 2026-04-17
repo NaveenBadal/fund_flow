@@ -176,20 +176,32 @@ class BankCsvImporter {
     final d = desc.toLowerCase();
     if (d.contains('swiggy') || d.contains('zomato') || d.contains('restaurant') ||
         d.contains('food') || d.contains('cafe') || d.contains('pizza') ||
-        d.contains('kfc') || d.contains('mcdonald')) return 'Food';
+        d.contains('kfc') || d.contains('mcdonald')) {
+      return 'Food';
+    }
     if (d.contains('uber') || d.contains('ola') || d.contains('metro') ||
         d.contains('petrol') || d.contains('fuel') || d.contains('irctc') ||
-        d.contains('indigo') || d.contains('spicejet')) return 'Transport';
+        d.contains('indigo') || d.contains('spicejet')) {
+      return 'Transport';
+    }
     if (d.contains('netflix') || d.contains('spotify') || d.contains('prime') ||
         d.contains('hotstar') || d.contains('youtube') || d.contains('movie') ||
-        d.contains('pvr') || d.contains('inox')) return 'Entertainment';
+        d.contains('pvr') || d.contains('inox')) {
+      return 'Entertainment';
+    }
     if (d.contains('electricity') || d.contains('water') || d.contains('gas') ||
         d.contains('broadband') || d.contains('airtel') || d.contains('jio') ||
-        d.contains('bsnl') || d.contains('utility')) return 'Utilities';
+        d.contains('bsnl') || d.contains('utility')) {
+      return 'Utilities';
+    }
     if (d.contains('amazon') || d.contains('flipkart') || d.contains('myntra') ||
-        d.contains('meesho') || d.contains('nykaa') || d.contains('ajio')) return 'Shopping';
+        d.contains('meesho') || d.contains('nykaa') || d.contains('ajio')) {
+      return 'Shopping';
+    }
     if (d.contains('hospital') || d.contains('pharmacy') || d.contains('apollo') ||
-        d.contains('medic') || d.contains('doctor') || d.contains('clinic')) return 'Health';
+        d.contains('medic') || d.contains('doctor') || d.contains('clinic')) {
+      return 'Health';
+    }
     return 'Others';
   }
 }

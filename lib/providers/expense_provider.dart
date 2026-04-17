@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +8,7 @@ import '../models/custom_category.dart';
 import '../models/expense.dart';
 import '../models/ai_log.dart';
 import '../models/financial_health_score.dart';
+import '../models/savings_goal.dart';
 import '../models/flutter_gemma_model_info.dart';
 import '../models/merchant_stats.dart';
 import '../models/spending_insight.dart';
@@ -63,7 +63,7 @@ final selectedAiProviderProvider =
 
 class SyncLookbackNotifier extends Notifier<int> {
   @override
-  int build() => 1;
+  int build() => 30;
   void setDays(int days) => state = days;
 }
 
@@ -173,6 +173,26 @@ class AppLockNotifier extends Notifier<bool> {
 final appLockEnabledProvider =
     NotifierProvider<AppLockNotifier, bool>(AppLockNotifier.new);
 
+// ─── Notification parsing ──────────────────────────────────────────────────
+
+class NotificationParsingNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  Future<void> toggle() async {
+    state = !state;
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'notification_parsing_enabled', value: state.toString());
+  }
+
+  void set(bool v) => state = v;
+}
+
+final notificationParsingEnabledProvider =
+    NotifierProvider<NotificationParsingNotifier, bool>(
+        NotificationParsingNotifier.new);
+
 // ─── Notification settings ─────────────────────────────────────────────────
 
 class DailyDigestNotifier extends Notifier<bool> {
@@ -208,7 +228,7 @@ final settingsInitializer = FutureProvider<void>((ref) async {
 
   final lookback = await storage.read(key: 'sync_lookback_days');
   if (lookback != null) {
-    ref.read(syncLookbackProvider.notifier).setDays(int.tryParse(lookback) ?? 1);
+    ref.read(syncLookbackProvider.notifier).setDays(int.tryParse(lookback) ?? 30);
   }
 
   final maxTokens = await storage.read(key: onDeviceMaxTokensStorageKey);
@@ -250,6 +270,9 @@ final settingsInitializer = FutureProvider<void>((ref) async {
 
   final dailyDigest = await storage.read(key: 'daily_digest_enabled');
   ref.read(dailyDigestEnabledProvider.notifier).set(dailyDigest == 'true');
+
+  final notifParsing = await storage.read(key: 'notification_parsing_enabled');
+  ref.read(notificationParsingEnabledProvider.notifier).set(notifParsing == 'true');
 });
 
 // ─── Database ─────────────────────────────────────────────────────────────
@@ -271,7 +294,12 @@ class ExpenseListNotifier extends AsyncNotifier<List<Expense>> {
   }
 
   Future<void> addExpense(Expense expense) async {
-    await ref.read(databaseProvider).insertExpense(expense);
+    await ref.read(databaseProvider).insertExpenses([expense]);
+    await refreshExpenses();
+  }
+
+  Future<void> addExpenses(List<Expense> expenses) async {
+    await ref.read(databaseProvider).insertExpenses(expenses);
     await refreshExpenses();
   }
 
@@ -465,6 +493,41 @@ final yearInReviewProvider =
   return ref.read(databaseProvider).getYearInReview(year);
 });
 
+// ─── Spending streak ──────────────────────────────────────────────────────
+
+final spendingStreakProvider = FutureProvider<int>((ref) async {
+  ref.watch(expenseListProvider);
+  final to = DateTime.now();
+  final from = to.subtract(const Duration(days: 365));
+  final dailyTotals = await ref.read(databaseProvider).getDailyTotals(from, to);
+  int streak = 0;
+  var day = DateTime(to.year, to.month, to.day);
+  while (true) {
+    final key = dailyTotals.keys.firstWhere(
+      (k) => k.year == day.year && k.month == day.month && k.day == day.day,
+      orElse: () => DateTime(0),
+    );
+    if (key.year != 0 && (dailyTotals[key] ?? 0) > 0) {
+      streak++;
+      day = day.subtract(const Duration(days: 1));
+    } else {
+      break;
+    }
+  }
+  return streak;
+});
+
+// ─── Previous month balance ────────────────────────────────────────────────
+
+final previousMonthBalanceProvider = FutureProvider<Map<String, double>>((ref) async {
+  ref.watch(expenseListProvider);
+  final now = DateTime.now();
+  final prev = now.month == 1
+      ? DateTime(now.year - 1, 12)
+      : DateTime(now.year, now.month - 1);
+  return ref.read(databaseProvider).getMonthlyBalance(prev.year, prev.month);
+});
+
 // ─── Parsed SMS audit ─────────────────────────────────────────────────────
 
 final parsedSmsAuditProvider =
@@ -500,12 +563,18 @@ final aiLogProvider =
 enum SyncPhase { idle, requestingPermissions, fetchingSms, analyzing, complete, error }
 
 class SyncState {
-  const SyncState({this.phase = SyncPhase.idle, this.errorMessage});
+  const SyncState({this.phase = SyncPhase.idle, this.errorMessage, this.detail});
   final SyncPhase phase;
   final String? errorMessage;
+  /// Human-readable detail shown in UI (e.g. "48 SMS found · 3 queued").
+  final String? detail;
 
-  SyncState copyWith({SyncPhase? phase, String? errorMessage}) =>
-      SyncState(phase: phase ?? this.phase, errorMessage: errorMessage);
+  SyncState copyWith({SyncPhase? phase, String? errorMessage, String? detail}) =>
+      SyncState(
+        phase: phase ?? this.phase,
+        errorMessage: errorMessage ?? this.errorMessage,
+        detail: detail ?? this.detail,
+      );
 
   static const idle = SyncState();
 }
@@ -555,14 +624,24 @@ class SyncNotifier extends Notifier<SyncState> {
     );
     final lookbackDays = ref.read(syncLookbackProvider);
 
-    state = const SyncState(phase: SyncPhase.analyzing);
-
-    final List<Map<String, dynamic>> unparsedSms = [];
-    final Set<String> seenBodies = {};
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final cutoffDate = today.subtract(Duration(days: lookbackDays));
+    final cutoffTimestamp = cutoffDate.millisecondsSinceEpoch;
+
+    // Report how many raw SMS we fetched so user can see the window.
+    state = SyncState(
+      phase: SyncPhase.analyzing,
+      detail: '${messages.length} SMS in inbox · scanning last $lookbackDays days',
+    );
+
+    final List<Map<String, dynamic>> unparsedSms = [];
+    final Set<String> seenBodies = {};
+    int financialCount = 0;
+    int alreadyParsedCount = 0;
+
+    // Prefetch all parsed message keys for this lookback window to avoid N+1 DB hits
+    final parsedKeys = await db.getParsedSmsKeys(cutoffTimestamp);
 
     for (var msg in messages) {
       final msgBody = msg.body;
@@ -571,14 +650,13 @@ class SyncNotifier extends Notifier<SyncState> {
       final timestamp = msg.date?.millisecondsSinceEpoch ?? 0;
 
       if (msgBody == null || msgDate.isBefore(cutoffDate)) continue;
-      
-      // Use a compound key to track seen messages in this run
+
       final seenKey = '$sender|$msgBody|$timestamp';
       if (seenBodies.contains(seenKey)) continue;
 
       if (_smsService.isFinancialSms(msgBody)) {
-        final alreadyParsed = await db.isSmsParsed(msgBody, sender, timestamp);
-        if (!alreadyParsed) {
+        financialCount++;
+        if (!parsedKeys.contains(seenKey)) {
           unparsedSms.add({
             'body': msgBody,
             'date': msgDate.toIso8601String(),
@@ -586,9 +664,20 @@ class SyncNotifier extends Notifier<SyncState> {
             'timestamp': timestamp,
           });
           seenBodies.add(seenKey);
+        } else {
+          alreadyParsedCount++;
         }
       }
     }
+
+    debugPrint('[Sync] inbox=${messages.length} financial=$financialCount '
+        'alreadyParsed=$alreadyParsedCount queued=${unparsedSms.length} '
+        'lookback=${lookbackDays}d cutoff=$cutoffDate');
+
+    state = SyncState(
+      phase: SyncPhase.analyzing,
+      detail: '$financialCount financial SMS · ${unparsedSms.length} new to process',
+    );
 
     if (unparsedSms.isNotEmpty) {
       const batchSize = 20;
@@ -598,29 +687,31 @@ class SyncNotifier extends Notifier<SyncState> {
         final batch = unparsedSms.sublist(i, end);
 
         try {
-          final newExpenses = await compute(_parseBatchInIsolate, {
-            'catService': catService,
-            'batch': batch,
-          });
-          for (var expense in newExpenses) {
-            await ref.read(expenseListProvider.notifier).addExpense(expense);
+          final result = await catService.parseSmsBatch(batch);
+          if (result.expenses.isNotEmpty) {
+            await ref.read(expenseListProvider.notifier).addExpenses(result.expenses);
           }
-          // Only mark SMS as parsed when the AI actually extracted expenses.
-          // Otherwise the same SMS can be retried on the next sync.
-          if (newExpenses.isNotEmpty) {
-            await db.markSmsBatchParsed(batch);
-          }
-        } catch (_) {
-          // One bad batch must not abort the entire sync; the AI log is
-          // already written (or swallowed) inside parseSmsBatch.
+          await db.markSmsBatchParsed(batch, skipReasons: result.skipReasons);
+        } catch (e) {
+          debugPrint('Batch parse error: $e');
+          final reasons = {for (final s in batch) s['body'] as String: 'parse_error'};
+          try {
+            await db.markSmsBatchParsed(batch, skipReasons: reasons);
+          } catch (_) {}
         }
       }
+      
+      // Refresh the audit provider since parsed_sms changed
+      ref.invalidate(parsedSmsAuditProvider);
 
-      // Detect recurring transactions after sync
+      // Re-run recurring detection across all expenses so subscriptions
+      // screen stays accurate after new transactions are added.
       try {
-        final all = await db.getAllExpenses();
-        final recurringFlags = RecurringDetector.detect(all);
-        await db.markRecurring(recurringFlags);
+        final allExpenses = await db.getAllExpenses();
+        final flags = RecurringDetector.detect(allExpenses);
+        await db.updateRecurringFlags(flags);
+        // Refresh expense list to reflect updated recurring flags.
+        await ref.read(expenseListProvider.notifier).refreshExpenses();
       } catch (_) {}
     }
 
@@ -651,21 +742,48 @@ class SyncNotifier extends Notifier<SyncState> {
       }
     } catch (_) {}
 
-    state = const SyncState(phase: SyncPhase.complete);
-    Future.delayed(const Duration(seconds: 2), () {
+    final completeDetail = unparsedSms.isEmpty
+        ? 'No new messages (${alreadyParsedCount > 0 ? '$alreadyParsedCount already parsed' : 'none matched'})'
+        : '${unparsedSms.length} processed';
+    state = SyncState(phase: SyncPhase.complete, detail: completeDetail);
+    Future.delayed(const Duration(seconds: 4), () {
       if (state.phase == SyncPhase.complete) state = SyncState.idle;
     });
   }
 }
 
-Future<List<Expense>> _parseBatchInIsolate(Map<String, dynamic> params) async {
-  final CategorizationService catService = params['catService'];
-  final List<Map<String, dynamic>> batch = params['batch'];
-  return await catService.parseSmsBatch(batch);
-}
 
 final syncProvider =
     NotifierProvider<SyncNotifier, SyncState>(SyncNotifier.new);
+
+// ─── Savings Goals ─────────────────────────────────────────────────────────
+
+class SavingsGoalNotifier extends AsyncNotifier<List<SavingsGoal>> {
+  @override
+  Future<List<SavingsGoal>> build() async {
+    return await ref.watch(databaseProvider).getAllSavingsGoals();
+  }
+
+  Future<void> _reload() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+        () => ref.read(databaseProvider).getAllSavingsGoals());
+  }
+
+  Future<void> upsert(SavingsGoal goal) async {
+    await ref.read(databaseProvider).insertOrUpdateSavingsGoal(goal);
+    await _reload();
+  }
+
+  Future<void> remove(int id) async {
+    await ref.read(databaseProvider).deleteSavingsGoal(id);
+    await _reload();
+  }
+}
+
+final savingsGoalsProvider =
+    AsyncNotifierProvider<SavingsGoalNotifier, List<SavingsGoal>>(
+        SavingsGoalNotifier.new);
 
 // ─── Onboarding ────────────────────────────────────────────────────────────
 

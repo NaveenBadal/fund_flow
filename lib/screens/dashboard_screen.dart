@@ -10,6 +10,8 @@ import '../models/ai_provider.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../utils/category_utils.dart';
+import '../utils/currency_utils.dart';
+import '../widgets/expense_form_sheet.dart';
 import 'merchant_profile_screen.dart';
 import 'settings_screen.dart';
 
@@ -58,6 +60,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final hasModel = modelName.trim().isNotEmpty;
 
     final privateMode = ref.watch(privateModeProvider);
+
+    // Show snackbar with detail when sync finishes or errors.
+    ref.listen<SyncState>(syncProvider, (prev, next) {
+      if (!mounted) return;
+      if (next.phase == SyncPhase.complete && next.detail != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync complete: ${next.detail}'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else if (next.phase == SyncPhase.error && next.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -126,17 +149,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }
               if (allEntries.isEmpty) {
                 return _NoExpensesState(
-                  syncStatus: syncStatus.phase,
+                  syncStatus: syncStatus,
                   provider: provider,
                   modelName: modelName,
                 );
               }
-              final expenses = allEntries.where((e) => !e.isIncome).toList();
-              final filtered = _applySearch(expenses);
+              // Keep all entries (expense + income) for list display.
+              // Hero card and category breakdown use expense-only subset.
+              final filtered = _applySearch(allEntries);
               return _buildList(
                 context,
                 ref,
-                expenses,
+                allEntries,
                 filtered,
                 provider,
                 modelName,
@@ -161,7 +185,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       floatingActionButton: hasCredentials && hasModel
           ? _SyncFab(
-              syncStatus: syncStatus.phase,
+              syncStatus: syncStatus,
               onAddManual: () => _showAddExpenseSheet(context, ref),
             )
           : null,
@@ -179,6 +203,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         .toList();
   }
 
+  Future<void> _onRefresh(WidgetRef ref) async {
+    await ref.read(expenseListProvider.notifier).refreshExpenses();
+  }
+
   Widget _buildList(
     BuildContext context,
     WidgetRef ref,
@@ -191,24 +219,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Day grouping
     final groups = _groupByDay(filtered);
     final now = DateTime.now();
+    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+    final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+
     final thisMonth = allExpenses.where((e) {
       return e.date.year == now.year && e.date.month == now.month;
     }).toList();
-    final lastMonthStart = DateTime(now.year, now.month - 1, 1);
-    final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+
     final lastMonth = allExpenses.where((e) {
-      return e.date.isAfter(lastMonthStart) && e.date.isBefore(lastMonthEnd);
+      return e.date.isAfter(lastMonthStart.subtract(const Duration(milliseconds: 1))) &&
+             e.date.isBefore(lastMonthEnd.add(const Duration(milliseconds: 1)));
     }).toList();
-    final thisMonthTotal = thisMonth.fold(0.0, (s, e) => s + e.amount);
-    final lastMonthTotal = lastMonth.fold(0.0, (s, e) => s + e.amount);
+
+    final thisMonthExpense = thisMonth.where((e) => !e.isIncome).fold(0.0, (s, e) => s + e.amount);
+    final thisMonthIncome = thisMonth.where((e) => e.isIncome).fold(0.0, (s, e) => s + e.amount);
+
+    final lastMonthExpense = lastMonth.where((e) => !e.isIncome).fold(0.0, (s, e) => s + e.amount);
     final currency = allExpenses.isNotEmpty
         ? allExpenses.first.currency
         : 'INR';
 
     // Trigger confetti if all budgets met (checked once per total change)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (thisMonthTotal != _lastMonthlyTotal) {
-        _lastMonthlyTotal = thisMonthTotal;
+      if (thisMonthExpense != _lastMonthlyTotal) {
+        _lastMonthlyTotal = thisMonthExpense;
         ref.read(budgetProgressProvider).whenData((progress) {
           if (progress.isNotEmpty &&
               progress.every(
@@ -222,16 +256,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     });
 
+    final streak = ref.watch(spendingStreakProvider).asData?.value ?? 0;
+
     // Build sliver list
     final slivers = <Widget>[
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         sliver: SliverToBoxAdapter(
           child: _MonthlyHeroCard(
-            thisMonthTotal: thisMonthTotal,
-            lastMonthTotal: lastMonthTotal,
+            thisMonthExpense: thisMonthExpense,
+            thisMonthIncome: thisMonthIncome,
+            lastMonthExpense: lastMonthExpense,
             currency: currency,
             count: thisMonth.length,
+            streak: streak,
             provider: provider,
             modelName: modelName,
             privateMode: privateMode,
@@ -245,7 +283,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           sliver: SliverToBoxAdapter(
             child: SizedBox(
               height: 260,
-              child: _CategoryBreakdown(expenses: allExpenses),
+              child: _CategoryBreakdown(
+                expenses: allExpenses.where((e) => !e.isIncome).toList(),
+                currency: currency,
+              ),
             ),
           ),
         ),
@@ -284,6 +325,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 expense: expense,
                 onDelete: () => _confirmDelete(context, ref, expense),
                 onTap: () => _showDetail(context, ref, expense),
+                onEdit: () => _showDetail(context, ref, expense),
               );
             },
           ),
@@ -293,7 +335,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 96)));
 
-    return CustomScrollView(slivers: slivers);
+    return RefreshIndicator(
+      onRefresh: () => _onRefresh(ref),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: slivers,
+      ),
+    );
   }
 
   Map<DateTime, List<Expense>> _groupByDay(List<Expense> expenses) {
@@ -327,7 +375,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       builder: (_) => AlertDialog(
         title: const Text('Delete expense?'),
         content: Text(
-          '${expense.merchant} — ${expense.currency} ${expense.amount.toStringAsFixed(2)} on ${DateFormat.yMMMd().format(expense.date)}',
+          '${expense.merchant} — ${formatAmount(expense.amount, expense.currency)} on ${DateFormat.yMMMd().format(expense.date)}',
         ),
         actions: [
           TextButton(
@@ -351,8 +399,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ExpenseDetailSheet(
-        expense: expense,
+      builder: (_) => ExpenseFormSheet(
+        initialExpense: expense,
         onSave: (updated) async {
           await ref.read(expenseListProvider.notifier).updateExpense(updated);
         },
@@ -369,7 +417,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AddExpenseSheet(
+      builder: (_) => ExpenseFormSheet(
         onSave: (expense) async {
           await ref.read(expenseListProvider.notifier).addExpense(expense);
         },
@@ -399,16 +447,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 class _SyncFab extends ConsumerWidget {
   const _SyncFab({required this.syncStatus, required this.onAddManual});
 
-  final SyncPhase syncStatus;
+  final SyncState syncStatus;
   final VoidCallback onAddManual;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final idle = syncStatus == SyncPhase.idle;
+    final phase = syncStatus.phase;
+    final idle = phase == SyncPhase.idle;
+    final label = _syncLabel(phase);
+    final detail = syncStatus.detail;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        // Show detail line above FAB while syncing or just after completion.
+        if (!idle && detail != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 280),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                detail,
+                style: Theme.of(context).textTheme.labelSmall,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
         FloatingActionButton.small(
           heroTag: 'add_manual',
           onPressed: onAddManual,
@@ -419,7 +489,7 @@ class _SyncFab extends ConsumerWidget {
         FloatingActionButton.extended(
           heroTag: 'sync',
           onPressed: idle ? () => ref.read(syncProvider.notifier).sync() : null,
-          label: Text(_syncLabel(syncStatus)),
+          label: Text(label),
           icon: idle
               ? const Icon(Icons.sync_rounded)
               : const SpinKitRotatingPlain(color: Colors.white, size: 20),
@@ -444,20 +514,24 @@ class _SyncFab extends ConsumerWidget {
 
 class _MonthlyHeroCard extends StatelessWidget {
   const _MonthlyHeroCard({
-    required this.thisMonthTotal,
-    required this.lastMonthTotal,
+    required this.thisMonthExpense,
+    required this.thisMonthIncome,
+    required this.lastMonthExpense,
     required this.currency,
     required this.count,
+    required this.streak,
     required this.provider,
     required this.modelName,
     required this.onExport,
     required this.privateMode,
   });
 
-  final double thisMonthTotal;
-  final double lastMonthTotal;
+  final double thisMonthExpense;
+  final double thisMonthIncome;
+  final double lastMonthExpense;
   final String currency;
   final int count;
+  final int streak;
   final AiProviderType provider;
   final String modelName;
   final VoidCallback onExport;
@@ -467,9 +541,8 @@ class _MonthlyHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-    final delta = lastMonthTotal > 0
-        ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal * 100)
+    final delta = lastMonthExpense > 0
+        ? ((thisMonthExpense - lastMonthExpense) / lastMonthExpense * 100)
         : null;
     final deltaUp = delta != null && delta > 0;
     final displayModel = provider == AiProviderType.flutterGemma
@@ -508,6 +581,11 @@ class _MonthlyHeroCard extends StatelessWidget {
                       icon: Icons.receipt_long_outlined,
                       label: '$count this month',
                     ),
+                    if (streak > 0)
+                      _HeroChip(
+                        icon: Icons.local_fire_department_rounded,
+                        label: '$streak day streak',
+                      ),
                   ],
                 ),
               ),
@@ -525,37 +603,91 @@ class _MonthlyHeroCard extends StatelessWidget {
               color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                child:
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                          privateMode ? '₹ ••••' : fmt.format(thisMonthTotal),
-                          key: ValueKey(
-                            privateMode
-                                ? 'private'
-                                : thisMonthTotal.toStringAsFixed(0),
-                          ),
-                          style: theme.textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        )
-                        .animate(key: ValueKey(thisMonthTotal))
-                        .shimmer(
-                          duration: 800.ms,
-                          color: scheme.onPrimaryContainer.withValues(
-                            alpha: 0.3,
-                          ),
+                      'Spent',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 600),
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
+                      child: Text(
+                        privateMode
+                            ? maskAmount(currency)
+                            : formatAmount(thisMonthExpense, currency),
+                        key: ValueKey(privateMode
+                            ? 'private_exp'
+                            : thisMonthExpense.toStringAsFixed(0)),
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: scheme.onPrimaryContainer,
                         ),
+                      ).animate(key: ValueKey(thisMonthExpense)).shimmer(
+                            duration: 800.ms,
+                            color: scheme.onPrimaryContainer.withValues(alpha: 0.3),
+                          ),
+                    ),
+                  ],
+                ),
               ),
-              if (delta != null) ...[
-                const SizedBox(width: 12),
+              Container(
+                width: 1,
+                height: 40,
+                color: scheme.onPrimaryContainer.withValues(alpha: 0.1),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Income',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 600),
+                      transitionBuilder: (child, animation) =>
+                          FadeTransition(opacity: animation, child: child),
+                      child: Text(
+                        privateMode
+                            ? maskAmount(currency)
+                            : formatAmount(thisMonthIncome, currency),
+                        key: ValueKey(privateMode
+                            ? 'private_inc'
+                            : thisMonthIncome.toStringAsFixed(0)),
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: Colors.green.shade700,
+                        ),
+                      ).animate(key: ValueKey(thisMonthIncome)).shimmer(
+                            duration: 800.ms,
+                            color: Colors.green.withValues(alpha: 0.3),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (delta != null)
+            Row(
+              children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -589,18 +721,15 @@ class _MonthlyHeroCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                if (!privateMode)
+                  Text(
+                    'vs ${formatAmount(lastMonthExpense, currency)} last month',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onPrimaryContainer.withValues(alpha: 0.7),
+                    ),
+                  ),
               ],
-            ],
-          ),
-          if (lastMonthTotal > 0 && !privateMode)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'vs ${fmt.format(lastMonthTotal)} last month',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onPrimaryContainer.withValues(alpha: 0.7),
-                ),
-              ),
             ),
         ],
       ),
@@ -638,9 +767,10 @@ class _HeroChip extends StatelessWidget {
 // ─── Category breakdown (donut) ───────────────────────────────────────────
 
 class _CategoryBreakdown extends StatefulWidget {
-  const _CategoryBreakdown({required this.expenses});
+  const _CategoryBreakdown({required this.expenses, this.currency = 'INR'});
 
   final List<Expense> expenses;
+  final String currency;
 
   @override
   State<_CategoryBreakdown> createState() => _CategoryBreakdownState();
@@ -662,15 +792,13 @@ class _CategoryBreakdownState extends State<_CategoryBreakdown> {
     }
     final sorted = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-
     final sections = sorted.asMap().entries.map((entry) {
       final i = entry.key;
       final cat = entry.value;
       final isTouched = _touched == i;
       return PieChartSectionData(
         value: cat.value,
-        title: isTouched ? fmt.format(cat.value) : '',
+        title: isTouched ? formatAmount(cat.value, widget.currency) : '',
         color: categoryColor(cat.key),
         radius: isTouched ? 68 : 56,
         titleStyle: theme.textTheme.labelSmall?.copyWith(
@@ -773,11 +901,13 @@ class _SwipeableExpenseTile extends StatelessWidget {
     required this.expense,
     required this.onDelete,
     required this.onTap,
+    required this.onEdit,
   });
 
   final Expense expense;
   final VoidCallback onDelete;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -785,8 +915,9 @@ class _SwipeableExpenseTile extends StatelessWidget {
 
     return Dismissible(
       key: ValueKey(expense.id ?? expense.originalSms),
-      direction: DismissDirection.endToStart,
-      background: Container(
+      direction: DismissDirection.horizontal,
+      // Left-swipe (end-to-start) = delete
+      secondaryBackground: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 10),
@@ -796,10 +927,26 @@ class _SwipeableExpenseTile extends StatelessWidget {
         ),
         child: Icon(Icons.delete_outline, color: scheme.onErrorContainer),
       ),
-      confirmDismiss: (_) async {
+      // Right-swipe (start-to-end) = edit
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Icon(Icons.edit_outlined, color: scheme.onPrimaryContainer),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          HapticFeedback.mediumImpact();
+          onEdit();
+          return false;
+        }
         HapticFeedback.heavyImpact();
         onDelete();
-        return false; // deletion handled via confirm dialog
+        return false;
       },
       child: Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -820,8 +967,9 @@ class _ExpenseTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final color = categoryColor(expense.category);
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
     final privateMode = ref.watch(privateModeProvider);
+    final isIncome = expense.isIncome;
+    final amountColor = isIncome ? Colors.green.shade700 : scheme.onSurface;
 
     return Material(
       color: scheme.surfaceContainerHighest.withValues(alpha: 0.38),
@@ -836,7 +984,10 @@ class _ExpenseTile extends ConsumerWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: color.withValues(alpha: 0.16),
-                child: Icon(categoryIcon(expense.category), color: color),
+                child: Icon(
+                  isIncome ? Icons.account_balance_wallet_rounded : categoryIcon(expense.category),
+                  color: color,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -855,10 +1006,13 @@ class _ExpenseTile extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            expense.displayMerchant,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
+                          Flexible(
+                            child: Text(
+                              expense.displayMerchant,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (expense.isRecurring) ...[
@@ -879,8 +1033,8 @@ class _ExpenseTile extends ConsumerWidget {
                     Row(
                       children: [
                         _MetaPill(
-                          label: expense.category,
-                          icon: Icons.sell_outlined,
+                          label: isIncome ? 'Income' : expense.category,
+                          icon: isIncome ? Icons.add_circle_outline_rounded : Icons.sell_outlined,
                         ),
                         const SizedBox(width: 6),
                         _MetaPill(
@@ -901,9 +1055,12 @@ class _ExpenseTile extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                privateMode ? '₹ ••' : fmt.format(expense.amount),
+                privateMode
+                    ? maskAmount(expense.currency)
+                    : '${isIncome ? '+' : ''}${formatAmount(expense.amount, expense.currency)}',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
+                  color: amountColor,
                 ),
               ),
             ],
@@ -914,409 +1071,6 @@ class _ExpenseTile extends ConsumerWidget {
   }
 }
 
-// ─── Expense detail / edit sheet ──────────────────────────────────────────
-
-class _ExpenseDetailSheet extends ConsumerStatefulWidget {
-  const _ExpenseDetailSheet({
-    required this.expense,
-    required this.onSave,
-    required this.onDelete,
-  });
-
-  final Expense expense;
-  final Future<void> Function(Expense) onSave;
-  final VoidCallback onDelete;
-
-  @override
-  ConsumerState<_ExpenseDetailSheet> createState() =>
-      _ExpenseDetailSheetState();
-}
-
-class _ExpenseDetailSheetState extends ConsumerState<_ExpenseDetailSheet> {
-  late TextEditingController _merchantCtrl;
-  late TextEditingController _amountCtrl;
-  late TextEditingController _tagsCtrl;
-  late String _category;
-  bool _editing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _merchantCtrl = TextEditingController(text: widget.expense.merchant);
-    _amountCtrl = TextEditingController(
-      text: widget.expense.amount.toStringAsFixed(2),
-    );
-    _tagsCtrl = TextEditingController(text: widget.expense.tags);
-    _category = widget.expense.category;
-  }
-
-  @override
-  void dispose() {
-    _merchantCtrl.dispose();
-    _amountCtrl.dispose();
-    _tagsCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final categories = ref.watch(allCategoryNamesProvider);
-
-    // Ensure _category is valid if it was deleted or changed
-    if (!categories.contains(_category)) {
-      _category = categories.isNotEmpty ? categories.first : 'Others';
-    }
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _editing ? 'Edit expense' : 'Expense detail',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              if (!_editing)
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: () => setState(() => _editing = true),
-                ),
-              IconButton(
-                icon: Icon(Icons.delete_outline, color: scheme.error),
-                onPressed: widget.onDelete,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_editing) ...[
-            TextField(
-              controller: _merchantCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Merchant',
-                prefixIcon: Icon(Icons.store_outlined),
-                filled: true,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixIcon: Icon(Icons.currency_rupee_rounded),
-                filled: true,
-              ),
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                prefixIcon: Icon(Icons.sell_outlined),
-                filled: true,
-              ),
-              items: categories
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
-              onChanged: (v) => setState(() => _category = v!),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _tagsCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Tags (comma-separated)',
-                hintText: 'business, reimbursable, vacation',
-                prefixIcon: Icon(Icons.local_offer_outlined),
-                filled: true,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _editing = false),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save'),
-                    onPressed: _save,
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            _DetailRow(
-              icon: Icons.store_outlined,
-              label: 'Merchant',
-              value: widget.expense.merchant,
-            ),
-            _DetailRow(
-              icon: Icons.currency_rupee_rounded,
-              label: 'Amount',
-              value: NumberFormat.currency(
-                locale: 'en_IN',
-                symbol: '₹',
-              ).format(widget.expense.amount),
-            ),
-            _DetailRow(
-              icon: Icons.sell_outlined,
-              label: 'Category',
-              value: widget.expense.category,
-            ),
-            _DetailRow(
-              icon: Icons.event_outlined,
-              label: 'Date',
-              value: DateFormat(
-                'EEEE, MMMM d, yyyy',
-              ).format(widget.expense.date),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Original SMS',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.primary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SelectableText(
-                widget.expense.originalSms,
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _save() async {
-    final amount = double.tryParse(_amountCtrl.text.trim());
-    if (amount == null) return;
-    final updated = widget.expense.copyWith(
-      merchant: _merchantCtrl.text.trim(),
-      amount: amount,
-      category: _category,
-      tags: _tagsCtrl.text.trim(),
-    );
-    await widget.onSave(updated);
-    if (mounted) Navigator.pop(context);
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: scheme.primary),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              Text(
-                value,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Manual add expense sheet ─────────────────────────────────────────────
-
-class _AddExpenseSheet extends ConsumerStatefulWidget {
-  const _AddExpenseSheet({required this.onSave});
-
-  final Future<void> Function(Expense) onSave;
-
-  @override
-  ConsumerState<_AddExpenseSheet> createState() => _AddExpenseSheetState();
-}
-
-class _AddExpenseSheetState extends ConsumerState<_AddExpenseSheet> {
-  final _merchantCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
-  late String _category;
-  DateTime _date = DateTime.now();
-  bool _initialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _category = 'Others';
-  }
-
-  @override
-  void dispose() {
-    _merchantCtrl.dispose();
-    _amountCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final categories = ref.watch(allCategoryNamesProvider);
-
-    if (!_initialized && categories.isNotEmpty) {
-      if (!categories.contains(_category)) {
-        _category = categories.first;
-      }
-      _initialized = true;
-    }
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add expense',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _merchantCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Merchant / Description',
-              prefixIcon: Icon(Icons.store_outlined),
-              filled: true,
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _amountCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Amount (₹)',
-              prefixIcon: Icon(Icons.currency_rupee_rounded),
-              filled: true,
-            ),
-          ),
-          const SizedBox(height: 14),
-          DropdownButtonFormField<String>(
-            value: categories.contains(_category) ? _category : null,
-            decoration: const InputDecoration(
-              labelText: 'Category',
-              prefixIcon: Icon(Icons.sell_outlined),
-              filled: true,
-            ),
-            items: categories
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _category = v!),
-          ),
-          const SizedBox(height: 14),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.event_outlined),
-            title: Text(DateFormat('EEEE, MMMM d, yyyy').format(_date)),
-            subtitle: const Text('Tap to change date'),
-            onTap: _pickDate,
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Add expense'),
-              onPressed: _save,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) setState(() => _date = picked);
-  }
-
-  Future<void> _save() async {
-    final merchant = _merchantCtrl.text.trim();
-    final amount = double.tryParse(_amountCtrl.text.trim());
-    if (merchant.isEmpty || amount == null || amount <= 0) return;
-    await widget.onSave(
-      Expense(
-        merchant: merchant,
-        amount: amount,
-        currency: 'INR',
-        category: _category,
-        date: _date,
-        originalSms: 'Manual entry',
-      ),
-    );
-    if (mounted) Navigator.pop(context);
-  }
-}
 
 // ─── Empty states ─────────────────────────────────────────────────────────
 
@@ -1403,7 +1157,7 @@ class _NoExpensesState extends StatelessWidget {
     required this.modelName,
   });
 
-  final SyncPhase syncStatus;
+  final SyncState syncStatus;
   final AiProviderType provider;
   final String modelName;
 
@@ -1411,6 +1165,7 @@ class _NoExpensesState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final phase = syncStatus.phase;
 
     return Center(
       child: Padding(
@@ -1440,15 +1195,25 @@ class _NoExpensesState extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Run SMS sync to populate your dashboard. Provider: ${provider.displayName}.',
+                'Run SMS sync to populate your dashboard.\nProvider: ${provider.displayName}.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               Text(
-                'Status: ${syncStatus.name}',
+                'Status: ${phase.name}',
                 style: theme.textTheme.labelLarge,
               ),
+              if (syncStatus.detail != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  syncStatus.detail!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSecondaryContainer.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1588,7 +1353,7 @@ class _InsightsRow extends ConsumerWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: allInsights.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
               final insight = allInsights[i];
               return Container(

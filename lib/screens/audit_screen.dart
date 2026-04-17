@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
+import '../services/database_helper.dart';
 
 // ignore: unused_element
 Color _categoryColor(String category) {
@@ -240,17 +241,50 @@ class _EmptyFilterState extends StatelessWidget {
   }
 }
 
-class _AuditTile extends StatefulWidget {
+class _AuditTile extends ConsumerStatefulWidget {
   const _AuditTile({required this.entry});
 
   final Map<String, dynamic> entry;
 
   @override
-  State<_AuditTile> createState() => _AuditTileState();
+  ConsumerState<_AuditTile> createState() => _AuditTileState();
 }
 
-class _AuditTileState extends State<_AuditTile> {
+class _AuditTileState extends ConsumerState<_AuditTile> {
   bool _expanded = false;
+  bool _retrying = false;
+
+  (Color, String) _resolveBadge(bool hasExpense, String skipReason) {
+    if (hasExpense) return (Colors.green, 'Transaction');
+    return switch (skipReason) {
+      'otp'           => (Colors.orange, 'OTP'),
+      'promotional'   => (Colors.deepOrange, 'Promo'),
+      'balance_alert' => (Colors.blue, 'Balance Alert'),
+      'statement'     => (Colors.indigo, 'Statement'),
+      'not_financial' => (Colors.blueGrey, 'Non-Financial'),
+      'no_response'   => (Colors.amber.shade700, 'No AI Response'),
+      'parse_error'   => (Colors.red, 'Parse Error'),
+      'zero_amount'   => (Colors.brown, 'Zero Amount'),
+      String r when r.startsWith('unknown_type:') =>
+        (Colors.purple, 'Unknown: ${r.substring(13)}'),
+      _               => (Colors.blueGrey, skipReason.isEmpty ? 'Skipped' : skipReason),
+    };
+  }
+
+  Future<void> _retry(String body) async {
+    setState(() => _retrying = true);
+    try {
+      await DatabaseHelper.instance.unmarkSmsParsed([body]);
+      ref.invalidate(parsedSmsAuditProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Queued for re-parse on next sync.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
 
   String _formatParsedAt(String raw) {
     try {
@@ -269,9 +303,9 @@ class _AuditTileState extends State<_AuditTile> {
     final body = widget.entry['body'] as String? ?? '';
     final parsedAt = widget.entry['parsed_at'] as String? ?? '';
     final hasExpense = widget.entry['has_expense'] == 1;
+    final skipReason = widget.entry['skip_reason'] as String? ?? '';
 
-    final badgeColor = hasExpense ? Colors.green : Colors.blueGrey;
-    final badgeLabel = hasExpense ? 'Transaction' : 'Skipped';
+    final (badgeColor, badgeLabel) = _resolveBadge(hasExpense, skipReason);
 
     return Card(
       elevation: 0,
@@ -364,13 +398,33 @@ class _AuditTileState extends State<_AuditTile> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Icon(
-                        _expanded
-                            ? Icons.expand_less_rounded
-                            : Icons.expand_more_rounded,
-                        size: 18,
-                        color: scheme.onSurface.withValues(alpha: 0.45),
-                      ),
+                      if (!hasExpense)
+                        _retrying
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Tooltip(
+                                message: 'Re-queue for parsing',
+                                child: InkWell(
+                                  onTap: () => _retry(body),
+                                  borderRadius: BorderRadius.circular(99),
+                                  child: Icon(
+                                    Icons.refresh_rounded,
+                                    size: 18,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                              )
+                      else
+                        Icon(
+                          _expanded
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 18,
+                          color: scheme.onSurface.withValues(alpha: 0.45),
+                        ),
                     ],
                   ),
                 ],

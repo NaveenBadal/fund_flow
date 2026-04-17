@@ -12,6 +12,7 @@ import 'screens/analytics_screen.dart';
 import 'screens/budget_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/subscriptions_screen.dart';
 import 'services/notification_service.dart';
 import 'services/drive_backup_service.dart';
 
@@ -111,7 +112,7 @@ class _AppGate extends ConsumerWidget {
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
-      error: (_, __) => const AppShell(),
+      error: (_, _) => const AppShell(),
       data: (done) {
         if (!done) return const OnboardingScreen();
         return const _AppLockGate();
@@ -250,6 +251,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       selectedIcon: Icon(Icons.account_balance_wallet_rounded),
       label: 'Budgets',
     ),
+    NavigationDestination(
+      icon: Icon(Icons.repeat_outlined),
+      selectedIcon: Icon(Icons.repeat_rounded),
+      label: 'Subscriptions',
+    ),
   ];
 
   @override
@@ -258,6 +264,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       0 => const DashboardScreen(),
       1 => const AnalyticsScreen(),
       2 => const BudgetScreen(),
+      3 => const SubscriptionsScreen(),
       _ => const DashboardScreen(),
     };
 

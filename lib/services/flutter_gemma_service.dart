@@ -19,9 +19,8 @@ class FlutterGemmaService {
     return dir;
   }
 
-  // Tracks which model + token limit the FlutterGemmaPlugin singleton has loaded.
+  // Tracks which model path the FlutterGemmaPlugin singleton has loaded.
   static String? _loadedModelPath;
-  static int? _loadedMaxTokens;
 
   Future<List<FlutterGemmaModelInfo>> listModels() async {
     final models = <FlutterGemmaModelInfo>[];

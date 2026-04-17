@@ -226,25 +226,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       allowedExtensions: ['csv'],
     );
     if (result == null || result.files.isEmpty) return;
-    
+
     final file = File(result.files.first.path!);
     setState(() => _importing = true);
-    
+
     try {
       final expenses = await BankCsvImporter.parse(file);
       if (expenses.isEmpty) {
         throw Exception('No transactions found in CSV.');
       }
-      
-      // Categorize and save
-      for (final e in expenses) {
-        await ref.read(expenseListProvider.notifier).addExpense(e);
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported ${expenses.length} transactions.')),
-        );
+      setState(() => _importing = false);
+      if (!mounted) return;
+
+      // Show preview sheet before committing
+      final confirmed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (_) => _CsvPreviewSheet(expenses: expenses),
+      );
+
+      if (confirmed == true && mounted) {
+        setState(() => _importing = true);
+        for (final e in expenses) {
+          await ref.read(expenseListProvider.notifier).addExpense(e);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Imported ${expenses.length} transactions.')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -335,6 +349,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
     final appLockEnabled = ref.watch(appLockEnabledProvider);
     final privateMode = ref.watch(privateModeProvider);
     final dailyDigestEnabled = ref.watch(dailyDigestEnabledProvider);
+    final notifParsingEnabled = ref.watch(notificationParsingEnabledProvider);
 
     final currentKey = _keyController.text.trim();
     final currentModel = _modelController.text.trim();
@@ -865,6 +880,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
                       NotificationService.instance.cancelDailyDigest();
                     }
                   },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Notification Parsing'),
+                  subtitle: const Text('Parse bank push notifications for transactions'),
+                  value: notifParsingEnabled,
+                  onChanged: (_) =>
+                      ref.read(notificationParsingEnabledProvider.notifier).toggle(),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -2120,4 +2143,158 @@ String _formatBytes(int bytes) {
 String _formatTimestamp(int millis) {
   if (millis <= 0) return 'Unknown time';
   return DateTime.fromMillisecondsSinceEpoch(millis).toLocal().toString().split('.').first;
+}
+
+// ─── CSV Import Preview Sheet ─────────────────────────────────────────────
+
+class _CsvPreviewSheet extends StatelessWidget {
+  const _CsvPreviewSheet({required this.expenses});
+
+  final List expenses; // List<Expense> but avoid import cycle with dynamic
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: scheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Preview Import',
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${expenses.length} transactions',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Review before importing. All will be saved.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface.withValues(alpha: 0.65),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: expenses.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final e = expenses[i];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.merchant as String? ?? '',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                e.category as String? ?? '',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurface.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '${e.currency} ${(e.amount as double).toStringAsFixed(2)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Import All'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/expense_provider.dart';
 import '../main.dart';
 
@@ -34,6 +35,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: 'Set monthly budgets per category. Get alerts when you\'re close to the limit and celebrate when you stay under.',
       gradient: [Color(0xFF386A20), Color(0xFF52A030)],
     ),
+    _OnboardingPage(
+      icon: Icons.lock_open_rounded,
+      title: 'Grant SMS Access',
+      body: 'To read your bank messages, Expense Manager needs SMS permission. Your messages never leave your device.',
+      gradient: [Color(0xFF7B4F00), Color(0xFFBF7F00)],
+      isPermissionPage: true,
+    ),
   ];
 
   @override
@@ -42,7 +50,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  Future<void> _requestPermissions() async {
+    await Permission.sms.request();
+  }
+
   Future<void> _complete() async {
+    await _requestPermissions();
     final storage = ref.read(secureStorageProvider);
     await markOnboardingDone(storage);
     if (mounted) {
@@ -129,7 +142,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                     duration: const Duration(milliseconds: 400),
                                     curve: Curves.easeInOut,
                                   ),
-                          child: Text(isLast ? 'Get started' : 'Next'),
+                          child: Text(isLast ? 'Grant & Get Started' : 'Next'),
                         ),
                       ),
                     ],
@@ -155,12 +168,14 @@ class _OnboardingPage {
   final String title;
   final String body;
   final List<Color> gradient;
+  final bool isPermissionPage;
 
   const _OnboardingPage({
     required this.icon,
     required this.title,
     required this.body,
     required this.gradient,
+    this.isPermissionPage = false,
   });
 }
 
@@ -223,6 +238,30 @@ class _PageContent extends StatelessWidget {
                   .animate()
                   .fadeIn(duration: 500.ms, delay: 350.ms)
                   .slideY(begin: 0.3, duration: 500.ms, delay: 350.ms),
+              if (page.isPermissionPage) ...[
+                const SizedBox(height: 28),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.security_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SMS data stays on-device, always.',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
+              ],
             ],
           ),
         ),

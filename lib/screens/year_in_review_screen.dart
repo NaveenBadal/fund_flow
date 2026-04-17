@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -27,9 +26,7 @@ class _YearInReviewScreenState extends ConsumerState<YearInReviewScreen> {
   Widget build(BuildContext context) {
     final reviewAsync = ref.watch(yearInReviewProvider(_year));
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-    final fmtCompact = NumberFormat.compact(locale: 'en_IN');
 
     return Scaffold(
       appBar: AppBar(

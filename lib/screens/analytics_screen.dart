@@ -4,13 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
 import '../utils/category_utils.dart';
+import '../utils/currency_utils.dart';
 import 'financial_health_screen.dart';
 import 'heatmap_screen.dart';
 import 'merchant_profile_screen.dart';
-
-// ─── Formatter ────────────────────────────────────────────────────────────────
-
-final _currencyFmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
@@ -37,6 +34,18 @@ class AnalyticsScreen extends ConsumerWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           sliver: const SliverToBoxAdapter(child: _BalanceCard()),
+        ),
+
+        // Month-over-month delta chip
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+          sliver: SliverToBoxAdapter(child: _DeltaChip()),
+        ),
+
+        // Anomaly callout (only if anomalies found)
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+          sliver: SliverToBoxAdapter(child: _AnomalyCalloutCard()),
         ),
 
         // Monthly spending bar chart
@@ -130,6 +139,10 @@ class _BalanceCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balanceAsync = ref.watch(currentMonthBalanceProvider);
+    final privateMode = ref.watch(privateModeProvider);
+    final currency = ref.watch(expenseListProvider).asData?.value
+            .firstOrNull?.currency ??
+        'INR';
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -167,6 +180,8 @@ class _BalanceCard extends ConsumerWidget {
                       child: _BalanceTile(
                         label: 'Income',
                         amount: income,
+                        currency: currency,
+                        privateMode: privateMode,
                         icon: Icons.arrow_downward_rounded,
                         color: Colors.green.shade600,
                         containerColor: Colors.green.shade50,
@@ -177,6 +192,8 @@ class _BalanceCard extends ConsumerWidget {
                       child: _BalanceTile(
                         label: 'Expenses',
                         amount: expense,
+                        currency: currency,
+                        privateMode: privateMode,
                         icon: Icons.arrow_upward_rounded,
                         color: scheme.error,
                         containerColor: scheme.errorContainer,
@@ -193,10 +210,124 @@ class _BalanceCard extends ConsumerWidget {
   }
 }
 
+// ─── Month-over-month delta chip ──────────────────────────────────────────────
+
+class _DeltaChip extends ConsumerWidget {
+  const _DeltaChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentAsync = ref.watch(currentMonthBalanceProvider);
+    final prevAsync = ref.watch(previousMonthBalanceProvider);
+    final privateMode = ref.watch(privateModeProvider);
+
+    final current = (currentAsync.asData?.value['expense'] as num?)?.toDouble() ?? 0.0;
+    final prev = (prevAsync.asData?.value['expense'] as num?)?.toDouble() ?? 0.0;
+
+    if (prev <= 0 || privateMode) return const SizedBox.shrink();
+
+    final delta = (current - prev) / prev * 100;
+    final up = delta > 0;
+    final color = up ? Colors.red : Colors.green;
+    final icon = up ? Icons.trending_up_rounded : Icons.trending_down_rounded;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                '${delta.abs().toStringAsFixed(1)}% vs last month',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Anomaly callout ──────────────────────────────────────────────────────────
+
+class _AnomalyCalloutCard extends ConsumerWidget {
+  const _AnomalyCalloutCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final anomaliesAsync = ref.watch(anomalyAlertsProvider);
+    final anomalies = anomaliesAsync.asData?.value ?? [];
+    if (anomalies.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      elevation: 0,
+      color: scheme.errorContainer.withValues(alpha: 0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: scheme.error, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '${anomalies.length} Anomal${anomalies.length == 1 ? 'y' : 'ies'} Detected',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onErrorContainer,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...anomalies.take(3).map((a) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                '• ${a.body}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onErrorContainer.withValues(alpha: 0.85),
+                ),
+              ),
+            )),
+            if (anomalies.length > 3)
+              Text(
+                '+${anomalies.length - 3} more…',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: scheme.onErrorContainer.withValues(alpha: 0.6),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _BalanceTile extends StatelessWidget {
   const _BalanceTile({
     required this.label,
     required this.amount,
+    required this.currency,
+    required this.privateMode,
     required this.icon,
     required this.color,
     required this.containerColor,
@@ -204,6 +335,8 @@ class _BalanceTile extends StatelessWidget {
 
   final String label;
   final double amount;
+  final String currency;
+  final bool privateMode;
   final IconData icon;
   final Color color;
   final Color containerColor;
@@ -233,7 +366,7 @@ class _BalanceTile extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            _currencyFmt.format(amount),
+            privateMode ? maskAmount(currency) : formatAmount(amount, currency),
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
               color: color,
@@ -423,7 +556,7 @@ class _MonthlyBarChart extends ConsumerWidget {
                             final typeLabel =
                                 rodIndex == 0 ? 'Expense' : 'Income';
                             return BarTooltipItem(
-                              '$label\n$typeLabel: ${_currencyFmt.format(rod.toY)}',
+                              '$label\n$typeLabel: ${formatAmount(rod.toY, 'INR')}',
                               theme.textTheme.labelSmall!.copyWith(
                                 color: scheme.onSurface,
                               ),
@@ -443,12 +576,10 @@ class _MonthlyBarChart extends ConsumerWidget {
   }
 
   String _compactAmount(double value) {
-    if (value >= 100000) {
-      return '₹${(value / 100000).toStringAsFixed(1)}L';
-    } else if (value >= 1000) {
-      return '₹${(value / 1000).toStringAsFixed(0)}K';
-    }
-    return '₹${value.toStringAsFixed(0)}';
+    const sym = '₹'; // y-axis labels are always compact; full symbol is fine
+    if (value >= 100000) return '$sym${(value / 100000).toStringAsFixed(1)}L';
+    if (value >= 1000) return '$sym${(value / 1000).toStringAsFixed(0)}K';
+    return '$sym${value.toStringAsFixed(0)}';
   }
 }
 
@@ -584,7 +715,7 @@ class _CategoryPieChart extends ConsumerWidget {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         Text(
-                                          _currencyFmt.format(entry.value),
+                                          formatAmount(entry.value, 'INR'),
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
                                             color: Theme.of(context)
@@ -714,7 +845,7 @@ class _TopMerchantsList extends ConsumerWidget {
                             ),
                           ),
                           trailing: Text(
-                            _currencyFmt.format(total),
+                            formatAmount(total, 'INR'),
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w800,
                             ),

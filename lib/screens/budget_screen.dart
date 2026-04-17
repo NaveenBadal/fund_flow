@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../models/budget.dart';
 import '../providers/expense_provider.dart';
 import '../utils/category_utils.dart';
+import '../utils/currency_utils.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
   const BudgetScreen({super.key});
@@ -183,7 +183,7 @@ class _EmptyBudgetState extends StatelessWidget {
   }
 }
 
-class _BudgetProgressCard extends StatelessWidget {
+class _BudgetProgressCard extends ConsumerWidget {
   const _BudgetProgressCard({
     required this.progress,
     required this.onTap,
@@ -195,14 +195,15 @@ class _BudgetProgressCard extends StatelessWidget {
   final VoidCallback onDismissed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final privateMode = ref.watch(privateModeProvider);
 
     final category = progress['category'] as String;
     final spent = (progress['spent'] as num).toDouble();
     final limit = (progress['limit_amount'] as num).toDouble();
-    // currency available for future multi-currency support
+    final currency = progress['currency'] as String? ?? 'INR';
 
     final ratio = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
     final isOver = spent > limit;
@@ -218,7 +219,6 @@ class _BudgetProgressCard extends StatelessWidget {
     }
 
     final catColor = categoryColor(category);
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 
     return Dismissible(
       key: ValueKey('budget_$category'),
@@ -306,7 +306,9 @@ class _BudgetProgressCard extends StatelessWidget {
                       ),
                     const SizedBox(width: 8),
                     Text(
-                      '${fmt.format(spent)} / ${fmt.format(limit)}',
+                      privateMode
+                          ? '${maskAmount(currency)} / ${maskAmount(currency)}'
+                          : '${formatAmount(spent, currency)} / ${formatAmount(limit, currency)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: isOver
