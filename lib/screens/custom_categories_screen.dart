@@ -1,293 +1,339 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/custom_category.dart';
 import '../providers/expense_provider.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/ui/command_ui.dart';
 
 class CustomCategoriesScreen extends ConsumerWidget {
   const CustomCategoriesScreen({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categoriesAsync = ref.watch(customCategoryListProvider);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
+    final async = ref.watch(customCategoryListProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Custom Categories')),
-      body: categoriesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (categories) {
-          if (categories.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: scheme.primaryContainer,
-                      child: Icon(Icons.category_rounded, size: 40, color: scheme.primary),
-                    ),
-                    const SizedBox(height: 20),
-                    Text('No custom categories',
-                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Text('Tap + to add one',
-                        style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: categories.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final cat = categories[i];
-              return _CategoryTile(
-                category: cat,
-                onEdit: () => _showEditDialog(context, ref, cat),
-                onDelete: () => _confirmDelete(context, ref, cat),
-              );
-            },
-          );
-        },
-      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEditDialog(context, ref, null),
+        onPressed: () => _open(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Category'),
+        label: const Text('New category'),
       ),
-    );
-  }
-
-  Future<void> _showEditDialog(BuildContext context, WidgetRef ref, CustomCategory? existing) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _CategoryEditSheet(existing: existing),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, CustomCategory cat) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete category?'),
-        content: Text('Remove "${cat.name}"? Existing expenses will keep this category label.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+      body: CustomScrollView(
+        slivers: [
+          const SliverAppBar.large(title: Text('Category library')),
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+              child: Text(
+                'Built-in categories cover the essentials. Add only the distinctions that change how you understand your spending.',
+              ),
+            ),
+          ),
+          async.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              child: StatePanel(
+                icon: Icons.category_outlined,
+                title: 'Library unavailable',
+                message: '$error',
+              ),
+            ),
+            data: (items) => items.isEmpty
+                ? const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: StatePanel(
+                      icon: Icons.category_rounded,
+                      title: 'No custom categories',
+                      message:
+                          'Your built-in category system is ready. Add one only when you need more detail.',
+                    ),
+                  )
+                : SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    sliver: SliverGrid.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.35,
+                          ),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return _CategoryCell(
+                          item: item,
+                          onTap: () => _open(context, item),
+                          onDelete: () => _delete(context, ref, item),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
     );
-    if (ok == true && cat.id != null) {
-      await ref.read(customCategoryListProvider.notifier).remove(cat.id!);
+  }
+
+  void _open(BuildContext context, [CustomCategory? category]) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => _CategorySheet(category: category),
+      );
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    CustomCategory category,
+  ) async {
+    final yes =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Delete ${category.name}?'),
+            content: const Text('Existing movements keep their current label.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (yes && category.id != null) {
+      await ref.read(customCategoryListProvider.notifier).remove(category.id!);
     }
   }
 }
 
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.category, required this.onEdit, required this.onDelete});
-
-  final CustomCategory category;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
+class _CategoryCell extends StatelessWidget {
+  const _CategoryCell({
+    required this.item,
+    required this.onTap,
+    required this.onDelete,
+  });
+  final CustomCategory item;
+  final VoidCallback onTap, onDelete;
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final color = category.color;
-
-    return Material(
-      color: scheme.surfaceContainerHighest.withValues(alpha: 0.38),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onEdit,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: color.withValues(alpha: 0.15),
-                child: Icon(category.iconData, color: color, size: 22),
+  Widget build(BuildContext context) => Material(
+    color: item.color.withValues(alpha: .11),
+    borderRadius: AppRadius.all(AppRadius.lg),
+    child: InkWell(
+      borderRadius: AppRadius.all(AppRadius.lg),
+      onTap: onTap,
+      onLongPress: onDelete,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: item.color,
+                borderRadius: AppRadius.all(14),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  category.name,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
+              child: Icon(item.iconData, color: Colors.white, size: 20),
+            ),
+            const Spacer(),
+            Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            Text(
+              'Hold to remove',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              const SizedBox(width: 12),
-              IconButton(
-                icon: Icon(Icons.delete_outline, color: scheme.error),
-                onPressed: onDelete,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _CategoryEditSheet extends ConsumerStatefulWidget {
-  const _CategoryEditSheet({this.existing});
-
-  final CustomCategory? existing;
-
+class _CategorySheet extends ConsumerStatefulWidget {
+  const _CategorySheet({this.category});
+  final CustomCategory? category;
   @override
-  ConsumerState<_CategoryEditSheet> createState() => _CategoryEditSheetState();
+  ConsumerState<_CategorySheet> createState() => _CategorySheetState();
 }
 
-class _CategoryEditSheetState extends ConsumerState<_CategoryEditSheet> {
-  late TextEditingController _nameCtrl;
-  late Color _selectedColor;
-  late IconData _selectedIcon;
-
+class _CategorySheetState extends ConsumerState<_CategorySheet> {
+  late final TextEditingController _name;
+  late Color _color;
+  late IconData _icon;
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
-    _selectedColor = widget.existing?.color ?? CustomCategory.presetColors.first;
-    _selectedIcon = widget.existing?.iconData ?? CustomCategory.presetIcons.first;
+    _name = TextEditingController(text: widget.category?.name ?? '');
+    _color = widget.category?.color ?? CustomCategory.presetColors.first;
+    _icon = widget.category?.iconData ?? CustomCategory.presetIcons.first;
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
+    _name.dispose();
     super.dispose();
   }
 
-  Future<void> _save() async {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
-
-    final colorHex = _selectedColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase();
-    final iconHex = _selectedIcon.codePoint.toRadixString(16).toUpperCase();
-
-    final cat = CustomCategory(
-      id: widget.existing?.id,
-      name: name,
-      iconCodepoint: iconHex,
-      colorValue: colorHex,
-    );
-
-    await ref.read(customCategoryListProvider.notifier).upsert(cat);
-    if (mounted) Navigator.pop(context);
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isEditing = widget.existing != null;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 28),
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      4,
+      20,
+      MediaQuery.viewInsetsOf(context).bottom + 28,
+    ),
+    child: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isEditing ? 'Edit Category' : 'New Category',
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: _color,
+                  borderRadius: AppRadius.all(18),
+                ),
+                child: Icon(_icon, color: Colors.white),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Text(
+                  widget.category == null ? 'Create category' : 'Edit category',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          TextField(
+            controller: _name,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Category name'),
           ),
           const SizedBox(height: 20),
-          TextField(
-            controller: _nameCtrl,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              prefixIcon: Icon(Icons.label_outline_rounded),
-              filled: true,
+          Text(
+            'COLOR',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
             ),
           ),
-          const SizedBox(height: 20),
-          Text('Color', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: CustomCategory.presetColors.map((c) {
-              final selected = _selectedColor.r == c.r && _selectedColor.g == c.g && _selectedColor.b == c.b && _selectedColor.a == c.a;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedColor = c),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: c,
-                    borderRadius: BorderRadius.circular(10),
-                    border: selected ? Border.all(color: scheme.onSurface, width: 3) : null,
-                    boxShadow: selected
-                        ? [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 8, spreadRadius: 1)]
-                        : null,
+            children: [
+              for (final color in CustomCategory.presetColors)
+                GestureDetector(
+                  onTap: () => setState(() => _color = color),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: color == _color
+                          ? Border.all(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              width: 3,
+                            )
+                          : null,
+                    ),
                   ),
-                  child: selected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
                 ),
-              );
-            }).toList(),
+            ],
           ),
           const SizedBox(height: 20),
-          Text('Icon', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            'SYMBOL',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
           const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: CustomCategory.presetIcons.map((icon) {
-              final selected = _selectedIcon.codePoint == icon.codePoint;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedIcon = icon),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? _selectedColor.withValues(alpha: 0.2)
-                        : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected ? Border.all(color: _selectedColor, width: 2) : null,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final icon in CustomCategory.presetIcons)
+                InkWell(
+                  borderRadius: AppRadius.all(13),
+                  onTap: () => setState(() => _icon = icon),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: icon.codePoint == _icon.codePoint
+                          ? _color.withValues(alpha: .18)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                      borderRadius: AppRadius.all(13),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: icon.codePoint == _icon.codePoint
+                          ? _color
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(icon, color: selected ? _selectedColor : scheme.onSurfaceVariant, size: 22),
                 ),
-              );
-            }).toList(),
+            ],
           ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              icon: const Icon(Icons.save_outlined),
-              label: Text(isEditing ? 'Update' : 'Create'),
+            height: 52,
+            child: FilledButton(
               onPressed: _save,
+              child: const Text('Save category'),
             ),
           ),
         ],
       ),
-    );
+    ),
+  );
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    await ref
+        .read(customCategoryListProvider.notifier)
+        .upsert(
+          CustomCategory(
+            id: widget.category?.id,
+            name: name,
+            iconCodepoint: _icon.codePoint.toRadixString(16).toUpperCase(),
+            colorValue: _color
+                .toARGB32()
+                .toRadixString(16)
+                .padLeft(8, '0')
+                .toUpperCase(),
+          ),
+        );
+    if (mounted) Navigator.pop(context);
   }
 }

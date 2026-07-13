@@ -1,280 +1,337 @@
+import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+
 import '../providers/expense_provider.dart';
+import '../theme/app_tokens.dart';
+import '../utils/currency_utils.dart';
+import '../widgets/ui/command_ui.dart';
 
 class YearInReviewScreen extends ConsumerStatefulWidget {
   const YearInReviewScreen({super.key, this.year});
-
   final int? year;
-
   @override
   ConsumerState<YearInReviewScreen> createState() => _YearInReviewScreenState();
 }
 
 class _YearInReviewScreenState extends ConsumerState<YearInReviewScreen> {
-  int get _year => widget.year ?? DateTime.now().year;
+  late int _year = widget.year ?? DateTime.now().year;
   final _shareKey = GlobalKey();
-
   @override
   Widget build(BuildContext context) {
-    final reviewAsync = ref.watch(yearInReviewProvider(_year));
-    final theme = Theme.of(context);
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-
+    final async = ref.watch(yearInReviewProvider(_year));
     return Scaffold(
-      appBar: AppBar(
-        title: Text('$_year in Review'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_rounded),
-            onPressed: () => _shareCard(context),
-            tooltip: 'Share',
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            title: const Text('Year story'),
+            actions: [
+              IconButton(
+                onPressed: _share,
+                icon: const Icon(Icons.ios_share_rounded),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: reviewAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (data) {
-          final topMerchant = data['topMerchant'] as String?;
-          final topMerchantTotal = data['topMerchantTotal'] as double? ?? 0;
-          final topCategory = data['topCategory'] as String?;
-          final totalSpent = data['totalSpent'] as double? ?? 0;
-          final maxSpendDay = data['maxSpendDay'] as String?;
-          final maxSpendAmount = data['maxSpendAmount'] as double? ?? 0;
-          final zeroSpendDays = data['zeroSpendDays'] as int? ?? 0;
-          final activeDays = data['activeDays'] as int? ?? 0;
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-            child: RepaintBoundary(
-              key: _shareKey,
-              child: Column(
-                children: [
-                  // Hero year card
-                  _WrappedCard(
-                    gradient: [const Color(0xFF6750A4), const Color(0xFF9C4DD7)],
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$_year',
-                          style: theme.textTheme.displayLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          'Your Year in Review',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Total spent',
-                          style: TextStyle(color: Colors.white60, fontSize: 14),
-                        ),
-                        Text(
-                          fmt.format(totalSpent),
-                          style: theme.textTheme.displaySmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.3, duration: 500.ms),
-
-                  const SizedBox(height: 12),
-
-                  // Top merchant
-                  if (topMerchant != null)
-                    _WrappedCard(
-                      gradient: [const Color(0xFF006874), const Color(0xFF00A3B4)],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Top Merchant', style: TextStyle(color: Colors.white60, fontSize: 14)),
-                          const SizedBox(height: 8),
-                          Text(
-                            topMerchant,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            fmt.format(topMerchantTotal),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(duration: 500.ms, delay: 150.ms).slideY(begin: 0.3, duration: 500.ms, delay: 150.ms),
-
-                  const SizedBox(height: 12),
-
-                  // Stats row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _WrappedCard(
-                          gradient: [const Color(0xFF386A20), const Color(0xFF52A030)],
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Zero-spend days', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                              const SizedBox(height: 8),
-                              Text(
-                                '$zeroSpendDays',
-                                style: theme.textTheme.displaySmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text('days', style: const TextStyle(color: Colors.white70)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _WrappedCard(
-                          gradient: [const Color(0xFF7D5260), const Color(0xFFB56576)],
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Active days', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                              const SizedBox(height: 8),
-                              Text(
-                                '$activeDays',
-                                style: theme.textTheme.displaySmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text('days', style: const TextStyle(color: Colors.white70)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ).animate().fadeIn(duration: 500.ms, delay: 300.ms),
-
-                  const SizedBox(height: 12),
-
-                  // Most expensive day
-                  if (maxSpendDay != null)
-                    _WrappedCard(
-                      gradient: [const Color(0xFFB71C1C), const Color(0xFFD32F2F)],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Most expensive day', style: TextStyle(color: Colors.white60, fontSize: 14)),
-                          const SizedBox(height: 8),
-                          Text(
-                            () {
-                              final dt = DateTime.tryParse(maxSpendDay);
-                              return dt != null ? DateFormat('EEEE, MMMM d').format(dt) : maxSpendDay;
-                            }(),
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            fmt.format(maxSpendAmount),
-                            style: theme.textTheme.titleLarge?.copyWith(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(duration: 500.ms, delay: 450.ms).slideY(begin: 0.3, duration: 500.ms, delay: 450.ms),
-
-                  const SizedBox(height: 12),
-
-                  // Top category
-                  if (topCategory != null)
-                    _WrappedCard(
-                      gradient: [const Color(0xFFF57F17), const Color(0xFFF9A825)],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Top Category', style: TextStyle(color: Colors.white60, fontSize: 14)),
-                          const SizedBox(height: 8),
-                          Text(
-                            topCategory,
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(duration: 500.ms, delay: 600.ms).slideY(begin: 0.3, duration: 500.ms, delay: 600.ms),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: [
+                  for (
+                    var year = DateTime.now().year - 2;
+                    year <= DateTime.now().year;
+                    year++
+                  )
+                    ButtonSegment(value: year, label: Text('$year')),
                 ],
+                selected: {_year},
+                onSelectionChanged: (value) =>
+                    setState(() => _year = value.first),
               ),
             ),
-          );
-        },
+          ),
+          async.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              child: StatePanel(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Story unavailable',
+                message: '$error',
+              ),
+            ),
+            data: (data) => SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 40),
+              sliver: SliverToBoxAdapter(
+                child: RepaintBoundary(
+                  key: _shareKey,
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Column(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(26),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.inverseSurface,
+                            borderRadius: AppRadius.all(36),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$_year',
+                                style: Theme.of(context).textTheme.displayLarge
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -2,
+                                    ),
+                              ),
+                              Text(
+                                'A year measured in choices.',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onInverseSurface,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                              const SizedBox(height: 28),
+                              Text(
+                                'TOTAL SPENT',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onInverseSurface
+                                          .withValues(alpha: .55),
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                formatAmount(
+                                  (data['totalSpent'] as num?)?.toDouble() ?? 0,
+                                  'INR',
+                                ),
+                                style: Theme.of(context).textTheme.displaySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onInverseSurface,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _StoryTile(
+                                label: 'NO-SPEND DAYS',
+                                value: '${data['zeroSpendDays'] ?? 0}',
+                                caption: 'quiet days',
+                                color: context.finance.income,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _StoryTile(
+                                label: 'ACTIVE DAYS',
+                                value: '${data['activeDays'] ?? 0}',
+                                caption: 'days with movement',
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (data['topMerchant'] != null)
+                          _Statement(
+                            kicker: 'MOST VISITED',
+                            title: data['topMerchant'] as String,
+                            detail: formatAmount(
+                              (data['topMerchantTotal'] as num?)?.toDouble() ??
+                                  0,
+                              'INR',
+                            ),
+                            icon: Icons.storefront_rounded,
+                          ),
+                        const SizedBox(height: 12),
+                        if (data['topCategory'] != null)
+                          _Statement(
+                            kicker: 'BIGGEST THEME',
+                            title: data['topCategory'] as String,
+                            detail: 'Your leading spending category',
+                            icon: Icons.category_rounded,
+                          ),
+                        const SizedBox(height: 12),
+                        if (data['maxSpendDay'] != null)
+                          _Statement(
+                            kicker: 'THE BIG DAY',
+                            title: _day(data['maxSpendDay'] as String),
+                            detail: formatAmount(
+                              (data['maxSpendAmount'] as num?)?.toDouble() ?? 0,
+                              'INR',
+                            ),
+                            icon: Icons.local_fire_department_rounded,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _shareCard(BuildContext context) async {
+  String _day(String raw) {
+    final date = DateTime.tryParse(raw);
+    return date == null ? raw : DateFormat('EEEE, d MMMM').format(date);
+  }
+
+  Future<void> _share() async {
     try {
-      final boundary = _shareKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary =
+          _shareKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
       if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/year_in_review_$_year.png');
-      await file.writeAsBytes(bytes);
+      final image = await boundary.toImage(pixelRatio: 3);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (bytes == null) return;
+      final file = File(
+        '${(await getTemporaryDirectory()).path}/money_story_$_year.png',
+      );
+      await file.writeAsBytes(bytes.buffer.asUint8List());
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path, mimeType: 'image/png')],
-          subject: '$_year Expense Wrapped',
+          subject: 'My $_year money story',
         ),
       );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Share failed: $e')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Share failed: $error')));
       }
     }
   }
 }
 
-class _WrappedCard extends StatelessWidget {
-  const _WrappedCard({required this.gradient, required this.child});
-
-  final List<Color> gradient;
-  final Widget child;
-
+class _StoryTile extends StatelessWidget {
+  const _StoryTile({
+    required this.label,
+    required this.value,
+    required this.caption,
+    required this.color,
+  });
+  final String label, value, caption;
+  final Color color;
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget build(BuildContext context) => Container(
+    height: 150,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .13),
+      borderRadius: AppRadius.all(AppRadius.lg),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
         ),
+        const Spacer(),
+        Text(
+          value,
+          style: Theme.of(
+            context,
+          ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        Text(caption, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+  );
+}
+
+class _Statement extends StatelessWidget {
+  const _Statement({
+    required this.kicker,
+    required this.title,
+    required this.detail,
+    required this.icon,
+  });
+  final String kicker, title, detail;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: AppRadius.all(AppRadius.lg),
+      border: Border.all(
+        color: Theme.of(
+          context,
+        ).colorScheme.outlineVariant.withValues(alpha: .45),
       ),
-      child: child,
-    );
-  }
+    ),
+    child: Row(
+      children: [
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 28),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                kicker,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                detail,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }

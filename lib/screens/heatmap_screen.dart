@@ -1,317 +1,242 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../providers/expense_provider.dart';
+import '../theme/app_tokens.dart';
+import '../utils/currency_utils.dart';
+import '../widgets/ui/command_ui.dart';
 
 class HeatmapScreen extends ConsumerWidget {
   const HeatmapScreen({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final heatmapAsync = ref.watch(heatmapDataProvider);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
+    final async = ref.watch(heatmapDataProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Spending Heatmap'),
-      ),
-      body: heatmapAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (data) {
-          if (data.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.calendar_today_outlined, size: 64, color: scheme.outline),
-                  const SizedBox(height: 16),
-                  Text('No data yet', style: theme.textTheme.titleLarge),
+      body: CustomScrollView(
+        slivers: [
+          const SliverAppBar.large(title: Text('Spending calendar')),
+          async.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              child: StatePanel(
+                icon: Icons.calendar_month_outlined,
+                title: 'Calendar unavailable',
+                message: '$error',
+              ),
+            ),
+            data: (data) {
+              if (data.isEmpty) {
+                return const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: StatePanel(
+                    icon: Icons.calendar_month_rounded,
+                    title: 'No rhythm yet',
+                    message:
+                        'Your daily pattern will emerge as movements enter the ledger.',
+                  ),
+                );
+              }
+              final maximum = data.values.reduce(max);
+              final total = data.values.fold<double>(
+                0,
+                (sum, value) => sum + value,
+              );
+              final active = data.values.where((value) => value > 0).length;
+              final top = data.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+              return SliverMainAxisGroup(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 125,
+                              child: MetricTile(
+                                label: 'Tracked year',
+                                value: formatAmount(total, 'INR'),
+                                icon: Icons.calendar_view_month_rounded,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 125,
+                              child: MetricTile(
+                                label: 'Active days',
+                                value: '$active',
+                                icon: Icons.brightness_5_rounded,
+                                caption: '${365 - active} no-spend days',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(
+                    child: SectionLabel('Last 16 weeks'),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.inverseSurface,
+                          borderRadius: AppRadius.all(AppRadius.xxl),
+                        ),
+                        child: _CalendarGrid(data: data, maximum: maximum),
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(
+                    child: SectionLabel('Highest-spend days'),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                    sliver: SliverList.separated(
+                      itemCount: min(6, top.length),
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: .4),
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = top[index];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 5,
+                          ),
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: .12),
+                              borderRadius: AppRadius.all(14),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${item.key.day}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            DateFormat('EEEE').format(item.key),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            DateFormat('d MMMM yyyy').format(item.key),
+                          ),
+                          trailing: Text(
+                            formatAmount(item.value, 'INR'),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ],
-              ),
-            );
-          }
-
-          final maxAmount = data.values.reduce(max);
-          final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-
-          return CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                sliver: SliverToBoxAdapter(
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Last 365 days',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Each square = one day. Darker = more spending.',
-                            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 20),
-                          _HeatmapGrid(data: data, maxAmount: maxAmount),
-                          const SizedBox(height: 12),
-                          _Legend(maxAmount: maxAmount),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                sliver: SliverToBoxAdapter(
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Top spend days',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 12),
-                          ...(data.entries.toList()
-                                ..sort((a, b) => b.value.compareTo(a.value)))
-                              .take(5)
-                              .map((e) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: BoxDecoration(
-                                            color: _intensityColor(
-                                                e.value, maxAmount, scheme.primary),
-                                            borderRadius: BorderRadius.circular(3),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            DateFormat('EEEE, MMM d, yyyy').format(e.key),
-                                            style: theme.textTheme.bodyMedium,
-                                          ),
-                                        ),
-                                        Text(
-                                          fmt.format(e.value),
-                                          style: theme.textTheme.titleSmall?.copyWith(
-                                              fontWeight: FontWeight.w800),
-                                        ),
-                                      ],
-                                    ),
-                                  )),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 88)),
-            ],
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _HeatmapGrid extends StatefulWidget {
-  const _HeatmapGrid({required this.data, required this.maxAmount});
-
+class _CalendarGrid extends StatelessWidget {
+  const _CalendarGrid({required this.data, required this.maximum});
   final Map<DateTime, double> data;
-  final double maxAmount;
-
-  @override
-  State<_HeatmapGrid> createState() => _HeatmapGridState();
-}
-
-class _HeatmapGridState extends State<_HeatmapGrid> {
-  DateTime? _hoveredDay;
-
+  final double maximum;
   @override
   Widget build(BuildContext context) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final days = [
+      for (var offset = 111; offset >= 0; offset--)
+        today.subtract(Duration(days: offset)),
+    ];
     final scheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-    final fmt = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-
-    final now = DateTime.now();
-    final startDay = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 364));
-
-    // Build weeks (columns), each with up to 7 days
-    final weeks = <List<DateTime?>>[];
-    final firstDayOfWeek = startDay.subtract(Duration(days: startDay.weekday % 7));
-    var current = firstDayOfWeek;
-
-    while (current.isBefore(now.add(const Duration(days: 7)))) {
-      final week = <DateTime?>[];
-      for (int d = 0; d < 7; d++) {
-        final day = current.add(Duration(days: d));
-        if (day.isBefore(startDay) || day.isAfter(now)) {
-          week.add(null);
-        } else {
-          week.add(DateTime(day.year, day.month, day.day));
-        }
-      }
-      weeks.add(week);
-      current = current.add(const Duration(days: 7));
-    }
-
-    // Month labels
-    final monthLabels = <int, String>{};
-    for (int w = 0; w < weeks.length; w++) {
-      for (final day in weeks[w]) {
-        if (day != null && day.day <= 7) {
-          monthLabels[w] = DateFormat('MMM').format(day);
-          break;
-        }
-      }
-    }
-
-    const cellSize = 12.0;
-    const cellGap = 2.0;
-
-    return LayoutBuilder(builder: (context, constraints) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Month labels row
-          SizedBox(
-            height: 20,
-            child: Row(
-              children: weeks.asMap().entries.map((e) {
-                final label = monthLabels[e.key];
-                return SizedBox(
-                  width: cellSize + cellGap,
-                  child: label != null
-                      ? Text(label,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontSize: 9,
-                              ))
-                      : const SizedBox.shrink(),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // Grid
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: weeks.map((week) {
-              return Padding(
-                padding: const EdgeInsets.only(right: cellGap),
-                child: Column(
-                  children: week.map((day) {
-                    if (day == null) {
-                      return SizedBox(width: cellSize, height: cellSize + cellGap);
-                    }
-                    final amount = widget.data[day] ?? 0;
-                    final color = amount > 0
-                        ? _intensityColor(amount, widget.maxAmount, scheme.primary)
-                        : scheme.surfaceContainerHighest.withValues(alpha: 0.4);
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _hoveredDay = day);
-                        if (amount > 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(
-                                '${DateFormat('MMM d, yyyy').format(day)}: ${fmt.format(amount)}'),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ));
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: cellGap),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          width: cellSize,
-                          height: cellSize,
-                          decoration: BoxDecoration(
-                            color: color,
-                            borderRadius: BorderRadius.circular(2),
-                            border: _hoveredDay == day
-                                ? Border.all(color: scheme.primary, width: 1.5)
-                                : null,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              );
-            }).toList(),
-          ),
-          if (_hoveredDay != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${DateFormat('EEEE, MMMM d, yyyy').format(_hoveredDay!)}: ${fmt.format(widget.data[_hoveredDay!] ?? 0)}',
-              style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ],
-      );
-    });
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend({required this.maxAmount});
-
-  final double maxAmount;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final fmt = NumberFormat.compact(locale: 'en_IN');
-
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Less', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
-        const SizedBox(width: 6),
-        ...List.generate(5, (i) {
-          final intensity = i / 4;
-          return Padding(
-            padding: const EdgeInsets.only(right: 3),
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: intensity == 0
-                    ? scheme.surfaceContainerHighest.withValues(alpha: 0.4)
-                    : _intensityColor(maxAmount * intensity, maxAmount, scheme.primary),
-                borderRadius: BorderRadius.circular(2),
+        Row(
+          children: [
+            Text(
+              'QUIET',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onInverseSurface.withValues(alpha: .55),
+                letterSpacing: 1,
               ),
             ),
-          );
-        }),
-        const SizedBox(width: 6),
-        Text('${fmt.format(maxAmount)}+',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+            const Spacer(),
+            for (var i = 1; i <= 4; i++)
+              Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.only(left: 4),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: i / 4),
+                  borderRadius: AppRadius.all(3),
+                ),
+              ),
+            const SizedBox(width: 7),
+            Text(
+              'BUSY',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onInverseSurface.withValues(alpha: .55),
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 16,
+            mainAxisSpacing: 5,
+            crossAxisSpacing: 5,
+          ),
+          itemCount: days.length,
+          itemBuilder: (context, index) {
+            final day = days[index];
+            final amount = data[day] ?? 0;
+            final intensity = maximum == 0
+                ? 0.0
+                : (amount / maximum).clamp(.08, 1.0);
+            return Tooltip(
+              message:
+                  '${DateFormat('d MMM').format(day)} · ${formatAmount(amount, 'INR')}',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: amount == 0
+                      ? scheme.onInverseSurface.withValues(alpha: .08)
+                      : scheme.primary.withValues(alpha: intensity),
+                  borderRadius: AppRadius.all(4),
+                ),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
-}
-
-Color _intensityColor(double amount, double maxAmount, Color primary) {
-  if (maxAmount == 0) return primary.withValues(alpha: 0.1);
-  final intensity = (amount / maxAmount).clamp(0.1, 1.0);
-  return primary.withValues(alpha: intensity);
 }

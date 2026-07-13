@@ -1,4 +1,4 @@
-# expense_manager
+# Fund Flow
 
 A new Flutter project.
 

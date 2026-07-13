@@ -13,10 +13,12 @@ class CustomCategory {
     required this.colorValue,
   });
 
+  // Persisted user-selected code points are necessarily runtime values.
   IconData get iconData => IconData(
-        int.parse(iconCodepoint, radix: 16),
-        fontFamily: 'MaterialIcons',
-      );
+    // ignore: non_const_argument_for_const_parameter
+    int.parse(iconCodepoint, radix: 16),
+    fontFamily: 'MaterialIcons',
+  );
 
   Color get color => Color(int.parse(colorValue, radix: 16));
 
@@ -25,27 +27,26 @@ class CustomCategory {
     String? name,
     String? iconCodepoint,
     String? colorValue,
-  }) =>
-      CustomCategory(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        iconCodepoint: iconCodepoint ?? this.iconCodepoint,
-        colorValue: colorValue ?? this.colorValue,
-      );
+  }) => CustomCategory(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    iconCodepoint: iconCodepoint ?? this.iconCodepoint,
+    colorValue: colorValue ?? this.colorValue,
+  );
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'icon': iconCodepoint,
-        'color': colorValue,
-      };
+    'id': id,
+    'name': name,
+    'icon': iconCodepoint,
+    'color': colorValue,
+  };
 
   factory CustomCategory.fromMap(Map<String, dynamic> map) => CustomCategory(
-        id: map['id'] as int?,
-        name: map['name'] as String,
-        iconCodepoint: map['icon'] as String,
-        colorValue: map['color'] as String,
-      );
+    id: map['id'] as int?,
+    name: map['name'] as String,
+    iconCodepoint: map['icon'] as String,
+    colorValue: map['color'] as String,
+  );
 
   /// Preset color swatches for the category picker UI.
   static const List<Color> presetColors = [

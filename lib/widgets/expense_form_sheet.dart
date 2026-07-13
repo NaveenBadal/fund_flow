@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
+import '../theme/app_tokens.dart';
 import '../utils/category_utils.dart';
-import '../utils/currency_utils.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ExpenseFormSheet
-//
-// Unified add / edit / view sheet for expenses.
-//   • initialExpense == null  →  Create mode ("Add expense")
-//   • initialExpense != null  →  View mode initially; user taps edit icon to
-//                                 switch into edit mode
-// ─────────────────────────────────────────────────────────────────────────────
 
 class ExpenseFormSheet extends ConsumerStatefulWidget {
   const ExpenseFormSheet({
@@ -22,552 +15,508 @@ class ExpenseFormSheet extends ConsumerStatefulWidget {
     required this.onSave,
     this.onDelete,
   });
-
-  /// Pass null to open in create mode.
   final Expense? initialExpense;
   final Future<void> Function(Expense) onSave;
   final VoidCallback? onDelete;
-
   @override
   ConsumerState<ExpenseFormSheet> createState() => _ExpenseFormSheetState();
 }
 
 class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
-  late TextEditingController _merchantCtrl;
-  late TextEditingController _amountCtrl;
-  late TextEditingController _splitCtrl;
-  late TextEditingController _tagInputCtrl;
+  late final TextEditingController _amount;
+  late final TextEditingController _merchant;
+  late final TextEditingController _tags;
+  late String _type;
   late String _category;
-  late String _type; // 'expense' | 'income'
   late String _currency;
   late DateTime _date;
-  late List<String> _tags;
-
-  bool _editing = false;
   bool _saving = false;
-
-  bool get _createMode => widget.initialExpense == null;
 
   @override
   void initState() {
     super.initState();
-    final e = widget.initialExpense;
-    _merchantCtrl = TextEditingController(text: e?.merchant ?? '');
-    _amountCtrl = TextEditingController(
-      text: e != null ? e.amount.toStringAsFixed(2) : '',
+    final item = widget.initialExpense;
+    _amount = TextEditingController(
+      text: item == null ? '' : item.amount.toStringAsFixed(2),
     );
-    _splitCtrl = TextEditingController(
-      text: e?.splitShare != null ? e!.splitShare!.toStringAsFixed(2) : '',
-    );
-    _tagInputCtrl = TextEditingController();
-    _category = e?.category ?? 'Others';
-    _type = e?.type ?? 'expense';
-    _currency = e?.currency ?? 'INR';
-    _date = e?.date ?? DateTime.now();
-    _tags = e?.tagList.toList() ?? [];
-    _editing = _createMode; // create mode starts in edit mode
+    _merchant = TextEditingController(text: item?.merchant ?? '');
+    _tags = TextEditingController(text: item?.tags ?? '');
+    _type = item?.type ?? 'expense';
+    _category = item?.category ?? 'Others';
+    _currency = item?.currency ?? 'INR';
+    _date = item?.date ?? DateTime.now();
   }
 
   @override
   void dispose() {
-    _merchantCtrl.dispose();
-    _amountCtrl.dispose();
-    _splitCtrl.dispose();
-    _tagInputCtrl.dispose();
+    _amount.dispose();
+    _merchant.dispose();
+    _tags.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final categories = ref.watch(allCategoryNamesProvider);
-
-    // Ensure category is valid
-    if (categories.isNotEmpty && !categories.contains(_category)) {
+    if (!categories.contains(_category) && categories.isNotEmpty) {
       _category = categories.first;
     }
-
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          0,
-          20,
-          MediaQuery.of(context).viewInsets.bottom + 28,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ────────────────────────────────────────
-              Row(
+    final scheme = Theme.of(context).colorScheme;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .92,
+      minChildSize: .65,
+      maxChildSize: .98,
+      builder: (context, controller) => CustomScrollView(
+        controller: controller,
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      _createMode
-                          ? 'Add expense'
-                          : _editing
-                          ? 'Edit expense'
-                          : 'Expense detail',
-                      style: theme.textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  if (!_createMode && !_editing)
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      tooltip: 'Edit',
-                      onPressed: () => setState(() => _editing = true),
-                    ),
-                  if (widget.onDelete != null)
-                    IconButton(
-                      icon: Icon(Icons.delete_outline, color: scheme.error),
-                      tooltip: 'Delete',
-                      onPressed: widget.onDelete,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              if (_editing) ...[
-                // ── Type toggle ───────────────────────────────
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'expense',
-                      label: Text('Expense'),
-                      icon: Icon(Icons.arrow_upward_rounded),
-                    ),
-                    ButtonSegment(
-                      value: 'income',
-                      label: Text('Income'),
-                      icon: Icon(Icons.arrow_downward_rounded),
-                    ),
-                  ],
-                  selected: {_type},
-                  onSelectionChanged: (s) =>
-                      setState(() => _type = s.first),
-                  style: SegmentedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // ── Amount + currency row ─────────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _amountCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Amount',
-                          prefixIcon: Icon(Icons.payments_outlined),
-                          filled: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 90,
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _currency,
-                        decoration: const InputDecoration(
-                          labelText: 'Currency',
-                          filled: true,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'INR', child: Text('INR')),
-                          DropdownMenuItem(value: 'USD', child: Text('USD')),
-                          DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                          DropdownMenuItem(value: 'GBP', child: Text('GBP')),
-                          DropdownMenuItem(value: 'SGD', child: Text('SGD')),
-                          DropdownMenuItem(value: 'AED', child: Text('AED')),
-                        ],
-                        onChanged: (v) => setState(() => _currency = v!),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                // ── Merchant ──────────────────────────────────
-                TextField(
-                  controller: _merchantCtrl,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Merchant / Description',
-                    prefixIcon: Icon(Icons.store_outlined),
-                    filled: true,
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // ── Category ─────────────────────────────────
-                DropdownButtonFormField<String>(
-                  initialValue: categories.contains(_category) ? _category : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    prefixIcon: Icon(Icons.sell_outlined),
-                    filled: true,
-                  ),
-                  items: categories.map((c) {
-                    final color = categoryColor(c);
-                    final icon = categoryIcon(c);
-                    return DropdownMenuItem(
-                      value: c,
-                      child: Row(
-                        children: [
-                          Icon(icon, size: 18, color: color),
-                          const SizedBox(width: 8),
-                          Text(c),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (v) => setState(() => _category = v!),
-                ),
-                const SizedBox(height: 14),
-
-                // ── Date ─────────────────────────────────────
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_outlined),
-                  title: Text(DateFormat('EEEE, MMMM d, yyyy').format(_date)),
-                  subtitle: const Text('Tap to change date'),
-                  onTap: _pickDate,
-                ),
-
-                // ── Split share ───────────────────────────────
-                if (_type == 'expense') ...[
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _splitCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText:
-                          'My share (${symbolFor(_currency)}) — optional',
-                      prefixIcon: const Icon(Icons.group_outlined),
-                      filled: true,
-                      helperText:
-                          'Leave empty if you paid the full amount',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 14),
-
-                // ── Tags chip editor ──────────────────────────
-                _TagsEditor(
-                  tags: _tags,
-                  onChanged: (updated) =>
-                      setState(() => _tags = updated),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Action buttons ────────────────────────────
-                Row(
-                  children: [
-                    if (!_createMode) ...[
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => setState(() => _editing = false),
-                          child: const Text('Cancel'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: FilledButton.icon(
-                        icon: _saving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Icon(
-                                _createMode
-                                    ? Icons.add
-                                    : Icons.save_outlined,
-                              ),
-                        label: Text(_createMode ? 'Add expense' : 'Save'),
-                        onPressed: _saving ? null : _save,
-                      ),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                // ── View mode ─────────────────────────────────
-                _DetailRow(
-                  icon: expense.isIncome
-                      ? Icons.arrow_downward_rounded
-                      : Icons.arrow_upward_rounded,
-                  label: 'Type',
-                  value:
-                      expense.isIncome ? 'Income' : 'Expense',
-                ),
-                _DetailRow(
-                  icon: Icons.payments_outlined,
-                  label: 'Amount',
-                  value: formatAmount(expense.amount, expense.currency),
-                ),
-                _DetailRow(
-                  icon: Icons.store_outlined,
-                  label: 'Merchant',
-                  value: expense.displayMerchant,
-                ),
-                _DetailRow(
-                  icon: Icons.sell_outlined,
-                  label: 'Category',
-                  value: expense.category,
-                ),
-                _DetailRow(
-                  icon: Icons.event_outlined,
-                  label: 'Date',
-                  value: DateFormat('EEEE, MMMM d, yyyy').format(expense.date),
-                ),
-                if (expense.splitShare != null)
-                  _DetailRow(
-                    icon: Icons.group_outlined,
-                    label: 'My share',
-                    value: formatAmount(expense.splitShare!, expense.currency),
-                  ),
-                if (expense.tagList.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.local_offer_outlined,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary),
-                        ...expense.tagList.map(
-                          (t) => Chip(
-                            label: Text(t),
-                            labelStyle:
-                                Theme.of(context).textTheme.labelMedium,
-                            padding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                          ),
+                        Text(
+                          widget.initialExpense == null
+                              ? 'New movement'
+                              : 'Movement',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          widget.initialExpense == null
+                              ? 'Add it to your ledger'
+                              : 'Review or adjust the details',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
                   ),
-                const SizedBox(height: 12),
-                Text(
-                  'Original SMS',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: scheme.primary),
+                  if (widget.onDelete != null)
+                    IconButton(
+                      onPressed: _confirmDelete,
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        color: scheme.error,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              24,
+              20,
+              MediaQuery.viewInsetsOf(context).bottom + 28,
+            ),
+            sliver: SliverList.list(
+              children: [
+                SegmentedButton<String>(
+                  expandedInsets: EdgeInsets.zero,
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: 'expense',
+                      icon: Icon(Icons.north_east_rounded),
+                      label: Text('Money out'),
+                    ),
+                    ButtonSegment(
+                      value: 'income',
+                      icon: Icon(Icons.south_west_rounded),
+                      label: Text('Money in'),
+                    ),
+                  ],
+                  selected: {_type},
+                  onSelectionChanged: (value) =>
+                      setState(() => _type = value.first),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 24),
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                   decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(16),
+                    color: scheme.inverseSurface,
+                    borderRadius: AppRadius.all(AppRadius.xxl),
                   ),
-                  child: SelectableText(
-                    expense.originalSms,
-                    style: theme.textTheme.bodySmall,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AMOUNT',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onInverseSurface.withValues(alpha: .6),
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _currency,
+                              dropdownColor: scheme.inverseSurface,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: scheme.onInverseSurface,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              items:
+                                  const [
+                                        'INR',
+                                        'USD',
+                                        'EUR',
+                                        'GBP',
+                                        'SGD',
+                                        'AED',
+                                      ]
+                                      .map(
+                                        (value) => DropdownMenuItem(
+                                          value: value,
+                                          child: Text(value),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged: (value) =>
+                                  setState(() => _currency = value!),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _amount,
+                              autofocus: widget.initialExpense == null,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d{0,2}'),
+                                ),
+                              ],
+                              style: Theme.of(context).textTheme.displaySmall
+                                  ?.copyWith(
+                                    color: scheme.onInverseSurface,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              decoration: InputDecoration.collapsed(
+                                hintText: '0.00',
+                                hintStyle: TextStyle(
+                                  color: scheme.onInverseSurface.withValues(
+                                    alpha: .35,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _merchant,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Merchant or description',
+                    prefixIcon: Icon(Icons.storefront_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  initialValue: categories.contains(_category)
+                      ? _category
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  items: categories
+                      .map(
+                        (name) => DropdownMenuItem(
+                          value: name,
+                          child: Row(
+                            children: [
+                              Icon(
+                                categoryIcon(name),
+                                size: 18,
+                                color: categoryColor(name),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(name),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _category = value!),
+                ),
+                const SizedBox(height: 14),
+                Material(
+                  color: scheme.surfaceContainerLow,
+                  borderRadius: AppRadius.all(AppRadius.md),
+                  child: ListTile(
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: Text(DateFormat('EEEE, d MMMM yyyy').format(_date)),
+                    subtitle: Text(DateFormat('h:mm a').format(_date)),
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    onTap: _pickDate,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _tags,
+                  decoration: const InputDecoration(
+                    labelText: 'Tags (optional)',
+                    hintText: 'travel, work, shared',
+                    prefixIcon: Icon(Icons.tag_rounded),
+                  ),
+                ),
+                if (widget.initialExpense != null) ...[
+                  const SizedBox(height: 20),
+                  _SourcePanel(expense: widget.initialExpense!),
+                ],
+                const SizedBox(height: 28),
+                SizedBox(
+                  height: 54,
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check_rounded),
+                    label: Text(
+                      widget.initialExpense == null
+                          ? 'Add to ledger'
+                          : 'Save changes',
+                    ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
-
-  Expense get expense => widget.initialExpense!;
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _date,
-      firstDate: DateTime(2015),
-      lastDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) {
+      setState(
+        () => _date = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _date.hour,
+          _date.minute,
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
-    final merchant = _merchantCtrl.text.trim();
-    final amount = double.tryParse(_amountCtrl.text.trim());
-    if (merchant.isEmpty || amount == null || amount <= 0) {
+    final value = double.tryParse(_amount.text.trim());
+    if (value == null || value <= 0 || _merchant.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid merchant and amount.')),
+        const SnackBar(content: Text('Enter an amount and description.')),
       );
       return;
     }
     setState(() => _saving = true);
-    try {
-      final splitShare = double.tryParse(_splitCtrl.text.trim());
-      final updated = Expense(
-        id: widget.initialExpense?.id,
-        amount: amount,
+    final old = widget.initialExpense;
+    await widget.onSave(
+      Expense(
+        id: old?.id,
+        amount: value,
         currency: _currency,
-        merchant: merchant,
+        merchant: _merchant.text.trim(),
         category: _category,
         date: _date,
-        originalSms: widget.initialExpense?.originalSms ?? 'Manual entry',
+        originalSms: old?.originalSms ?? '',
         type: _type,
-        tags: _tags.join(','),
-        splitShare: splitShare,
-        isRecurring: widget.initialExpense?.isRecurring ?? false,
-        normalizedMerchant: widget.initialExpense?.normalizedMerchant,
-      );
-      await widget.onSave(updated);
-      if (mounted) Navigator.pop(context);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-}
-
-// ─── Tags chip editor ─────────────────────────────────────────────────────────
-
-class _TagsEditor extends StatefulWidget {
-  const _TagsEditor({required this.tags, required this.onChanged});
-
-  final List<String> tags;
-  final ValueChanged<List<String>> onChanged;
-
-  @override
-  State<_TagsEditor> createState() => _TagsEditorState();
-}
-
-class _TagsEditorState extends State<_TagsEditor> {
-  final _ctrl = TextEditingController();
-
-  void _addTag(String raw) {
-    final parts = raw.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty);
-    final updated = [...widget.tags];
-    for (final tag in parts) {
-      if (!updated.contains(tag)) updated.add(tag);
-    }
-    widget.onChanged(updated);
-    _ctrl.clear();
-  }
-
-  void _removeTag(String tag) {
-    widget.onChanged(widget.tags.where((t) => t != tag).toList());
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (widget.tags.isNotEmpty)
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: widget.tags
-                .map(
-                  (t) => InputChip(
-                    label: Text(t),
-                    onDeleted: () => _removeTag(t),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                )
-                .toList(),
-          ),
-        if (widget.tags.isNotEmpty) const SizedBox(height: 8),
-        TextField(
-          controller: _ctrl,
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: 'Add tag…',
-            hintText: 'e.g. business, reimbursable',
-            prefixIcon: const Icon(Icons.local_offer_outlined),
-            filled: true,
-            suffixIcon: IconButton(
-              icon: Icon(Icons.add_circle_outline, color: scheme.primary),
-              onPressed: () {
-                if (_ctrl.text.trim().isNotEmpty) _addTag(_ctrl.text);
-              },
-            ),
-          ),
-          onSubmitted: (v) {
-            if (v.trim().isNotEmpty) _addTag(v);
-          },
-          onChanged: (v) {
-            if (v.endsWith(',')) _addTag(v);
-          },
-        ),
-      ],
+        tags: _tags.text.trim(),
+        splitShare: old?.splitShare,
+        isRecurring: old?.isRecurring ?? false,
+        normalizedMerchant: old?.normalizedMerchant,
+      ),
     );
+    if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _confirmDelete() async {
+    final yes =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete movement?'),
+            content: const Text(
+              'This will remove it from every report and budget.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (yes) widget.onDelete?.call();
   }
 }
 
-// ─── Detail row (view mode) ──────────────────────────────────────────────────
+class _SourcePanel extends StatelessWidget {
+  const _SourcePanel({required this.expense});
 
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
+  final Expense expense;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: scheme.primary),
-          const SizedBox(width: 12),
-          Column(
+    final message = expense.originalSms.trim();
+    final hasMessage = message.isNotEmpty;
+
+    final identity = Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: .1),
+            borderRadius: AppRadius.all(12),
+          ),
+          child: Icon(
+            hasMessage ? Icons.sms_outlined : Icons.edit_note_rounded,
+            size: 19,
+            color: scheme.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                label,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                'Source',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
+              const SizedBox(height: 2),
               Text(
-                value,
-                style: theme.textTheme.bodyLarge
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                hasMessage ? 'Imported from bank SMS' : 'Added manually',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
-        ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: AppRadius.all(99),
+          ),
+          child: Text(
+            hasMessage ? 'SMS' : 'MANUAL',
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: .7,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: AppRadius.all(AppRadius.lg),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .45)),
       ),
+      child: hasMessage
+          ? Theme(
+              data: theme.copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 3,
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: const Border(),
+                collapsedShape: const Border(),
+                title: identity,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withValues(
+                        alpha: .55,
+                      ),
+                      borderRadius: AppRadius.all(AppRadius.md),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SelectionArea(
+                          child: Text(
+                            message,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.5,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () async {
+                              await Clipboard.setData(
+                                ClipboardData(text: message),
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Original SMS copied.'),
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.copy_rounded, size: 16),
+                            label: const Text('Copy message'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Padding(padding: const EdgeInsets.all(16), child: identity),
     );
   }
 }

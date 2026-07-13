@@ -39,29 +39,22 @@ dependencies:
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   flutter_sms_inbox: ^1.0.4
-  fl_chart: ^1.2.0
-  google_fonts: ^8.0.2
   flex_color_scheme: ^8.4.0
   flutter_secure_storage: ^10.0.0
   intl: ^0.20.2
-  flutter_spinkit: ^5.2.2
   path: ^1.9.1
   sqflite: ^2.4.2
-  file_picker: ^11.0.2
-  share_plus: ^12.0.2
+  file_picker: ^12.0.0-beta.7
+  share_plus: ^13.2.0
   local_auth: ^3.0.1
   local_auth_android: ^2.0.8
-  confetti: ^0.8.0
-  dynamic_color: ^1.8.1
   pdf: ^3.12.0
   printing: ^5.14.3
-  flutter_local_notifications: ^21.0.0
-  flutter_animate: ^4.5.2
+  flutter_local_notifications: ^22.0.1
   timezone: ^0.11.0
   google_sign_in: ^7.2.0
   googleapis: ^16.0.0
   http: ^1.6.0
-  onnxruntime: ^1.4.1
 
 dev_dependencies:
   flutter_test:
@@ -86,12 +79,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  assets:
-    - assets/onnx_model/inference_meta.json
-    - assets/onnx_model/tokenizer_config.json
-    - assets/onnx_model/special_tokens_map.json
-    - assets/onnx_model/vocab.txt
-    - assets/onnx_model/model.onnx
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

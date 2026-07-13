@@ -53,14 +53,23 @@ class DatabaseHelper {
     }
     if (oldVersion < 4) {
       await db.execute(
-          "ALTER TABLE expenses ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'");
+        "ALTER TABLE expenses ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'",
+      );
       await _createBudgetsTable(db);
     }
     if (oldVersion < 5) {
-      await db.execute("ALTER TABLE expenses ADD COLUMN tags TEXT NOT NULL DEFAULT ''");
-      await db.execute("ALTER TABLE expenses ADD COLUMN split_share REAL DEFAULT NULL");
-      await db.execute("ALTER TABLE expenses ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0");
-      await db.execute("ALTER TABLE expenses ADD COLUMN normalized_merchant TEXT DEFAULT NULL");
+      await db.execute(
+        "ALTER TABLE expenses ADD COLUMN tags TEXT NOT NULL DEFAULT ''",
+      );
+      await db.execute(
+        "ALTER TABLE expenses ADD COLUMN split_share REAL DEFAULT NULL",
+      );
+      await db.execute(
+        "ALTER TABLE expenses ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0",
+      );
+      await db.execute(
+        "ALTER TABLE expenses ADD COLUMN normalized_merchant TEXT DEFAULT NULL",
+      );
     }
     if (oldVersion < 6) {
       await _createCustomCategoriesTable(db);
@@ -73,10 +82,14 @@ class DatabaseHelper {
       // Columns may already exist if the DB was created at v3+ with the updated
       // _createParsedSmsTable schema. Ignore "duplicate column" errors.
       try {
-        await db.execute("ALTER TABLE parsed_sms ADD COLUMN sender TEXT DEFAULT ''");
+        await db.execute(
+          "ALTER TABLE parsed_sms ADD COLUMN sender TEXT DEFAULT ''",
+        );
       } catch (_) {}
       try {
-        await db.execute("ALTER TABLE parsed_sms ADD COLUMN date INTEGER DEFAULT 0");
+        await db.execute(
+          "ALTER TABLE parsed_sms ADD COLUMN date INTEGER DEFAULT 0",
+        );
       } catch (_) {}
     }
     if (oldVersion < 9) {
@@ -84,7 +97,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 10) {
       try {
-        await db.execute("ALTER TABLE parsed_sms ADD COLUMN skip_reason TEXT NOT NULL DEFAULT ''");
+        await db.execute(
+          "ALTER TABLE parsed_sms ADD COLUMN skip_reason TEXT NOT NULL DEFAULT ''",
+        );
       } catch (_) {}
     }
   }
@@ -190,7 +205,8 @@ CREATE TABLE IF NOT EXISTS app_metadata (
 )
 ''');
     await db.execute(
-        "INSERT OR IGNORE INTO app_metadata (key, value) VALUES ('last_sync_at', '')");
+      "INSERT OR IGNORE INTO app_metadata (key, value) VALUES ('last_sync_at', '')",
+    );
   }
 
   // ─── Expense CRUD ────────────────────────────────────────────────────────
@@ -208,6 +224,20 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       batch.insert('expenses', e.toMap());
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<List<Expense>> insertExpensesReturning(List<Expense> expenses) async {
+    if (expenses.isEmpty) return const [];
+    final db = await instance.database;
+    final batch = db.batch();
+    for (final expense in expenses) {
+      batch.insert('expenses', expense.toMap());
+    }
+    final ids = await batch.commit();
+    return [
+      for (var index = 0; index < expenses.length; index++)
+        expenses[index].copyWith(id: ids[index] as int),
+    ];
   }
 
   Future<int> updateExpense(Expense expense) async {
@@ -331,17 +361,13 @@ CREATE TABLE IF NOT EXISTS app_metadata (
     final batch = db.batch();
     for (final sms in smsList) {
       final body = sms['body'] as String;
-      batch.insert(
-        'parsed_sms',
-        {
-          'body': body,
-          'sender': sms['address'],
-          'date': sms['timestamp'],
-          'parsed_at': now,
-          'skip_reason': skipReasons[body] ?? '',
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      batch.insert('parsed_sms', {
+        'body': body,
+        'sender': sms['address'],
+        'date': sms['timestamp'],
+        'parsed_at': now,
+        'skip_reason': skipReasons[body] ?? '',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
@@ -412,20 +438,22 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   Future<Map<String, String>> getMerchantCategoryMap() async {
     final db = await instance.database;
     final rows = await db.query('merchant_category_map');
-    return {for (final r in rows) r['merchant_key'] as String: r['category'] as String};
+    return {
+      for (final r in rows)
+        r['merchant_key'] as String: r['category'] as String,
+    };
   }
 
-  Future<void> upsertMerchantCategory(String merchantKey, String category) async {
+  Future<void> upsertMerchantCategory(
+    String merchantKey,
+    String category,
+  ) async {
     final db = await instance.database;
-    await db.insert(
-      'merchant_category_map',
-      {
-        'merchant_key': merchantKey.toLowerCase().trim(),
-        'category': category,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('merchant_category_map', {
+      'merchant_key': merchantKey.toLowerCase().trim(),
+      'category': category,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ─── App metadata ─────────────────────────────────────────────────────────
@@ -446,11 +474,10 @@ CREATE TABLE IF NOT EXISTS app_metadata (
 
   Future<void> setAppMetadata(String key, String value) async {
     final db = await instance.database;
-    await db.insert(
-      'app_metadata',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('app_metadata', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ─── Analytics queries ───────────────────────────────────────────────────
@@ -458,7 +485,8 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   Future<List<Map<String, dynamic>>> getMonthlyTotals({int months = 6}) async {
     final db = await instance.database;
     final cutoff = DateTime.now().subtract(Duration(days: months * 31));
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT
         CAST(strftime('%Y', date) AS INTEGER) AS year,
         CAST(strftime('%m', date) AS INTEGER) AS month,
@@ -468,31 +496,41 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       WHERE date >= ?
       GROUP BY year, month
       ORDER BY year DESC, month DESC
-    ''', [cutoff.toIso8601String()]);
+    ''',
+      [cutoff.toIso8601String()],
+    );
     return rows;
   }
 
   Future<Map<String, double>> getCategoryTotals(
-      DateTime from, DateTime to) async {
+    DateTime from,
+    DateTime to,
+  ) async {
     final db = await instance.database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT category, SUM(amount) AS total
       FROM expenses
       WHERE type = 'expense'
         AND date >= ? AND date <= ?
       GROUP BY category
-    ''', [from.toIso8601String(), to.toIso8601String()]);
+    ''',
+      [from.toIso8601String(), to.toIso8601String()],
+    );
     return {
       for (final r in rows)
-        r['category'] as String: (r['total'] as num).toDouble()
+        r['category'] as String: (r['total'] as num).toDouble(),
     };
   }
 
   Future<List<Map<String, dynamic>>> getTopMerchants(
-      DateTime from, DateTime to,
-      {int limit = 7}) async {
+    DateTime from,
+    DateTime to, {
+    int limit = 7,
+  }) async {
     final db = await instance.database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT
         COALESCE(normalized_merchant, merchant) AS merchant,
         SUM(amount)  AS total,
@@ -503,19 +541,24 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       GROUP BY COALESCE(normalized_merchant, merchant)
       ORDER BY total DESC
       LIMIT ?
-    ''', [from.toIso8601String(), to.toIso8601String(), limit]);
+    ''',
+      [from.toIso8601String(), to.toIso8601String(), limit],
+    );
     return rows;
   }
 
   Future<Map<String, double>> getMonthlyBalance(int year, int month) async {
     final db = await instance.database;
     final pad = month.toString().padLeft(2, '0');
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT type, SUM(amount) AS total
       FROM expenses
       WHERE strftime('%Y-%m', date) = ?
       GROUP BY type
-    ''', ['$year-$pad']);
+    ''',
+      ['$year-$pad'],
+    );
     final result = <String, double>{'income': 0, 'expense': 0};
     for (final r in rows) {
       result[r['type'] as String] = (r['total'] as num).toDouble();
@@ -524,10 +567,13 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   }
 
   Future<List<Map<String, dynamic>>> getBudgetProgress(
-      int year, int month) async {
+    int year,
+    int month,
+  ) async {
     final db = await instance.database;
     final pad = month.toString().padLeft(2, '0');
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT b.category,
              COALESCE(SUM(e.amount), 0) AS spent,
              b.limit_amount,
@@ -539,21 +585,28 @@ CREATE TABLE IF NOT EXISTS app_metadata (
         AND strftime('%Y-%m', e.date) = ?
       GROUP BY b.category
       ORDER BY b.category
-    ''', ['$year-$pad']);
+    ''',
+      ['$year-$pad'],
+    );
     return rows;
   }
 
   /// Daily spend totals for heatmap calendar.
   Future<Map<DateTime, double>> getDailyTotals(
-      DateTime from, DateTime to) async {
+    DateTime from,
+    DateTime to,
+  ) async {
     final db = await instance.database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT date(date) AS day, SUM(amount) AS total
       FROM expenses
       WHERE type = 'expense'
         AND date >= ? AND date <= ?
       GROUP BY day
-    ''', [from.toIso8601String(), to.toIso8601String()]);
+    ''',
+      [from.toIso8601String(), to.toIso8601String()],
+    );
     final result = <DateTime, double>{};
     for (final r in rows) {
       final dayStr = r['day'] as String;
@@ -567,7 +620,8 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   Future<MerchantStats> getMerchantStats(String merchant) async {
     final db = await instance.database;
 
-    final agg = await db.rawQuery('''
+    final agg = await db.rawQuery(
+      '''
       SELECT
         SUM(amount) AS lifetime_total,
         COUNT(*) AS txn_count,
@@ -576,10 +630,13 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       FROM expenses
       WHERE type = 'expense'
         AND (LOWER(COALESCE(normalized_merchant, merchant)) = LOWER(?))
-    ''', [merchant]);
+    ''',
+      [merchant],
+    );
 
     final cutoff = DateTime.now().subtract(const Duration(days: 180));
-    final monthly = await db.rawQuery('''
+    final monthly = await db.rawQuery(
+      '''
       SELECT
         CAST(strftime('%Y', date) AS INTEGER) AS year,
         CAST(strftime('%m', date) AS INTEGER) AS month,
@@ -590,7 +647,9 @@ CREATE TABLE IF NOT EXISTS app_metadata (
         AND (LOWER(COALESCE(normalized_merchant, merchant)) = LOWER(?))
       GROUP BY year, month
       ORDER BY year ASC, month ASC
-    ''', [cutoff.toIso8601String(), merchant]);
+    ''',
+      [cutoff.toIso8601String(), merchant],
+    );
 
     final aggRow = agg.isNotEmpty ? agg.first : {};
     return MerchantStats(
@@ -602,11 +661,13 @@ CREATE TABLE IF NOT EXISTS app_metadata (
           : null,
       averageAmount: (aggRow['avg_amount'] as num?)?.toDouble() ?? 0.0,
       monthlyTotals: monthly
-          .map((r) => MonthlyMerchantTotal(
-                year: r['year'] as int,
-                month: r['month'] as int,
-                total: (r['total'] as num).toDouble(),
-              ))
+          .map(
+            (r) => MonthlyMerchantTotal(
+              year: r['year'] as int,
+              month: r['month'] as int,
+              total: (r['total'] as num).toDouble(),
+            ),
+          )
           .toList(),
     );
   }
@@ -615,38 +676,53 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   Future<Map<String, dynamic>> getYearInReview(int year) async {
     final db = await instance.database;
 
-    final topMerchantRows = await db.rawQuery('''
+    final topMerchantRows = await db.rawQuery(
+      '''
       SELECT COALESCE(normalized_merchant, merchant) AS merchant, SUM(amount) AS total
       FROM expenses
       WHERE type = 'expense' AND strftime('%Y', date) = ?
       GROUP BY merchant ORDER BY total DESC LIMIT 1
-    ''', ['$year']);
+    ''',
+      ['$year'],
+    );
 
-    final topCategoryRows = await db.rawQuery('''
+    final topCategoryRows = await db.rawQuery(
+      '''
       SELECT category, SUM(amount) AS total
       FROM expenses
       WHERE type = 'expense' AND strftime('%Y', date) = ?
       GROUP BY category ORDER BY total DESC LIMIT 1
-    ''', ['$year']);
+    ''',
+      ['$year'],
+    );
 
-    final totalRows = await db.rawQuery('''
+    final totalRows = await db.rawQuery(
+      '''
       SELECT SUM(amount) AS total FROM expenses
       WHERE type = 'expense' AND strftime('%Y', date) = ?
-    ''', ['$year']);
+    ''',
+      ['$year'],
+    );
 
-    final maxDayRows = await db.rawQuery('''
+    final maxDayRows = await db.rawQuery(
+      '''
       SELECT date(date) AS day, SUM(amount) AS total
       FROM expenses
       WHERE type = 'expense' AND strftime('%Y', date) = ?
       GROUP BY day ORDER BY total DESC LIMIT 1
-    ''', ['$year']);
+    ''',
+      ['$year'],
+    );
 
     // Days with at least one expense
-    final activeDayRows = await db.rawQuery('''
+    final activeDayRows = await db.rawQuery(
+      '''
       SELECT COUNT(DISTINCT date(date)) AS active_days
       FROM expenses
       WHERE type = 'expense' AND strftime('%Y', date) = ?
-    ''', ['$year']);
+    ''',
+      ['$year'],
+    );
 
     return {
       'topMerchant': topMerchantRows.isNotEmpty
@@ -658,7 +734,8 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       'topCategory': topCategoryRows.isNotEmpty
           ? topCategoryRows.first['category'] as String?
           : null,
-      'totalSpent': (totalRows.isNotEmpty
+      'totalSpent':
+          (totalRows.isNotEmpty
               ? (totalRows.first['total'] as num?)?.toDouble()
               : null) ??
           0.0,
@@ -668,11 +745,13 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       'maxSpendAmount': maxDayRows.isNotEmpty
           ? (maxDayRows.first['total'] as num?)?.toDouble() ?? 0.0
           : 0.0,
-      'activeDays': (activeDayRows.isNotEmpty
+      'activeDays':
+          (activeDayRows.isNotEmpty
               ? activeDayRows.first['active_days'] as int?
               : null) ??
           0,
-      'zeroSpendDays': 365 -
+      'zeroSpendDays':
+          365 -
           ((activeDayRows.isNotEmpty
                   ? activeDayRows.first['active_days'] as int?
                   : null) ??

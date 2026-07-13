@@ -10,22 +10,26 @@ class ExportService {
 
   Future<void> exportCsv(List<Expense> expenses) async {
     final buffer = StringBuffer();
-    buffer.writeln('Date,Type,Merchant,NormalizedMerchant,Category,Amount,Currency,Tags,SplitShare,IsRecurring,OriginalSMS');
+    buffer.writeln(
+      'Date,Type,Merchant,NormalizedMerchant,Category,Amount,Currency,Tags,SplitShare,IsRecurring,OriginalSMS',
+    );
 
     for (final e in expenses) {
-      buffer.writeln([
-        _esc(DateFormat('yyyy-MM-dd HH:mm').format(e.date.toLocal())),
-        _esc(e.type),
-        _esc(e.merchant),
-        _esc(e.normalizedMerchant ?? ''),
-        _esc(e.category),
-        e.amount.toStringAsFixed(2),
-        _esc(e.currency),
-        _esc(e.tags),
-        e.splitShare?.toStringAsFixed(2) ?? '',
-        e.isRecurring ? '1' : '0',
-        _esc(e.originalSms.replaceAll('\n', ' ')),
-      ].join(','));
+      buffer.writeln(
+        [
+          _esc(DateFormat('yyyy-MM-dd HH:mm').format(e.date.toLocal())),
+          _esc(e.type),
+          _esc(e.merchant),
+          _esc(e.normalizedMerchant ?? ''),
+          _esc(e.category),
+          e.amount.toStringAsFixed(2),
+          _esc(e.currency),
+          _esc(e.tags),
+          e.splitShare?.toStringAsFixed(2) ?? '',
+          e.isRecurring ? '1' : '0',
+          _esc(e.originalSms.replaceAll('\n', ' ')),
+        ].join(','),
+      );
     }
 
     final dir = await getTemporaryDirectory();
@@ -35,7 +39,7 @@ class ExportService {
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'text/csv')],
-        subject: 'Expense Manager Export',
+        subject: 'Fund Flow Export',
       ),
     );
   }
@@ -63,7 +67,9 @@ class ExportService {
 
   String _esc(String value) {
     final escaped = value.replaceAll('"', '""');
-    if (escaped.contains(',') || escaped.contains('"') || escaped.contains('\n')) {
+    if (escaped.contains(',') ||
+        escaped.contains('"') ||
+        escaped.contains('\n')) {
       return '"$escaped"';
     }
     return escaped;

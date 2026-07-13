@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,13 +28,41 @@ import '../utils/category_utils.dart';
 final secureStorageProvider = Provider((ref) => const FlutterSecureStorage());
 final exportServiceProvider = Provider((ref) => const ExportService());
 
-// ─── AI Provider (always localOnnx) ───────────────────────────────────────
+// ─── AI (Ollama Cloud) ──────────────────────────────────────────────────────
 
-final selectedAiProviderProvider =
-    Provider<AiProviderType>((ref) => AiProviderType.localOnnx);
+class OllamaApiKeyNotifier extends Notifier<String> {
+  @override
+  String build() => defaultOllamaApiKey;
+  void set(String key) => state = key;
+}
 
-final activeModelProvider =
-    Provider<String>((ref) => defaultModelFor(AiProviderType.localOnnx));
+final ollamaApiKeyProvider = NotifierProvider<OllamaApiKeyNotifier, String>(
+  OllamaApiKeyNotifier.new,
+);
+
+class OllamaBaseUrlNotifier extends Notifier<String> {
+  @override
+  String build() => defaultOllamaBaseUrl;
+  void set(String url) => state = url;
+}
+
+final ollamaBaseUrlProvider = NotifierProvider<OllamaBaseUrlNotifier, String>(
+  OllamaBaseUrlNotifier.new,
+);
+
+class OllamaModelNotifier extends Notifier<String> {
+  @override
+  String build() => defaultOllamaModel;
+  void set(String model) => state = model;
+}
+
+final ollamaModelProvider = NotifierProvider<OllamaModelNotifier, String>(
+  OllamaModelNotifier.new,
+);
+
+final activeModelProvider = Provider<String>(
+  (ref) => ref.watch(ollamaModelProvider),
+);
 
 class SyncLookbackNotifier extends Notifier<int> {
   @override
@@ -40,8 +70,9 @@ class SyncLookbackNotifier extends Notifier<int> {
   void setDays(int days) => state = days;
 }
 
-final syncLookbackProvider =
-    NotifierProvider<SyncLookbackNotifier, int>(SyncLookbackNotifier.new);
+final syncLookbackProvider = NotifierProvider<SyncLookbackNotifier, int>(
+  SyncLookbackNotifier.new,
+);
 
 // ─── Theme ────────────────────────────────────────────────────────────────
 
@@ -51,41 +82,46 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   void setThemeMode(ThemeMode mode) => state = mode;
 }
 
-final themeModeProvider =
-    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
+  ThemeModeNotifier.new,
+);
 
 // ─── Privacy / App lock ────────────────────────────────────────────────────
 
 class PrivateModeNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-  
+
   void toggle() {
     state = !state;
   }
-  
+
   void set(bool v) {
     state = v;
   }
 }
 
-final privateModeProvider =
-    NotifierProvider<PrivateModeNotifier, bool>(PrivateModeNotifier.new);
+final privateModeProvider = NotifierProvider<PrivateModeNotifier, bool>(
+  PrivateModeNotifier.new,
+);
 
 class AppLockNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-  
+
   Future<void> toggle() async {
     state = !state;
-    await ref.read(secureStorageProvider).write(key: 'app_lock_enabled', value: state.toString());
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'app_lock_enabled', value: state.toString());
   }
-  
+
   void set(bool v) => state = v;
 }
 
-final appLockEnabledProvider =
-    NotifierProvider<AppLockNotifier, bool>(AppLockNotifier.new);
+final appLockEnabledProvider = NotifierProvider<AppLockNotifier, bool>(
+  AppLockNotifier.new,
+);
 
 // ─── Notification parsing ──────────────────────────────────────────────────
 
@@ -105,24 +141,28 @@ class NotificationParsingNotifier extends Notifier<bool> {
 
 final notificationParsingEnabledProvider =
     NotifierProvider<NotificationParsingNotifier, bool>(
-        NotificationParsingNotifier.new);
+      NotificationParsingNotifier.new,
+    );
 
 // ─── Notification settings ─────────────────────────────────────────────────
 
 class DailyDigestNotifier extends Notifier<bool> {
   @override
   bool build() => false;
-  
+
   Future<void> toggle() async {
     state = !state;
-    await ref.read(secureStorageProvider).write(key: 'daily_digest_enabled', value: state.toString());
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'daily_digest_enabled', value: state.toString());
   }
-  
+
   void set(bool v) => state = v;
 }
 
-final dailyDigestEnabledProvider =
-    NotifierProvider<DailyDigestNotifier, bool>(DailyDigestNotifier.new);
+final dailyDigestEnabledProvider = NotifierProvider<DailyDigestNotifier, bool>(
+  DailyDigestNotifier.new,
+);
 
 // ─── Settings initializer ──────────────────────────────────────────────────
 
@@ -131,7 +171,9 @@ final settingsInitializer = FutureProvider<void>((ref) async {
 
   final lookback = await storage.read(key: 'sync_lookback_days');
   if (lookback != null) {
-    ref.read(syncLookbackProvider.notifier).setDays(int.tryParse(lookback) ?? 30);
+    ref
+        .read(syncLookbackProvider.notifier)
+        .setDays(int.tryParse(lookback) ?? 30);
   }
 
   final theme = await storage.read(key: 'theme_mode');
@@ -150,7 +192,32 @@ final settingsInitializer = FutureProvider<void>((ref) async {
   ref.read(dailyDigestEnabledProvider.notifier).set(dailyDigest == 'true');
 
   final notifParsing = await storage.read(key: 'notification_parsing_enabled');
-  ref.read(notificationParsingEnabledProvider.notifier).set(notifParsing == 'true');
+  ref
+      .read(notificationParsingEnabledProvider.notifier)
+      .set(notifParsing == 'true');
+
+  final apiKey = await storage.read(key: ollamaApiKeyStorageKey);
+  if (apiKey != null && apiKey.isNotEmpty) {
+    ref.read(ollamaApiKeyProvider.notifier).set(apiKey);
+  }
+
+  final ollamaUrl = await storage.read(key: ollamaBaseUrlStorageKey);
+  if (ollamaUrl != null && ollamaUrl.isNotEmpty) {
+    ref.read(ollamaBaseUrlProvider.notifier).set(ollamaUrl);
+  }
+
+  final ollamaModel = await storage.read(key: ollamaModelStorageKey);
+  if (ollamaModel != null && ollamaModel.isNotEmpty) {
+    // Migrate the former heavyweight default. Users can still explicitly pick
+    // 120B again from Settings after this one-time performance migration.
+    final migrated = ollamaModel == 'gpt-oss:120b'
+        ? defaultOllamaModel
+        : ollamaModel;
+    ref.read(ollamaModelProvider.notifier).set(migrated);
+    if (migrated != ollamaModel) {
+      await storage.write(key: ollamaModelStorageKey, value: migrated);
+    }
+  }
 });
 
 // ─── Database ─────────────────────────────────────────────────────────────
@@ -168,7 +235,14 @@ class ExpenseListNotifier extends AsyncNotifier<List<Expense>> {
   Future<void> refreshExpenses() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => ref.read(databaseProvider).getAllExpenses());
+      () => ref.read(databaseProvider).getAllExpenses(),
+    );
+  }
+
+  Future<void> refreshPreservingData() async {
+    state = await AsyncValue.guard(
+      () => ref.read(databaseProvider).getAllExpenses(),
+    );
   }
 
   Future<void> addExpense(Expense expense) async {
@@ -181,12 +255,33 @@ class ExpenseListNotifier extends AsyncNotifier<List<Expense>> {
     await refreshExpenses();
   }
 
+  Future<List<Expense>> insertExpensesProgressively(
+    List<Expense> expenses,
+  ) async {
+    final inserted = await ref
+        .read(databaseProvider)
+        .insertExpensesReturning(expenses);
+    final visible = state.asData?.value;
+    if (visible != null && inserted.isNotEmpty) {
+      state = AsyncValue.data(
+        [...inserted, ...visible]..sort((a, b) => b.date.compareTo(a.date)),
+      );
+    } else if (inserted.isNotEmpty) {
+      await refreshPreservingData();
+    }
+    return inserted;
+  }
+
   Future<void> updateExpense(Expense expense) async {
     await ref.read(databaseProvider).updateExpense(expense);
     // Learn category correction
     try {
-      final key = (expense.normalizedMerchant ?? expense.merchant).toLowerCase().trim();
-      await ref.read(databaseProvider).upsertMerchantCategory(key, expense.category);
+      final key = (expense.normalizedMerchant ?? expense.merchant)
+          .toLowerCase()
+          .trim();
+      await ref
+          .read(databaseProvider)
+          .upsertMerchantCategory(key, expense.category);
     } catch (_) {}
     await refreshExpenses();
   }
@@ -199,7 +294,8 @@ class ExpenseListNotifier extends AsyncNotifier<List<Expense>> {
 
 final expenseListProvider =
     AsyncNotifierProvider<ExpenseListNotifier, List<Expense>>(
-        ExpenseListNotifier.new);
+      ExpenseListNotifier.new,
+    );
 
 // ─── Custom categories ─────────────────────────────────────────────────────
 
@@ -212,7 +308,8 @@ class CustomCategoryNotifier extends AsyncNotifier<List<CustomCategory>> {
   Future<void> _reload() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => ref.read(databaseProvider).getAllCustomCategories());
+      () => ref.read(databaseProvider).getAllCustomCategories(),
+    );
   }
 
   Future<void> upsert(CustomCategory cat) async {
@@ -228,7 +325,8 @@ class CustomCategoryNotifier extends AsyncNotifier<List<CustomCategory>> {
 
 final customCategoryListProvider =
     AsyncNotifierProvider<CustomCategoryNotifier, List<CustomCategory>>(
-        CustomCategoryNotifier.new);
+      CustomCategoryNotifier.new,
+    );
 
 /// All category names: builtins + custom
 final allCategoryNamesProvider = Provider<List<String>>((ref) {
@@ -247,7 +345,8 @@ class BudgetNotifier extends AsyncNotifier<List<Budget>> {
   Future<void> _reload() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => ref.read(databaseProvider).getAllBudgets());
+      () => ref.read(databaseProvider).getAllBudgets(),
+    );
   }
 
   Future<void> upsert(Budget budget) async {
@@ -261,10 +360,13 @@ class BudgetNotifier extends AsyncNotifier<List<Budget>> {
   }
 }
 
-final budgetListProvider =
-    AsyncNotifierProvider<BudgetNotifier, List<Budget>>(BudgetNotifier.new);
+final budgetListProvider = AsyncNotifierProvider<BudgetNotifier, List<Budget>>(
+  BudgetNotifier.new,
+);
 
-final budgetProgressProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final budgetProgressProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   ref.watch(budgetListProvider);
   ref.watch(expenseListProvider);
   final now = DateTime.now();
@@ -279,18 +381,21 @@ class AnalyticsPeriodNotifier extends Notifier<int> {
   void setPeriod(int months) => state = months;
 }
 
-final analyticsPeriodProvider =
-    NotifierProvider<AnalyticsPeriodNotifier, int>(AnalyticsPeriodNotifier.new);
+final analyticsPeriodProvider = NotifierProvider<AnalyticsPeriodNotifier, int>(
+  AnalyticsPeriodNotifier.new,
+);
 
-final monthlyTotalsProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final monthlyTotalsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final months = ref.watch(analyticsPeriodProvider);
   ref.watch(expenseListProvider);
   return ref.read(databaseProvider).getMonthlyTotals(months: months);
 });
 
-final categoryTotalsForPeriodProvider =
-    FutureProvider<Map<String, double>>((ref) async {
+final categoryTotalsForPeriodProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
   final months = ref.watch(analyticsPeriodProvider);
   ref.watch(expenseListProvider);
   final to = DateTime.now();
@@ -300,15 +405,16 @@ final categoryTotalsForPeriodProvider =
 
 final topMerchantsForPeriodProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final months = ref.watch(analyticsPeriodProvider);
-  ref.watch(expenseListProvider);
-  final to = DateTime.now();
-  final from = DateTime(to.year, to.month - months + 1, 1);
-  return ref.read(databaseProvider).getTopMerchants(from, to);
-});
+      final months = ref.watch(analyticsPeriodProvider);
+      ref.watch(expenseListProvider);
+      final to = DateTime.now();
+      final from = DateTime(to.year, to.month - months + 1, 1);
+      return ref.read(databaseProvider).getTopMerchants(from, to);
+    });
 
-final currentMonthBalanceProvider =
-    FutureProvider<Map<String, double>>((ref) async {
+final currentMonthBalanceProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
   ref.watch(expenseListProvider);
   final now = DateTime.now();
   return ref.read(databaseProvider).getMonthlyBalance(now.year, now.month);
@@ -316,19 +422,25 @@ final currentMonthBalanceProvider =
 
 // ─── Spending insights & anomalies ────────────────────────────────────────
 
-final spendingInsightsProvider = FutureProvider<List<SpendingInsight>>((ref) async {
+final spendingInsightsProvider = FutureProvider<List<SpendingInsight>>((
+  ref,
+) async {
   final expenses = ref.watch(expenseListProvider).asData?.value ?? [];
   return InsightsService.compute(expenses);
 });
 
-final anomalyAlertsProvider = FutureProvider<List<SpendingInsight>>((ref) async {
+final anomalyAlertsProvider = FutureProvider<List<SpendingInsight>>((
+  ref,
+) async {
   final expenses = ref.watch(expenseListProvider).asData?.value ?? [];
   return AnomalyDetector.detect(expenses);
 });
 
 // ─── Financial health score ────────────────────────────────────────────────
 
-final financialHealthScoreProvider = FutureProvider<FinancialHealthScore>((ref) async {
+final financialHealthScoreProvider = FutureProvider<FinancialHealthScore>((
+  ref,
+) async {
   final balance = await ref.watch(currentMonthBalanceProvider.future);
   final budgetProg = await ref.watch(budgetProgressProvider.future);
   final now = DateTime.now();
@@ -349,8 +461,10 @@ final financialHealthScoreProvider = FutureProvider<FinancialHealthScore>((ref) 
 
 // ─── Merchant stats ────────────────────────────────────────────────────────
 
-final merchantStatsProvider =
-    FutureProvider.family<MerchantStats, String>((ref, merchant) async {
+final merchantStatsProvider = FutureProvider.family<MerchantStats, String>((
+  ref,
+  merchant,
+) async {
   return ref.read(databaseProvider).getMerchantStats(merchant);
 });
 
@@ -365,8 +479,10 @@ final heatmapDataProvider = FutureProvider<Map<DateTime, double>>((ref) async {
 
 // ─── Year in review ────────────────────────────────────────────────────────
 
-final yearInReviewProvider =
-    FutureProvider.family<Map<String, dynamic>, int>((ref, year) async {
+final yearInReviewProvider = FutureProvider.family<Map<String, dynamic>, int>((
+  ref,
+  year,
+) async {
   ref.watch(expenseListProvider);
   return ref.read(databaseProvider).getYearInReview(year);
 });
@@ -397,7 +513,9 @@ final spendingStreakProvider = FutureProvider<int>((ref) async {
 
 // ─── Previous month balance ────────────────────────────────────────────────
 
-final previousMonthBalanceProvider = FutureProvider<Map<String, double>>((ref) async {
+final previousMonthBalanceProvider = FutureProvider<Map<String, double>>((
+  ref,
+) async {
   ref.watch(expenseListProvider);
   final now = DateTime.now();
   final prev = now.month == 1
@@ -408,8 +526,9 @@ final previousMonthBalanceProvider = FutureProvider<Map<String, double>>((ref) a
 
 // ─── Parsed SMS audit ─────────────────────────────────────────────────────
 
-final parsedSmsAuditProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final parsedSmsAuditProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   return ref.read(databaseProvider).getParsedSmsAudit();
 });
 
@@ -424,7 +543,8 @@ class AiLogNotifier extends AsyncNotifier<List<AiLog>> {
   Future<void> refreshLogs() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => ref.read(databaseProvider).getAllAiLogs());
+      () => ref.read(databaseProvider).getAllAiLogs(),
+    );
   }
 
   Future<void> clearLogs() async {
@@ -433,41 +553,100 @@ class AiLogNotifier extends AsyncNotifier<List<AiLog>> {
   }
 }
 
-final aiLogProvider =
-    AsyncNotifierProvider<AiLogNotifier, List<AiLog>>(AiLogNotifier.new);
+final aiLogProvider = AsyncNotifierProvider<AiLogNotifier, List<AiLog>>(
+  AiLogNotifier.new,
+);
 
 // ─── Sync ─────────────────────────────────────────────────────────────────
 
-enum SyncPhase { idle, requestingPermissions, fetchingSms, analyzing, complete, error }
+enum SyncPhase {
+  idle,
+  requestingPermissions,
+  fetchingSms,
+  analyzing,
+  complete,
+  error,
+}
 
 class SyncState {
-  const SyncState({this.phase = SyncPhase.idle, this.errorMessage, this.detail});
+  const SyncState({
+    this.phase = SyncPhase.idle,
+    this.errorMessage,
+    this.detail,
+    this.current = 0,
+    this.total = 0,
+  });
   final SyncPhase phase;
   final String? errorMessage;
-  /// Human-readable detail shown in UI (e.g. "48 SMS found · 3 queued").
   final String? detail;
 
-  SyncState copyWith({SyncPhase? phase, String? errorMessage, String? detail}) =>
-      SyncState(
-        phase: phase ?? this.phase,
-        errorMessage: errorMessage ?? this.errorMessage,
-        detail: detail ?? this.detail,
-      );
+  /// Index of the SMS currently being parsed (1-based).
+  final int current;
+
+  /// Total SMS queued for parsing.
+  final int total;
+
+  bool get isAnalyzing => phase == SyncPhase.analyzing && total > 0;
+
+  SyncState copyWith({
+    SyncPhase? phase,
+    String? errorMessage,
+    String? detail,
+    int? current,
+    int? total,
+  }) => SyncState(
+    phase: phase ?? this.phase,
+    errorMessage: errorMessage ?? this.errorMessage,
+    detail: detail ?? this.detail,
+    current: current ?? this.current,
+    total: total ?? this.total,
+  );
 
   static const idle = SyncState();
 }
 
 class SyncNotifier extends Notifier<SyncState> {
   final SmsService _smsService = SmsService();
+  bool _cancelled = false;
+  bool _paused = false;
+  Completer<void>? _resumeSignal;
 
   @override
   SyncState build() => SyncState.idle;
+
+  void cancel() {
+    _cancelled = true;
+    resume();
+  }
+
+  void pause() {
+    if (state.phase == SyncPhase.analyzing) _paused = true;
+  }
+
+  void resume() {
+    _paused = false;
+    _resumeSignal?.complete();
+    _resumeSignal = null;
+  }
+
+  Future<void> _waitWhilePaused() async {
+    if (!_paused) return;
+    state = state.copyWith(detail: 'Paused · unlock to continue safely');
+    _resumeSignal ??= Completer<void>();
+    await _resumeSignal!.future;
+  }
 
   void _error(String message) {
     state = SyncState(phase: SyncPhase.error, errorMessage: message);
   }
 
   Future<void> sync() async {
+    _cancelled = false;
+    if (ref.read(ollamaApiKeyProvider).trim().isEmpty) {
+      _error('Add your Ollama Cloud API key in Settings before syncing.');
+      return;
+    }
+
     state = const SyncState(phase: SyncPhase.requestingPermissions);
     final hasPermission = await _smsService.requestPermissions();
     if (!hasPermission) {
@@ -478,7 +657,11 @@ class SyncNotifier extends Notifier<SyncState> {
     state = const SyncState(phase: SyncPhase.fetchingSms);
     final messages = await _smsService.getMessages();
     final db = ref.read(databaseProvider);
-    const catService = CategorizationService();
+    final catService = CategorizationService(
+      apiKey: ref.read(ollamaApiKeyProvider),
+      baseUrl: ref.read(ollamaBaseUrlProvider),
+      model: ref.read(ollamaModelProvider),
+    );
     final lookbackDays = ref.read(syncLookbackProvider);
 
     final now = DateTime.now();
@@ -486,18 +669,16 @@ class SyncNotifier extends Notifier<SyncState> {
     final cutoffDate = today.subtract(Duration(days: lookbackDays));
     final cutoffTimestamp = cutoffDate.millisecondsSinceEpoch;
 
-    // Report how many raw SMS we fetched so user can see the window.
     state = SyncState(
       phase: SyncPhase.analyzing,
-      detail: '${messages.length} SMS in inbox · scanning last $lookbackDays days',
+      detail:
+          '${messages.length} SMS in inbox · scanning last $lookbackDays days',
     );
 
     final List<Map<String, dynamic>> unparsedSms = [];
     final Set<String> seenBodies = {};
-    int financialCount = 0;
     int alreadyParsedCount = 0;
 
-    // Prefetch all parsed message keys for this lookback window to avoid N+1 DB hits
     final parsedKeys = await db.getParsedSmsKeys(cutoffTimestamp);
 
     for (var msg in messages) {
@@ -511,86 +692,119 @@ class SyncNotifier extends Notifier<SyncState> {
       final seenKey = '$sender|$msgBody|$timestamp';
       if (seenBodies.contains(seenKey)) continue;
 
-      if (_smsService.isFinancialSms(msgBody)) {
-        financialCount++;
-        if (!parsedKeys.contains(seenKey)) {
-          unparsedSms.add({
-            'body': msgBody,
-            'date': msgDate.toIso8601String(),
-            'address': sender,
-            'timestamp': timestamp,
-          });
-          seenBodies.add(seenKey);
-        } else {
-          alreadyParsedCount++;
-        }
+      if (!parsedKeys.contains(seenKey)) {
+        unparsedSms.add({
+          'body': msgBody,
+          'date': msgDate.toIso8601String(),
+          'address': sender,
+          'timestamp': timestamp,
+        });
+        seenBodies.add(seenKey);
+      } else {
+        alreadyParsedCount++;
       }
     }
 
-    debugPrint('[Sync] inbox=${messages.length} financial=$financialCount '
-        'alreadyParsed=$alreadyParsedCount queued=${unparsedSms.length} '
-        'lookback=${lookbackDays}d cutoff=$cutoffDate');
+    debugPrint(
+      '[Sync] inbox=${messages.length} '
+      'alreadyParsed=$alreadyParsedCount queued=${unparsedSms.length} '
+      'lookback=${lookbackDays}d cutoff=$cutoffDate',
+    );
+
+    final total = unparsedSms.length;
 
     state = SyncState(
       phase: SyncPhase.analyzing,
-      detail: '$financialCount financial SMS · ${unparsedSms.length} new to process',
+      detail: '$total new SMS to analyze',
+      total: total,
+      current: 0,
     );
 
-    if (unparsedSms.isNotEmpty) {
-      const batchSize = 20;
-      final total = unparsedSms.length;
+    var importedCount = 0;
+    if (total > 0) {
+      // Run two 12-message AI batches per wave. Each batch is published as soon
+      // as it finishes, so the ledger visibly fills while the second request
+      // and later waves continue in the background.
+      const aiBatchSize = 12;
+      const waveSize = aiBatchSize * 2;
+      var processed = 0;
 
-      for (var i = 0; i < total; i += batchSize) {
-        final end = (i + batchSize).clamp(0, total);
-        final batch = unparsedSms.sublist(i, end);
-
-        state = SyncState(
-          phase: SyncPhase.analyzing,
-          detail: 'Analyzing $end / $total',
-        );
-
+      Future<void> processBatch(List<Map<String, dynamic>> batch) async {
         try {
           final result = await catService.parseSmsBatch(batch);
           if (result.expenses.isNotEmpty) {
-            await ref.read(expenseListProvider.notifier).addExpenses(result.expenses);
+            await ref
+                .read(expenseListProvider.notifier)
+                .insertExpensesProgressively(result.expenses);
+            importedCount += result.expenses.length;
           }
-          await db.markSmsBatchParsed(batch, skipReasons: result.skipReasons);
-        } catch (e) {
-          debugPrint('Batch parse error: $e');
-          final reasons = {for (final s in batch) s['body'] as String: 'parse_error'};
-          try {
-            await db.markSmsBatchParsed(batch, skipReasons: reasons);
-          } catch (_) {}
+          final confirmed = batch
+              .where((sms) => result.skipReasons[sms['body']] != 'parse_error')
+              .toList();
+          if (confirmed.isNotEmpty) {
+            await db.markSmsBatchParsed(
+              confirmed,
+              skipReasons: result.skipReasons,
+            );
+          }
+        } catch (error) {
+          debugPrint('AI batch failed: $error');
+        } finally {
+          processed += batch.length;
+          state = SyncState(
+            phase: SyncPhase.analyzing,
+            detail: '$processed of $total analyzed · $importedCount imported',
+            current: processed,
+            total: total,
+          );
         }
       }
-      
-      // Refresh the audit provider since parsed_sms changed
+
+      for (var i = 0; i < total; i += waveSize) {
+        await _waitWhilePaused();
+        if (_cancelled) break;
+
+        final waveEnd = (i + waveSize).clamp(0, total);
+        final batches = <List<Map<String, dynamic>>>[];
+        for (var start = i; start < waveEnd; start += aiBatchSize) {
+          batches.add(
+            unparsedSms.sublist(start, (start + aiBatchSize).clamp(0, waveEnd)),
+          );
+        }
+        await Future.wait(batches.map(processBatch));
+      }
+
+      if (_cancelled) {
+        await ref.read(expenseListProvider.notifier).refreshPreservingData();
+        final done = state.current;
+        state = SyncState(
+          phase: SyncPhase.complete,
+          detail: 'Stopped after $done / $total',
+        );
+        Future.delayed(const Duration(seconds: 4), () {
+          if (state.phase == SyncPhase.complete) state = SyncState.idle;
+        });
+        return;
+      }
+
       ref.invalidate(parsedSmsAuditProvider);
 
-      // Re-run recurring detection across all expenses so subscriptions
-      // screen stays accurate after new transactions are added.
       try {
         final allExpenses = await db.getAllExpenses();
         final flags = RecurringDetector.detect(allExpenses);
         await db.updateRecurringFlags(flags);
-        // Refresh expense list to reflect updated recurring flags.
-        await ref.read(expenseListProvider.notifier).refreshExpenses();
+        await ref.read(expenseListProvider.notifier).refreshPreservingData();
       } catch (_) {}
     }
 
-    // Always refresh the AI log list so the UI reflects the current DB state
-    // regardless of whether there were new SMS to process this run.
     try {
       await ref.read(aiLogProvider.notifier).refreshLogs();
     } catch (_) {}
 
-    // Save last sync timestamp
     await db.setAppMetadata('last_sync_at', DateTime.now().toIso8601String());
 
-    // Haptic feedback
     HapticFeedback.mediumImpact();
 
-    // Check budget proximity
     try {
       final budgetProgress = await db.getBudgetProgress(now.year, now.month);
       for (final b in budgetProgress) {
@@ -605,9 +819,9 @@ class SyncNotifier extends Notifier<SyncState> {
       }
     } catch (_) {}
 
-    final completeDetail = unparsedSms.isEmpty
+    final completeDetail = total == 0
         ? 'No new messages (${alreadyParsedCount > 0 ? '$alreadyParsedCount already parsed' : 'none matched'})'
-        : '${unparsedSms.length} processed';
+        : '$total analyzed · $importedCount imported';
     state = SyncState(phase: SyncPhase.complete, detail: completeDetail);
     Future.delayed(const Duration(seconds: 4), () {
       if (state.phase == SyncPhase.complete) state = SyncState.idle;
@@ -615,9 +829,9 @@ class SyncNotifier extends Notifier<SyncState> {
   }
 }
 
-
-final syncProvider =
-    NotifierProvider<SyncNotifier, SyncState>(SyncNotifier.new);
+final syncProvider = NotifierProvider<SyncNotifier, SyncState>(
+  SyncNotifier.new,
+);
 
 // ─── Savings Goals ─────────────────────────────────────────────────────────
 
@@ -630,7 +844,8 @@ class SavingsGoalNotifier extends AsyncNotifier<List<SavingsGoal>> {
   Future<void> _reload() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => ref.read(databaseProvider).getAllSavingsGoals());
+      () => ref.read(databaseProvider).getAllSavingsGoals(),
+    );
   }
 
   Future<void> upsert(SavingsGoal goal) async {
@@ -646,7 +861,8 @@ class SavingsGoalNotifier extends AsyncNotifier<List<SavingsGoal>> {
 
 final savingsGoalsProvider =
     AsyncNotifierProvider<SavingsGoalNotifier, List<SavingsGoal>>(
-        SavingsGoalNotifier.new);
+      SavingsGoalNotifier.new,
+    );
 
 // ─── Onboarding ────────────────────────────────────────────────────────────
 

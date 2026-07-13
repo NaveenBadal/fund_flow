@@ -1,26 +1,32 @@
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flex_color_scheme/flex_color_scheme.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'providers/expense_provider.dart';
-import 'screens/analytics_screen.dart';
-import 'screens/budget_screen.dart';
+import 'theme/app_theme.dart';
+import 'screens/activity_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/intelligence_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/subscriptions_screen.dart';
+import 'screens/plan_screen.dart';
 import 'services/notification_service.dart';
 import 'services/drive_backup_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.instance.init();
-  await GoogleSignIn.instance.initialize();
-  DriveBackupService.instance; // trigger listener
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const ProviderScope(child: ExpenseManagerApp()));
+  // Non-essential integrations initialize after the first frame. This keeps
+  // cold start independent of plugin and account-service latency.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await Future.wait([
+      NotificationService.instance.init(),
+      GoogleSignIn.instance.initialize(),
+    ]);
+    DriveBackupService.instance;
+  });
 }
 
 class ExpenseManagerApp extends ConsumerWidget {
@@ -31,68 +37,13 @@ class ExpenseManagerApp extends ConsumerWidget {
     ref.watch(settingsInitializer);
     final themeMode = ref.watch(themeModeProvider);
 
-    final subThemes = const FlexSubThemesData(
-      blendOnLevel: 10,
-      blendOnColors: false,
-      useMaterial3Typography: true,
-      useM2StyleDividerInM3: true,
-      alignedDropdown: true,
-      useInputDecoratorThemeInDialogs: true,
-      cardRadius: 28,
-      defaultRadius: 20,
-      inputDecoratorRadius: 20,
-      chipRadius: 999,
-      fabUseShape: true,
-      fabRadius: 20,
-      navigationBarHeight: 72,
-    );
-
-    return DynamicColorBuilder(
-      builder: (lightDynamic, darkDynamic) {
-        final lightScheme = lightDynamic?.harmonized();
-        final darkScheme = darkDynamic?.harmonized();
-
-        return MaterialApp(
-          title: 'Expense Manager',
-          debugShowCheckedModeBanner: false,
-          themeMode: themeMode,
-          theme: lightScheme != null
-              ? FlexThemeData.light(
-                  colorScheme: lightScheme,
-                  subThemesData: subThemes,
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                  fontFamily: GoogleFonts.notoSans().fontFamily,
-                )
-              : FlexThemeData.light(
-                  scheme: FlexScheme.materialBaseline,
-                  surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
-                  blendLevel: 7,
-                  subThemesData: subThemes,
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                  fontFamily: GoogleFonts.notoSans().fontFamily,
-                ),
-          darkTheme: darkScheme != null
-              ? FlexThemeData.dark(
-                  colorScheme: darkScheme,
-                  subThemesData: subThemes.copyWith(blendOnLevel: 20),
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                  fontFamily: GoogleFonts.notoSans().fontFamily,
-                )
-              : FlexThemeData.dark(
-                  scheme: FlexScheme.materialBaseline,
-                  surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
-                  blendLevel: 13,
-                  subThemesData: subThemes.copyWith(blendOnLevel: 20),
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                  fontFamily: GoogleFonts.notoSans().fontFamily,
-                ),
-          home: const _AppGate(),
-        );
-      },
+    return MaterialApp(
+      title: 'Fund Flow',
+      debugShowCheckedModeBanner: false,
+      themeMode: themeMode,
+      theme: AppTheme.light(null),
+      darkTheme: AppTheme.dark(null),
+      home: const _AppGate(),
     );
   }
 }
@@ -107,9 +58,8 @@ class _AppGate extends ConsumerWidget {
     final onboardingAsync = ref.watch(onboardingDoneProvider);
 
     return onboardingAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, _) => const AppShell(),
       data: (done) {
         if (!done) return const OnboardingScreen();
@@ -150,7 +100,8 @@ class _AppLockGateState extends ConsumerState<_AppLockGate> {
     setState(() => _authenticating = true);
     try {
       final auth = LocalAuthentication();
-      final canCheck = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+      final canCheck =
+          await auth.canCheckBiometrics || await auth.isDeviceSupported();
       if (!canCheck) {
         setState(() {
           _unlocked = true;
@@ -159,12 +110,8 @@ class _AppLockGateState extends ConsumerState<_AppLockGate> {
         return;
       }
       final authenticated = await auth.authenticate(
-        localizedReason: 'Authenticate to open Expense Manager',
-        authMessages: const [
-          AndroidAuthMessages(
-            signInTitle: 'App Locked',
-          ),
-        ],
+        localizedReason: 'Authenticate to open Fund Flow',
+        authMessages: const [AndroidAuthMessages(signInTitle: 'App Locked')],
       );
       setState(() {
         _unlocked = authenticated;
@@ -195,17 +142,25 @@ class _AppLockGateState extends ConsumerState<_AppLockGate> {
               CircleAvatar(
                 radius: 40,
                 backgroundColor: scheme.primaryContainer,
-                child: Icon(Icons.lock_rounded, size: 40, color: scheme.primary),
+                child: Icon(
+                  Icons.lock_rounded,
+                  size: 40,
+                  color: scheme.primary,
+                ),
               ),
               const SizedBox(height: 24),
               Text(
                 'App Locked',
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 'Authenticate to continue',
-                style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 28),
               FilledButton.icon(
@@ -230,49 +185,159 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell>
+    with WidgetsBindingObserver {
   int _index = 0;
+
+  static const _pages = [
+    DashboardScreen(),
+    ActivityScreen(),
+    PlanScreen(),
+    IntelligenceScreen(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final sync = ref.read(syncProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      sync.resume();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      sync.pause();
+    }
+  }
 
   static const _destinations = [
     NavigationDestination(
       icon: Icon(Icons.home_outlined),
       selectedIcon: Icon(Icons.home_rounded),
-      label: 'Home',
+      label: 'Today',
     ),
     NavigationDestination(
-      icon: Icon(Icons.bar_chart_outlined),
-      selectedIcon: Icon(Icons.bar_chart_rounded),
-      label: 'Analytics',
+      icon: Icon(Icons.receipt_long_outlined),
+      selectedIcon: Icon(Icons.receipt_long_rounded),
+      label: 'Activity',
     ),
     NavigationDestination(
-      icon: Icon(Icons.account_balance_wallet_outlined),
-      selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-      label: 'Budgets',
+      icon: Icon(Icons.track_changes_outlined),
+      selectedIcon: Icon(Icons.track_changes_rounded),
+      label: 'Plan',
     ),
     NavigationDestination(
-      icon: Icon(Icons.repeat_outlined),
-      selectedIcon: Icon(Icons.repeat_rounded),
-      label: 'Subscriptions',
+      icon: Icon(Icons.auto_graph_outlined),
+      selectedIcon: Icon(Icons.auto_graph_rounded),
+      label: 'Insights',
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final Widget body = switch (_index) {
-      0 => const DashboardScreen(),
-      1 => const AnalyticsScreen(),
-      2 => const BudgetScreen(),
-      3 => const SubscriptionsScreen(),
-      _ => const DashboardScreen(),
-    };
-
-    return Scaffold(
-      body: body,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: _destinations,
-      ),
+    final body = IndexedStack(index: _index, children: _pages);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 900) {
+          return Scaffold(
+            body: Row(
+              children: [
+                SafeArea(
+                  child: NavigationRail(
+                    extended: constraints.maxWidth >= 1180,
+                    selectedIndex: _index,
+                    onDestinationSelected: (i) => setState(() => _index = i),
+                    leading: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Icon(
+                        Icons.bolt_rounded,
+                        size: 30,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    destinations: const [
+                      NavigationRailDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home_rounded),
+                        label: Text('Today'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.receipt_long_outlined),
+                        selectedIcon: Icon(Icons.receipt_long_rounded),
+                        label: Text('Activity'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.track_changes_outlined),
+                        selectedIcon: Icon(Icons.track_changes_rounded),
+                        label: Text('Plan'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.auto_graph_outlined),
+                        selectedIcon: Icon(Icons.auto_graph_rounded),
+                        label: Text('Insights'),
+                      ),
+                    ],
+                  ),
+                ),
+                VerticalDivider(
+                  width: 1,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: .4),
+                ),
+                Expanded(child: body),
+              ],
+            ),
+          );
+        }
+        return Scaffold(
+          extendBody: true,
+          body: body,
+          bottomNavigationBar: SafeArea(
+            minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainer.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: NavigationBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  selectedIndex: _index,
+                  onDestinationSelected: (i) => setState(() => _index = i),
+                  destinations: _destinations,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

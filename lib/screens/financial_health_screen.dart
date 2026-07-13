@@ -1,316 +1,236 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import '../providers/expense_provider.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/ui/command_ui.dart';
 
 class FinancialHealthScreen extends ConsumerWidget {
   const FinancialHealthScreen({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final healthAsync = ref.watch(financialHealthScoreProvider);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
+    final async = ref.watch(financialHealthScoreProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Financial Health')),
-      body: healthAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (health) {
-          final gradeColor = _gradeColor(health.grade, scheme);
-
-          return CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-                    child: Container(
-                      padding: const EdgeInsets.all(28),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(32),
-                        gradient: LinearGradient(
-                          colors: [
-                            gradeColor.withValues(alpha: 0.15),
-                            gradeColor.withValues(alpha: 0.05),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          // Ring chart
-                          SizedBox(
-                            height: 200,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                PieChart(
-                                  PieChartData(
-                                    startDegreeOffset: -90,
-                                    sectionsSpace: 0,
-                                    centerSpaceRadius: 70,
-                                    sections: [
-                                      PieChartSectionData(
-                                        value: health.score.toDouble(),
-                                        color: gradeColor,
-                                        radius: 20,
-                                        title: '',
-                                      ),
-                                      PieChartSectionData(
-                                        value: (100 - health.score).toDouble(),
-                                        color: scheme.surfaceContainerHighest,
-                                        radius: 16,
-                                        title: '',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '${health.score}',
-                                      style: theme.textTheme.displaySmall?.copyWith(
-                                        fontWeight: FontWeight.w900,
-                                        color: gradeColor,
-                                      ),
-                                    )
-                                        .animate()
-                                        .fadeIn(duration: 600.ms)
-                                        .scale(begin: const Offset(0.5, 0.5), duration: 600.ms, curve: Curves.elasticOut),
-                                    Text(
-                                      health.gradeLabel,
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        color: gradeColor,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Grade ${health.grade}',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: gradeColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+      body: CustomScrollView(
+        slivers: [
+          const SliverAppBar.large(title: Text('Financial health')),
+          async.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              child: StatePanel(
+                icon: Icons.monitor_heart_outlined,
+                title: 'Score unavailable',
+                message: '$error',
               ),
-
-              // Sub-scores
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
+            ),
+            data: (health) {
+              final color = _color(context, health.score);
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                sliver: SliverList.list(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.inverseSurface,
+                        borderRadius: AppRadius.all(AppRadius.xxl),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Score breakdown',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 20),
-                          _ScoreRow(
-                            label: 'Savings rate',
-                            value: health.savingsRate,
-                            description:
-                                '${(health.savingsRate * 100).toStringAsFixed(1)}% of income saved',
-                            weight: '40%',
-                          ),
-                          const SizedBox(height: 16),
-                          _ScoreRow(
-                            label: 'Budget adherence',
-                            value: health.budgetAdherence,
-                            description:
-                                '${(health.budgetAdherence * 100).toStringAsFixed(0)}% of categories within budget',
-                            weight: '35%',
-                          ),
-                          const SizedBox(height: 16),
-                          _ScoreRow(
-                            label: 'Spending trend',
-                            value: health.trendScore,
-                            description: health.trendScore >= 0.5
-                                ? 'Spending is trending down'
-                                : 'Spending increased vs last month',
-                            weight: '25%',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // How it's calculated
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                sliver: SliverToBoxAdapter(
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        title: Text(
-                          'How is this calculated?',
-                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _FormulaRow('Savings rate (40%)', '(Income − Expense) ÷ Income'),
-                                _FormulaRow('Budget adherence (35%)',
-                                    '% of categories that stayed within their monthly limit'),
-                                _FormulaRow('Spending trend (25%)',
-                                    'Current month vs previous month expense'),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Score = (Savings × 40) + (Adherence × 35) + (Trend × 25)',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontStyle: FontStyle.italic,
-                                    color: scheme.onSurfaceVariant,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${health.score}',
+                                style: Theme.of(context).textTheme.displayLarge
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onInverseSurface,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -2,
+                                    ),
+                              ),
+                              Text(
+                                '/100',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onInverseSurface
+                                          .withValues(alpha: .55),
+                                    ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: AppRadius.all(99),
+                                ),
+                                child: Text(
+                                  '${health.grade} · ${health.gradeLabel}',
+                                  style: TextStyle(
+                                    color:
+                                        ThemeData.estimateBrightnessForColor(
+                                              color,
+                                            ) ==
+                                            Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          ClipRRect(
+                            borderRadius: AppRadius.all(99),
+                            child: LinearProgressIndicator(
+                              value: health.score / 100,
+                              minHeight: 10,
+                              color: color,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onInverseSurface
+                                  .withValues(alpha: .13),
                             ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            _summary(health.score),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onInverseSurface
+                                      .withValues(alpha: .72),
+                                  height: 1.45,
+                                ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                    const SectionLabel('What shapes your score'),
+                    _Factor(
+                      title: 'Savings capacity',
+                      value: health.savingsRate,
+                      weight: '40%',
+                      caption:
+                          '${(health.savingsRate * 100).round()}% of income remains',
+                    ),
+                    const SizedBox(height: 10),
+                    _Factor(
+                      title: 'Budget control',
+                      value: health.budgetAdherence,
+                      weight: '35%',
+                      caption:
+                          '${(health.budgetAdherence * 100).round()}% of limits are healthy',
+                    ),
+                    const SizedBox(height: 10),
+                    _Factor(
+                      title: 'Spending direction',
+                      value: health.trendScore,
+                      weight: '25%',
+                      caption: health.trendScore >= .5
+                          ? 'Moving in the right direction'
+                          : 'Higher than your recent baseline',
+                    ),
+                    const SectionLabel('How to read this'),
+                    Text(
+                      'The score is directional, not a credit rating. It combines how much income remains, whether categories stay within plan, and whether spending is improving month over month.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.55,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 88)),
-            ],
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Color _gradeColor(String grade, ColorScheme scheme) {
-    return switch (grade) {
-      'A' => Colors.green.shade600,
-      'B' => Colors.teal.shade500,
-      'C' => Colors.amber.shade700,
-      'D' => Colors.orange.shade700,
-      _ => scheme.error,
-    };
-  }
+  Color _color(BuildContext context, int score) => score >= 75
+      ? context.finance.income
+      : score >= 50
+      ? context.finance.warning
+      : context.finance.expense;
+  String _summary(int score) => score >= 75
+      ? 'Your current habits create useful financial breathing room.'
+      : score >= 50
+      ? 'Your foundation is workable, with a few pressure points worth correcting.'
+      : 'Cash flow and spending limits need attention. Start with one controllable category.';
 }
 
-class _ScoreRow extends StatelessWidget {
-  const _ScoreRow({
-    required this.label,
+class _Factor extends StatelessWidget {
+  const _Factor({
+    required this.title,
     required this.value,
-    required this.description,
     required this.weight,
+    required this.caption,
   });
-
-  final String label;
+  final String title;
   final double value;
-  final String description;
   final String weight;
-
+  final String caption;
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    Color barColor;
-    if (value >= 0.7) {
-      barColor = Colors.green.shade600;
-    } else if (value >= 0.4) {
-      barColor = Colors.amber.shade700;
-    } else {
-      barColor = scheme.error;
-    }
-
-    return Column(
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: AppRadius.all(AppRadius.lg),
+      border: Border.all(
+        color: Theme.of(
+          context,
+        ).colorScheme.outlineVariant.withValues(alpha: .45),
+      ),
+    ),
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: Text(label, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+              child: Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
             Text(
               weight,
-              style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${(value * 100).toStringAsFixed(0)}%',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: barColor,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 12),
         ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 8,
-            backgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          borderRadius: AppRadius.all(99),
+          child: LinearProgressIndicator(value: value, minHeight: 8),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          caption,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          description,
-          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-        ),
       ],
-    );
-  }
-}
-
-class _FormulaRow extends StatelessWidget {
-  const _FormulaRow(this.label, this.formula);
-
-  final String label;
-  final String formula;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
-          Text(formula, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }

@@ -1,438 +1,226 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../providers/expense_provider.dart';
 import '../services/database_helper.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/ui/command_ui.dart';
 
-// ignore: unused_element
-Color _categoryColor(String category) {
-  switch (category.toLowerCase()) {
-    case 'food':
-      return Colors.orange;
-    case 'transport':
-      return Colors.blue;
-    case 'utilities':
-      return Colors.green;
-    case 'entertainment':
-      return Colors.deepPurple;
-    case 'shopping':
-      return Colors.pink;
-    case 'health':
-      return Colors.red;
-    default:
-      return Colors.blueGrey;
-  }
-}
-
-enum _SmsFilter { all, withTransaction, skipped }
+enum _Filter { all, imported, skipped }
 
 class AuditScreen extends ConsumerStatefulWidget {
   const AuditScreen({super.key});
-
   @override
   ConsumerState<AuditScreen> createState() => _AuditScreenState();
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  _SmsFilter _filter = _SmsFilter.all;
-
-  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> items) {
-    switch (_filter) {
-      case _SmsFilter.all:
-        return items;
-      case _SmsFilter.withTransaction:
-        return items.where((e) => e['has_expense'] == 1).toList();
-      case _SmsFilter.skipped:
-        return items.where((e) => e['has_expense'] == 0).toList();
-    }
-  }
-
+  _Filter _filter = _Filter.all;
   @override
   Widget build(BuildContext context) {
-    final auditAsync = ref.watch(parsedSmsAuditProvider);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
+    final async = ref.watch(parsedSmsAuditProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: auditAsync.when(
-          data: (items) => Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Parsed SMS Audit'),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${items.length}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
+      body: CustomScrollView(
+        slivers: [
+          const SliverAppBar.large(title: Text('SMS inbox')),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Every message the importer has considered, including why non-transactions were skipped.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 18),
+                  SegmentedButton<_Filter>(
+                    expandedInsets: EdgeInsets.zero,
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: _Filter.all, label: Text('All')),
+                      ButtonSegment(
+                        value: _Filter.imported,
+                        label: Text('Imported'),
+                      ),
+                      ButtonSegment(
+                        value: _Filter.skipped,
+                        label: Text('Skipped'),
+                      ),
+                    ],
+                    selected: {_filter},
+                    onSelectionChanged: (value) =>
+                        setState(() => _filter = value.first),
+                  ),
+                ],
               ),
-            ],
-          ),
-          loading: () => const Text('Parsed SMS Audit'),
-          error: (err, stack) => Text('Error: $err'),
-        ),
-      ),
-      body: auditAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.error_outline_rounded,
-                  size: 48,
-                  color: scheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Failed to load audit data',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  err.toString(),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurface.withValues(alpha: 0.65),
-                  ),
-                ),
-              ],
             ),
           ),
-        ),
-        data: (items) {
-          final filtered = _applyFilter(items);
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _FilterChipRow(
-                  current: _filter,
-                  total: items.length,
-                  withTransaction:
-                      items.where((e) => e['has_expense'] == 1).length,
-                  skipped: items.where((e) => e['has_expense'] == 0).length,
-                  onChanged: (f) => setState(() => _filter = f),
-                ),
+          async.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              child: StatePanel(
+                icon: Icons.sms_failed_outlined,
+                title: 'Inbox unavailable',
+                message: '$error',
               ),
-              if (filtered.isEmpty)
-                SliverFillRemaining(
+            ),
+            data: (all) {
+              final items = all
+                  .where(
+                    (item) =>
+                        _filter == _Filter.all ||
+                        (_filter == _Filter.imported
+                            ? item['has_expense'] == 1
+                            : item['has_expense'] == 0),
+                  )
+                  .toList();
+              if (items.isEmpty) {
+                return const SliverFillRemaining(
                   hasScrollBody: false,
-                  child: _EmptyFilterState(filter: _filter),
-                )
-              else
-                SliverPadding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  sliver: SliverList.separated(
-                    itemCount: filtered.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) =>
-                        _AuditTile(entry: filtered[index]),
+                  child: StatePanel(
+                    icon: Icons.sms_outlined,
+                    title: 'Nothing here',
+                    message:
+                        'Messages matching this filter will appear after sync.',
+                  ),
+                );
+              }
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                sliver: SliverList.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) => _SmsEvent(
+                    entry: items[index],
+                    onRetry: () =>
+                        _retry(items[index]['body'] as String? ?? ''),
                   ),
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _FilterChipRow extends StatelessWidget {
-  const _FilterChipRow({
-    required this.current,
-    required this.total,
-    required this.withTransaction,
-    required this.skipped,
-    required this.onChanged,
-  });
-
-  final _SmsFilter current;
-  final int total;
-  final int withTransaction;
-  final int skipped;
-  final ValueChanged<_SmsFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Wrap(
-        spacing: 8,
-        children: [
-          FilterChip(
-            label: Text('All ($total)'),
-            selected: current == _SmsFilter.all,
-            onSelected: (_) => onChanged(_SmsFilter.all),
-          ),
-          FilterChip(
-            label: Text('With transaction ($withTransaction)'),
-            selected: current == _SmsFilter.withTransaction,
-            onSelected: (_) => onChanged(_SmsFilter.withTransaction),
-          ),
-          FilterChip(
-            label: Text('Skipped ($skipped)'),
-            selected: current == _SmsFilter.skipped,
-            onSelected: (_) => onChanged(_SmsFilter.skipped),
+              );
+            },
           ),
         ],
       ),
     );
   }
-}
-
-class _EmptyFilterState extends StatelessWidget {
-  const _EmptyFilterState({required this.filter});
-
-  final _SmsFilter filter;
-
-  String get _message {
-    switch (filter) {
-      case _SmsFilter.all:
-        return 'No parsed SMS found.\nSync SMS from the dashboard to populate this list.';
-      case _SmsFilter.withTransaction:
-        return 'No SMS with detected transactions.';
-      case _SmsFilter.skipped:
-        return 'No skipped SMS entries.';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.sms_failed_outlined,
-              size: 52,
-              color: scheme.onSurface.withValues(alpha: 0.35),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _message,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: scheme.onSurface.withValues(alpha: 0.55),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AuditTile extends ConsumerStatefulWidget {
-  const _AuditTile({required this.entry});
-
-  final Map<String, dynamic> entry;
-
-  @override
-  ConsumerState<_AuditTile> createState() => _AuditTileState();
-}
-
-class _AuditTileState extends ConsumerState<_AuditTile> {
-  bool _expanded = false;
-  bool _retrying = false;
-
-  (Color, String) _resolveBadge(bool hasExpense, String skipReason) {
-    if (hasExpense) return (Colors.green, 'Transaction');
-    return switch (skipReason) {
-      'otp'           => (Colors.orange, 'OTP'),
-      'promotional'   => (Colors.deepOrange, 'Promo'),
-      'balance_alert' => (Colors.blue, 'Balance Alert'),
-      'statement'     => (Colors.indigo, 'Statement'),
-      'not_financial' => (Colors.blueGrey, 'Non-Financial'),
-      'no_response'   => (Colors.amber.shade700, 'No AI Response'),
-      'parse_error'   => (Colors.red, 'Parse Error'),
-      'zero_amount'   => (Colors.brown, 'Zero Amount'),
-      String r when r.startsWith('unknown_type:') =>
-        (Colors.purple, 'Unknown: ${r.substring(13)}'),
-      _               => (Colors.blueGrey, skipReason.isEmpty ? 'Skipped' : skipReason),
-    };
-  }
 
   Future<void> _retry(String body) async {
-    setState(() => _retrying = true);
-    try {
-      await DatabaseHelper.instance.unmarkSmsParsed([body]);
-      ref.invalidate(parsedSmsAuditProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Queued for re-parse on next sync.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _retrying = false);
+    await DatabaseHelper.instance.unmarkSmsParsed([body]);
+    ref.invalidate(parsedSmsAuditProvider);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Queued for the next sync.')),
+      );
     }
   }
+}
 
-  String _formatParsedAt(String raw) {
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      return DateFormat('MMM d, yyyy • h:mm a').format(dt);
-    } catch (_) {
-      return raw;
-    }
-  }
-
+class _SmsEvent extends StatelessWidget {
+  const _SmsEvent({required this.entry, required this.onRetry});
+  final Map<String, dynamic> entry;
+  final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    final body = widget.entry['body'] as String? ?? '';
-    final parsedAt = widget.entry['parsed_at'] as String? ?? '';
-    final hasExpense = widget.entry['has_expense'] == 1;
-    final skipReason = widget.entry['skip_reason'] as String? ?? '';
-
-    final (badgeColor, badgeLabel) = _resolveBadge(hasExpense, skipReason);
-
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+    final imported = entry['has_expense'] == 1;
+    final reason = entry['skip_reason'] as String? ?? '';
+    final color = imported
+        ? context.finance.income
+        : _reasonColor(context, reason);
+    final rawTime = entry['parsed_at'] as String? ?? '';
+    final time = DateTime.tryParse(rawTime)?.toLocal();
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: AppRadius.all(AppRadius.lg),
+        border: Border.all(color: color.withValues(alpha: .18)),
       ),
-      child: InkWell(
-        onTap: () => setState(() => _expanded = !_expanded),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: badgeColor.withValues(alpha: 0.12),
-                    child: Icon(
-                      hasExpense
-                          ? Icons.receipt_rounded
-                          : Icons.do_not_disturb_alt_rounded,
-                      size: 18,
-                      color: badgeColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AnimatedCrossFade(
-                          duration: const Duration(milliseconds: 200),
-                          crossFadeState: _expanded
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
-                          firstChild: Text(
-                            body,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          secondChild: Text(
-                            body,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time_rounded,
-                              size: 13,
-                              color: scheme.onSurface.withValues(alpha: 0.45),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatParsedAt(parsedAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurface.withValues(alpha: 0.55),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: badgeColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          badgeLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: badgeColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (!hasExpense)
-                        _retrying
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Tooltip(
-                                message: 'Re-queue for parsing',
-                                child: InkWell(
-                                  onTap: () => _retry(body),
-                                  borderRadius: BorderRadius.circular(99),
-                                  child: Icon(
-                                    Icons.refresh_rounded,
-                                    size: 18,
-                                    color: scheme.primary,
-                                  ),
-                                ),
-                              )
-                      else
-                        Icon(
-                          _expanded
-                              ? Icons.expand_less_rounded
-                              : Icons.expand_more_rounded,
-                          size: 18,
-                          color: scheme.onSurface.withValues(alpha: 0.45),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .12),
+            borderRadius: AppRadius.all(13),
+          ),
+          child: Icon(
+            imported ? Icons.receipt_long_rounded : Icons.sms_outlined,
+            color: color,
+            size: 19,
           ),
         ),
+        title: Text(
+          entry['body'] as String? ?? '',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          time == null ? rawTime : DateFormat('d MMM · h:mm a').format(time),
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .12),
+            borderRadius: AppRadius.all(99),
+          ),
+          child: Text(
+            imported ? 'Imported' : _label(reason),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    imported
+                        ? 'A transaction was created from this message.'
+                        : 'Skipped because: ${_label(reason)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                if (!imported)
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  String _label(String reason) => switch (reason) {
+    'otp' => 'OTP',
+    'promotional' => 'Promotion',
+    'balance_alert' => 'Balance',
+    'statement' => 'Statement',
+    'not_financial' => 'Not financial',
+    'parse_error' => 'Parse error',
+    'no_response' => 'No response',
+    'zero_amount' => 'No amount',
+    _ => reason.isEmpty ? 'Skipped' : reason.replaceAll('_', ' '),
+  };
+  Color _reasonColor(BuildContext context, String reason) =>
+      reason == 'parse_error' || reason == 'no_response'
+      ? context.finance.expense
+      : context.finance.warning;
 }
