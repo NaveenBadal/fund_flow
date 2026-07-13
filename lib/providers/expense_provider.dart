@@ -190,6 +190,13 @@ class NotificationParsingNotifier extends Notifier<bool> {
         .write(key: 'notification_parsing_enabled', value: state.toString());
   }
 
+  Future<void> setEnabled(bool value) async {
+    state = value;
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'notification_parsing_enabled', value: value.toString());
+  }
+
   void set(bool v) => state = v;
 }
 

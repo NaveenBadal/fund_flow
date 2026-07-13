@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'providers/expense_provider.dart';
 import 'providers/development_update_provider.dart';
+import 'providers/notification_ingestion_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/activity_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -202,8 +203,11 @@ class _AppShellState extends ConsumerState<AppShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(developmentUpdateProvider.notifier).check(silent: true);
+      await ref.read(settingsInitializer.future);
+      if (!mounted) return;
+      ref.read(notificationIngestionProvider.notifier).processPending();
     });
   }
 
@@ -218,6 +222,7 @@ class _AppShellState extends ConsumerState<AppShell>
     final sync = ref.read(syncProvider.notifier);
     if (state == AppLifecycleState.resumed) {
       sync.resume();
+      ref.read(notificationIngestionProvider.notifier).processPending();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {

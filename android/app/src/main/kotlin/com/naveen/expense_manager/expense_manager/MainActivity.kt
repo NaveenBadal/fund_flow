@@ -12,6 +12,7 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val updateChannel = "com.naveen.expense_manager/updater"
+    private val notificationChannel = "com.naveen.expense_manager/notifications"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -35,6 +36,32 @@ class MainActivity : FlutterActivity() {
                                 result.error("install_failed", error.message, null)
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isAccessEnabled" -> result.success(
+                        FinancialNotificationListenerService.isAccessEnabled(this),
+                    )
+                    "openAccessSettings" -> {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        result.success(null)
+                    }
+                    "setCaptureEnabled" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: false
+                        FinancialNotificationListenerService.setCaptureEnabled(this, enabled)
+                        result.success(null)
+                    }
+                    "getPending" -> result.success(
+                        FinancialNotificationListenerService.getPending(this),
+                    )
+                    "acknowledge" -> {
+                        val ids = call.argument<List<String>>("ids").orEmpty()
+                        FinancialNotificationListenerService.acknowledge(this, ids)
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }

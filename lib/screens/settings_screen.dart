@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ai_provider.dart';
 import '../providers/expense_provider.dart';
+import '../providers/notification_ingestion_provider.dart';
 import '../services/bank_csv_importer.dart';
 import '../services/ollama_cloud_service.dart';
 import '../services/development_update_service.dart';
@@ -236,6 +237,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
+              const _SettingsLabel('SMART CAPTURE'),
+              const _NotificationCaptureCard(),
               const _SettingsLabel('ADVANCED AUTOMATION'),
               _SettingsSurface(
                 child: ExpansionTile(
@@ -513,6 +516,123 @@ class _SettingsLabel extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _NotificationCaptureCard extends ConsumerStatefulWidget {
+  const _NotificationCaptureCard();
+
+  @override
+  ConsumerState<_NotificationCaptureCard> createState() =>
+      _NotificationCaptureCardState();
+}
+
+class _NotificationCaptureCardState
+    extends ConsumerState<_NotificationCaptureCard>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationIngestionProvider.notifier).refreshAccess();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final notifier = ref.read(notificationIngestionProvider.notifier);
+      notifier.refreshAccess().then((_) => notifier.processPending());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = ref.watch(notificationParsingEnabledProvider);
+    final ingestion = ref.watch(notificationIngestionProvider);
+    final scheme = Theme.of(context).colorScheme;
+    final caption = !enabled
+        ? 'Capture RCS and bank-app transaction alerts'
+        : !ingestion.accessEnabled
+        ? 'Android notification access is required'
+        : ingestion.processing
+        ? 'Processing captured transactions…'
+        : ingestion.imported > 0
+        ? '${ingestion.imported} new transaction${ingestion.imported == 1 ? '' : 's'} imported'
+        : 'Protected and watching for completed transactions';
+
+    return _SettingsSurface(
+      child: Column(
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: Icon(
+              ingestion.accessEnabled
+                  ? Icons.notifications_active_rounded
+                  : Icons.notifications_outlined,
+            ),
+            title: const Text('Transaction notifications'),
+            subtitle: Text(caption),
+            value: enabled,
+            onChanged: (value) => ref
+                .read(notificationIngestionProvider.notifier)
+                .setEnabled(value),
+          ),
+          if (enabled && !ingestion.accessEnabled) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Fund Flow stores only notifications that look like completed money movement. OTPs are rejected on-device.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonal(
+                    onPressed: () => ref
+                        .read(notificationIngestionProvider.notifier)
+                        .openAccessSettings(),
+                    child: const Text('Allow'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (ingestion.error case final error?) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: scheme.error),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      error,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _SettingsSurface extends StatelessWidget {
