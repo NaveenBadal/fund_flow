@@ -164,7 +164,11 @@ class AppLockNotifier extends Notifier<bool> {
   bool build() => false;
 
   Future<void> toggle() async {
-    state = !state;
+    await setEnabled(!state);
+  }
+
+  Future<void> setEnabled(bool value) async {
+    state = value;
     await ref
         .read(secureStorageProvider)
         .write(key: 'app_lock_enabled', value: state.toString());

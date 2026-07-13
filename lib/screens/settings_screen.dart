@@ -222,8 +222,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       title: 'App lock',
                       caption: 'Require device authentication',
                       value: ref.watch(appLockEnabledProvider),
-                      onChanged: (_) =>
-                          ref.read(appLockEnabledProvider.notifier).toggle(),
+                      onChanged: (value) => ref
+                          .read(appLockEnabledProvider.notifier)
+                          .setEnabled(value),
                     ),
                     const Divider(height: 1, indent: 52),
                     _SwitchRow(
