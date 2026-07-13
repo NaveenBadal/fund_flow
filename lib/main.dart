@@ -261,6 +261,15 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
                 icon: const Icon(Icons.fingerprint_rounded),
                 label: Text(_authenticating ? 'Authenticating…' : 'Unlock'),
               ),
+              if (_authError != null) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => ref
+                      .read(appLockEnabledProvider.notifier)
+                      .setEnabled(false),
+                  child: const Text('Disable app lock'),
+                ),
+              ],
             ],
           ),
         ),
