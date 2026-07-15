@@ -123,9 +123,14 @@ class _CategoryCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: item.color.withValues(alpha: .11),
-    borderRadius: AppRadius.all(AppRadius.lg),
+    borderRadius: const BorderRadius.only(
+      topLeft: Radius.circular(6),
+      topRight: Radius.circular(28),
+      bottomLeft: Radius.circular(28),
+      bottomRight: Radius.circular(6),
+    ),
     child: InkWell(
-      borderRadius: AppRadius.all(AppRadius.lg),
+      borderRadius: BorderRadius.circular(28),
       onTap: onTap,
       onLongPress: onDelete,
       child: Padding(

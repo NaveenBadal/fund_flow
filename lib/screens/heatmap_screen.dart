@@ -95,8 +95,14 @@ class HeatmapScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.inverseSurface,
-                        borderRadius: AppRadius.all(AppRadius.xxl),
+                        color: const Color(0xFF090D16),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(38),
+                          bottomLeft: Radius.circular(38),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        border: Border.all(color: Colors.white12),
                       ),
                       child: _CalendarGrid(
                         data: data,

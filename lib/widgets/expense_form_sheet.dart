@@ -62,250 +62,283 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
       _category = categories.first;
     }
     final scheme = Theme.of(context).colorScheme;
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .92,
-      minChildSize: .65,
-      maxChildSize: .98,
-      builder: (context, controller) => CustomScrollView(
-        controller: controller,
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.initialExpense == null
-                              ? 'Create a money memory'
-                              : 'Inspect this memory',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          widget.initialExpense == null
-                              ? 'Flow will include it in future reasoning'
-                              : 'Correct the machine’s understanding',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (widget.onDelete != null)
-                    IconButton(
-                      onPressed: _confirmDelete,
-                      icon: Icon(
-                        Icons.delete_outline_rounded,
-                        color: scheme.error,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF090D16),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF65EAD1),
+            brightness: Brightness.dark,
+            surface: const Color(0xFF090D16),
           ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              24,
-              20,
-              MediaQuery.viewInsetsOf(context).bottom + 28,
-            ),
-            sliver: SliverList.list(
-              children: [
-                SegmentedButton<String>(
-                  expandedInsets: EdgeInsets.zero,
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: 'expense',
-                      icon: Icon(Icons.north_east_rounded),
-                      label: Text('Energy out'),
-                    ),
-                    ButtonSegment(
-                      value: 'income',
-                      icon: Icon(Icons.south_west_rounded),
-                      label: Text('Energy in'),
-                    ),
-                  ],
-                  selected: {_type},
-                  onSelectionChanged: (value) =>
-                      setState(() => _type = value.first),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                  decoration: BoxDecoration(
-                    color: scheme.inverseSurface,
-                    borderRadius: AppRadius.all(AppRadius.xxl),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: .94,
+          minChildSize: .72,
+          maxChildSize: .99,
+          builder: (context, controller) => CustomScrollView(
+            controller: controller,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+                  child: Row(
                     children: [
-                      Text(
-                        'MAGNITUDE',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onInverseSurface.withValues(alpha: .6),
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.initialExpense == null
+                                  ? 'Create a money memory'
+                                  : 'Inspect this memory',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              widget.initialExpense == null
+                                  ? 'Flow will include it in future reasoning'
+                                  : 'Correct the machine’s understanding',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
                         ),
                       ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _currency,
-                              dropdownColor: scheme.inverseSurface,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: scheme.onInverseSurface,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              items:
-                                  const [
-                                        'INR',
-                                        'USD',
-                                        'EUR',
-                                        'GBP',
-                                        'SGD',
-                                        'AED',
-                                      ]
-                                      .map(
-                                        (value) => DropdownMenuItem(
-                                          value: value,
-                                          child: Text(value),
-                                        ),
-                                      )
-                                      .toList(),
-                              onChanged: (value) =>
-                                  setState(() => _currency = value!),
-                            ),
+                      if (widget.onDelete != null)
+                        IconButton(
+                          onPressed: _confirmDelete,
+                          icon: Icon(
+                            Icons.delete_outline_rounded,
+                            color: scheme.error,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _amount,
-                              autofocus: widget.initialExpense == null,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                  RegExp(r'^\d*\.?\d{0,2}'),
-                                ),
-                              ],
-                              style: Theme.of(context).textTheme.displaySmall
-                                  ?.copyWith(
-                                    color: scheme.onInverseSurface,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              decoration: InputDecoration.collapsed(
-                                hintText: '0.00',
-                                hintStyle: TextStyle(
-                                  color: scheme.onInverseSurface.withValues(
-                                    alpha: .35,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _merchant,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Where did the money meet the world?',
-                    prefixIcon: Icon(Icons.storefront_outlined),
-                  ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  24,
+                  20,
+                  MediaQuery.viewInsetsOf(context).bottom + 28,
                 ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: categories.contains(_category)
-                      ? _category
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Meaning',
-                    prefixIcon: Icon(Icons.category_outlined),
-                  ),
-                  items: categories
-                      .map(
-                        (name) => DropdownMenuItem(
-                          value: name,
-                          child: Row(
+                sliver: SliverList.list(
+                  children: [
+                    SegmentedButton<String>(
+                      expandedInsets: EdgeInsets.zero,
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: 'expense',
+                          icon: Icon(Icons.north_east_rounded),
+                          label: Text('Energy out'),
+                        ),
+                        ButtonSegment(
+                          value: 'income',
+                          icon: Icon(Icons.south_west_rounded),
+                          label: Text('Energy in'),
+                        ),
+                      ],
+                      selected: {_type},
+                      onSelectionChanged: (value) =>
+                          setState(() => _type = value.first),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .06),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(34),
+                          bottomLeft: Radius.circular(34),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MAGNITUDE',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: scheme.onInverseSurface.withValues(
+                                    alpha: .6,
+                                  ),
+                                  letterSpacing: 1.2,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Icon(
-                                categoryIcon(name),
-                                size: 18,
-                                color: categoryColor(name),
+                              DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _currency,
+                                  dropdownColor: scheme.inverseSurface,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: scheme.onInverseSurface,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                  items:
+                                      const [
+                                            'INR',
+                                            'USD',
+                                            'EUR',
+                                            'GBP',
+                                            'SGD',
+                                            'AED',
+                                          ]
+                                          .map(
+                                            (value) => DropdownMenuItem(
+                                              value: value,
+                                              child: Text(value),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged: (value) =>
+                                      setState(() => _currency = value!),
+                                ),
                               ),
-                              const SizedBox(width: 10),
-                              Text(name),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _amount,
+                                  autofocus: widget.initialExpense == null,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d*\.?\d{0,2}'),
+                                    ),
+                                  ],
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .displaySmall
+                                      ?.copyWith(
+                                        color: scheme.onInverseSurface,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                  decoration: InputDecoration.collapsed(
+                                    hintText: '0.00',
+                                    hintStyle: TextStyle(
+                                      color: scheme.onInverseSurface.withValues(
+                                        alpha: .35,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => _category = value!),
-                ),
-                const SizedBox(height: 14),
-                Material(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: AppRadius.all(AppRadius.md),
-                  child: ListTile(
-                    leading: const Icon(Icons.calendar_today_outlined),
-                    title: Text(DateFormat('EEEE, d MMMM yyyy').format(_date)),
-                    subtitle: Text(DateFormat('h:mm a').format(_date)),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
-                    onTap: _pickDate,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _tags,
-                  decoration: const InputDecoration(
-                    labelText: 'Personal memory cues (optional)',
-                    hintText: 'travel, work, shared',
-                    prefixIcon: Icon(Icons.tag_rounded),
-                  ),
-                ),
-                if (widget.initialExpense != null) ...[
-                  const SizedBox(height: 20),
-                  _SourcePanel(expense: widget.initialExpense!),
-                ],
-                const SizedBox(height: 28),
-                SizedBox(
-                  height: 54,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check_rounded),
-                    label: Text(
-                      widget.initialExpense == null
-                          ? 'Commit to memory'
-                          : 'Update memory',
+                        ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _merchant,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Where did the money meet the world?',
+                        prefixIcon: Icon(Icons.storefront_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: categories.contains(_category)
+                          ? _category
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Meaning',
+                        prefixIcon: Icon(Icons.category_outlined),
+                      ),
+                      items: categories
+                          .map(
+                            (name) => DropdownMenuItem(
+                              value: name,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    categoryIcon(name),
+                                    size: 18,
+                                    color: categoryColor(name),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(name),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _category = value!),
+                    ),
+                    const SizedBox(height: 14),
+                    Material(
+                      color: scheme.surfaceContainerLow,
+                      borderRadius: AppRadius.all(AppRadius.md),
+                      child: ListTile(
+                        leading: const Icon(Icons.calendar_today_outlined),
+                        title: Text(
+                          DateFormat('EEEE, d MMMM yyyy').format(_date),
+                        ),
+                        subtitle: Text(DateFormat('h:mm a').format(_date)),
+                        trailing: const Icon(Icons.edit_calendar_outlined),
+                        onTap: _pickDate,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _tags,
+                      decoration: const InputDecoration(
+                        labelText: 'Personal memory cues (optional)',
+                        hintText: 'travel, work, shared',
+                        prefixIcon: Icon(Icons.tag_rounded),
+                      ),
+                    ),
+                    if (widget.initialExpense != null) ...[
+                      const SizedBox(height: 20),
+                      _SourcePanel(expense: widget.initialExpense!),
+                    ],
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      height: 54,
+                      child: FilledButton.icon(
+                        onPressed: _saving ? null : _save,
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.check_rounded),
+                        label: Text(
+                          widget.initialExpense == null
+                              ? 'Commit to memory'
+                              : 'Update memory',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

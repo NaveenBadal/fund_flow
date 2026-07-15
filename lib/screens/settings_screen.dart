@@ -507,14 +507,24 @@ class _SettingsLabel extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 28, 4, 10),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: Theme.of(context).colorScheme.primary,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.3,
-      ),
+    padding: const EdgeInsets.fromLTRB(4, 30, 4, 10),
+    child: Row(
+      children: [
+        Container(
+          width: 18,
+          height: 1,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(width: 9),
+        Text(
+          text,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.45,
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -641,14 +651,17 @@ class _SettingsSurface extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: AppRadius.all(AppRadius.lg),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: .68),
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(7),
+        topRight: Radius.circular(30),
+        bottomLeft: Radius.circular(30),
+        bottomRight: Radius.circular(7),
+      ),
       border: Border.all(
-        color: Theme.of(
-          context,
-        ).colorScheme.outlineVariant.withValues(alpha: .45),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: .16),
       ),
     ),
     child: child,
@@ -669,13 +682,63 @@ class _SwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    contentPadding: EdgeInsets.zero,
-    secondary: Icon(icon),
-    title: Text(title),
-    subtitle: Text(caption),
-    value: value,
-    onChanged: onChanged,
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => onChanged(!value),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: value
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  caption,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: 42,
+            height: 24,
+            padding: const EdgeInsets.all(3),
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: value
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: value
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -691,12 +754,42 @@ class _LinkRow extends StatelessWidget {
   final String caption;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: Icon(icon),
-    title: Text(title),
-    subtitle: Text(caption),
-    trailing: const Icon(Icons.arrow_forward_rounded, size: 19),
+  Widget build(BuildContext context) => InkWell(
     onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      child: Row(
+        children: [
+          Text(
+            '↗',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Icon(icon, size: 19),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  caption,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }

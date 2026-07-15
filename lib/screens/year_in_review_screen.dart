@@ -252,7 +252,12 @@ class _StoryTile extends StatelessWidget {
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
       color: color.withValues(alpha: .13),
-      borderRadius: AppRadius.all(AppRadius.lg),
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(6),
+        topRight: Radius.circular(28),
+        bottomLeft: Radius.circular(28),
+        bottomRight: Radius.circular(6),
+      ),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,8 +296,13 @@ class _Statement extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: AppRadius.all(AppRadius.lg),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: .68),
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(6),
+        topRight: Radius.circular(28),
+        bottomLeft: Radius.circular(28),
+        bottomRight: Radius.circular(6),
+      ),
       border: Border.all(
         color: Theme.of(
           context,

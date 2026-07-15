@@ -106,8 +106,13 @@ class _LogEvent extends StatelessWidget {
         : context.finance.income;
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: AppRadius.all(AppRadius.lg),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .66),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(6),
+          topRight: Radius.circular(26),
+          bottomLeft: Radius.circular(26),
+          bottomRight: Radius.circular(6),
+        ),
         border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: ExpansionTile(

@@ -42,29 +42,50 @@ class IntelligenceScreen extends ConsumerWidget {
                 ),
                 child: const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Row(children: [
-                    Icon(Icons.chat_bubble_outline_rounded,
-                        size: 32, color: Color(0xFFC7FF4A)),
-                    SizedBox(width: 18),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('ASK YOUR MONEY ANYTHING', style: TextStyle(
-                          color: Color(0xFFC7FF4A), fontSize: 10,
-                          fontWeight: FontWeight.w800, letterSpacing: 1.3,
-                        )),
-                        SizedBox(height: 6),
-                        Text('Start a private reasoning session', style: TextStyle(
-                          color: Colors.white, fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        )),
-                        SizedBox(height: 4),
-                        Text('Every answer is grounded in your actual records.',
-                          style: TextStyle(color: Colors.white38, fontSize: 11)),
-                      ],
-                    )),
-                    Icon(Icons.arrow_forward_rounded, color: Colors.white54),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 32,
+                        color: Color(0xFFC7FF4A),
+                      ),
+                      SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ASK YOUR MONEY ANYTHING',
+                              style: TextStyle(
+                                color: Color(0xFFC7FF4A),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.3,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Start a private reasoning session',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Every answer is grounded in your actual records.',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white54),
+                    ],
+                  ),
                 ),
               ),
             ),

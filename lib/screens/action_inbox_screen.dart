@@ -303,8 +303,13 @@ class _ActionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: AppRadius.all(AppRadius.lg),
+        color: scheme.surface.withValues(alpha: .68),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(6),
+          topRight: Radius.circular(28),
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(6),
+        ),
         border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: Column(

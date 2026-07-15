@@ -64,8 +64,14 @@ class SavingsGoalsScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: AppRadius.all(AppRadius.xxl),
+                        color: const Color(0xFF090D16),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(38),
+                          bottomLeft: Radius.circular(38),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        border: Border.all(color: Colors.white12),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,6 +80,7 @@ class SavingsGoalsScreen extends ConsumerWidget {
                             'FUNDED ACROSS ALL GOALS',
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
+                                  color: const Color(0xFFC7FF4A),
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.2,
                                 ),
@@ -84,7 +91,10 @@ class SavingsGoalsScreen extends ConsumerWidget {
                                 ? maskAmount(currency)
                                 : formatAmount(saved, currency),
                             style: Theme.of(context).textTheme.displaySmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
                           const SizedBox(height: 14),
                           ClipRRect(
@@ -99,6 +109,7 @@ class SavingsGoalsScreen extends ConsumerWidget {
                             hidden
                                 ? '${(target == 0 ? 0 : saved / target * 100).round()}% funded'
                                 : '${(target == 0 ? 0 : saved / target * 100).round()}% of ${formatAmount(target, currency)}',
+                            style: const TextStyle(color: Colors.white54),
                           ),
                         ],
                       ),
@@ -185,8 +196,13 @@ class _GoalRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = goal.color;
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: AppRadius.all(AppRadius.lg),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: .66),
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(6),
+        topRight: Radius.circular(28),
+        bottomLeft: Radius.circular(28),
+        bottomRight: Radius.circular(6),
+      ),
       child: InkWell(
         borderRadius: AppRadius.all(AppRadius.lg),
         onTap: onTap,

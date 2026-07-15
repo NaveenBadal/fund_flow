@@ -293,32 +293,34 @@ class _StepView extends StatelessWidget {
             height: 250,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: scheme.inverseSurface,
-              borderRadius: AppRadius.all(36),
+              color: const Color(0xFF090D16),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(42),
+                bottomLeft: Radius.circular(42),
+                bottomRight: Radius.circular(8),
+              ),
+              border: Border.all(color: Colors.white12),
             ),
             child: Stack(
               children: [
-                Positioned(
-                  right: -30,
-                  top: -30,
-                  child: Container(
-                    width: 160,
-                    height: 160,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: scheme.primary.withValues(alpha: .18),
-                    ),
-                  ),
+                const Positioned.fill(
+                  child: CustomPaint(painter: _CalibrationFieldPainter()),
                 ),
                 Center(
                   child: Container(
                     width: 108,
                     height: 108,
                     decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: AppRadius.all(34),
+                      color: Colors.white.withValues(alpha: .06),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFC7FF4A)),
                     ),
-                    child: Icon(step.icon, size: 52, color: scheme.onPrimary),
+                    child: Icon(
+                      step.icon,
+                      size: 44,
+                      color: const Color(0xFFC7FF4A),
+                    ),
                   ),
                 ),
               ],
@@ -346,4 +348,31 @@ class _StepView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CalibrationFieldPainter extends CustomPainter {
+  const _CalibrationFieldPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = const Color(0xFF65EAD1).withValues(alpha: .17)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    final center = Offset(size.width / 2, size.height / 2);
+    for (final radius in [72.0, 104.0, 142.0]) {
+      canvas.drawCircle(center, radius, line);
+    }
+    final dot = Paint()..color = const Color(0xFFC7FF4A);
+    for (final point in [
+      Offset(size.width * .16, size.height * .28),
+      Offset(size.width * .8, size.height * .2),
+      Offset(size.width * .76, size.height * .78),
+    ]) {
+      canvas.drawCircle(point, 2.5, dot);
+      canvas.drawLine(point, center, line);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -65,8 +65,14 @@ class BudgetScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.inverseSurface,
-                        borderRadius: AppRadius.all(AppRadius.xxl),
+                        color: const Color(0xFF090D16),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(38),
+                          bottomLeft: Radius.circular(38),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        border: Border.all(color: Colors.white12),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,10 +229,15 @@ class _LimitRow extends StatelessWidget {
         child: const Icon(Icons.delete_outline_rounded),
       ),
       child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: AppRadius.all(AppRadius.lg),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .66),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(6),
+          topRight: Radius.circular(26),
+          bottomLeft: Radius.circular(26),
+          bottomRight: Radius.circular(6),
+        ),
         child: InkWell(
-          borderRadius: AppRadius.all(AppRadius.lg),
+          borderRadius: BorderRadius.circular(26),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(18),

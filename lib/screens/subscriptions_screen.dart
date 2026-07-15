@@ -128,8 +128,14 @@ class SubscriptionsScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.inverseSurface,
-                        borderRadius: AppRadius.all(AppRadius.xxl),
+                        color: const Color(0xFF090D16),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(38),
+                          bottomLeft: Radius.circular(38),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        border: Border.all(color: Colors.white12),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,7 +201,16 @@ class SubscriptionsScreen extends ConsumerWidget {
                       final item = items[index];
                       final color = categoryColor(item.category);
                       return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        shape: const Border(
+                          left: BorderSide(
+                            color: Color(0xFF65EAD1),
+                            width: 1.5,
+                          ),
+                        ),
                         leading: Container(
                           width: 46,
                           height: 46,

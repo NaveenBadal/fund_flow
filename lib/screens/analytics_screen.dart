@@ -143,12 +143,23 @@ class AnalyticsScreen extends ConsumerWidget {
                 final total = (item['total'] as num?)?.toDouble() ?? 0;
                 final count = item['txn_count'] as int? ?? 0;
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 5),
-                  leading: CircleAvatar(
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer,
-                    child: Text(name.characters.first.toUpperCase()),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  shape: Border(
+                    left: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  leading: Text(
+                    '${index + 1}'.padLeft(2, '0'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
                   ),
                   title: Text(
                     name,
