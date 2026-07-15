@@ -43,60 +43,104 @@ class GlobalQuickActionButton extends ConsumerWidget {
   Future<void> _show(BuildContext context, WidgetRef ref) async {
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit_rounded),
-                title: const Text('Add movement'),
-                subtitle: const Text('Record money in or money out'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _add(context, ref);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.bolt_rounded),
-                title: const Text('Sync bank messages'),
-                subtitle: const Text('Import new transactions'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  ref.read(syncProvider.notifier).sync();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.inbox_outlined),
-                title: const Text('Action inbox'),
-                subtitle: const Text('Review decisions that need you'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ActionInboxScreen(),
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF090D16),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: Color(0xFFC7FF4A),
                     ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.tune_rounded),
-                title: const Text('Settings'),
-                subtitle: const Text('Plan, privacy, and automation'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsScreen(),
+                    SizedBox(width: 10),
+                    Text(
+                      'CAUSE A CHANGE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                  );
-                },
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  textColor: Colors.white,
+                  iconColor: const Color(0xFFC7FF4A),
+                  leading: const Icon(Icons.gesture_rounded),
+                  title: const Text('Teach Flow a movement'),
+                  subtitle: const Text(
+                    'Create a memory manually',
+                    style: TextStyle(color: Colors.white38),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _add(context, ref);
+                  },
+                ),
+                ListTile(
+                  textColor: Colors.white,
+                  iconColor: const Color(0xFF65EAD1),
+                  leading: const Icon(Icons.bolt_rounded),
+                  title: const Text('Sense bank signals now'),
+                  subtitle: const Text(
+                    'Understand new movements',
+                    style: TextStyle(color: Colors.white38),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    ref.read(syncProvider.notifier).sync();
+                  },
+                ),
+                ListTile(
+                  textColor: Colors.white,
+                  iconColor: Colors.white70,
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: const Text('Review interventions'),
+                  subtitle: const Text(
+                    'Decisions that change outcomes',
+                    style: TextStyle(color: Colors.white38),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ActionInboxScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  textColor: Colors.white,
+                  iconColor: Colors.white70,
+                  leading: const Icon(Icons.tune_rounded),
+                  title: const Text('Alter Flow DNA'),
+                  subtitle: const Text(
+                    'Privacy, memory, and intelligence',
+                    style: TextStyle(color: Colors.white38),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

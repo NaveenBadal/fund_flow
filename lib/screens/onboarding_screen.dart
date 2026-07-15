@@ -21,28 +21,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _steps = [
     _Step(
       number: '01',
-      title: 'Know where you stand.',
+      title: 'Your money gains a memory.',
       body:
-          'A calm daily view of what came in, what went out, and what is safe to spend.',
+          'Not a dashboard. A living model that remembers every movement and understands how they connect.',
       icon: Icons.radar_rounded,
     ),
     _Step(
       number: '02',
-      title: 'Your ledger, built for you.',
+      title: 'Signals become meaning.',
       body:
-          'Bank messages become organized movements. You stay in control of every category and correction.',
+          'Flow listens for financial signals, rejects duplicate echoes, and shows how every conclusion was formed.',
       icon: Icons.receipt_long_rounded,
     ),
     _Step(
       number: '03',
-      title: 'Shape your safe-to-spend.',
+      title: 'Calibrate your reality.',
       body:
           'Choose your currency and add an optional income estimate and safety buffer.',
       icon: Icons.tune_rounded,
     ),
     _Step(
       number: '04',
-      title: 'Automation, on your terms.',
+      title: 'Intelligence with boundaries.',
       body:
           'Allow SMS access to find bank transactions automatically. Messages are reviewed only when you start a sync, and you can continue without it.',
       icon: Icons.sms_outlined,
@@ -80,7 +80,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'FUND FLOW',
+                    'FLOW · PRIVATE INTELLIGENCE',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.4,

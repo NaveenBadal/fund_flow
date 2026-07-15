@@ -108,6 +108,43 @@ class OllamaCloudService {
       (await parseBatch([smsBody]))[0] ??
       (throw const FormatException('Missing result 0'));
 
+  /// Grounded free-form answer used by the in-app financial copilot.
+  Future<String> answer({
+    required String systemPrompt,
+    required String userPrompt,
+  }) async {
+    if (!hasKey) throw StateError('Ollama Cloud API key is not set.');
+    final response = await _withRetry(
+      () => _client
+          .post(
+            Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/api/chat'),
+            headers: _headers,
+            body: jsonEncode({
+              'model': model,
+              'messages': [
+                {'role': 'system', 'content': systemPrompt},
+                {'role': 'user', 'content': userPrompt},
+              ],
+              'stream': false,
+              'think': 'medium',
+              'options': {'temperature': .1, 'num_predict': 900},
+            }),
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode != 200) {
+      throw OllamaRequestException(response.statusCode, response.body);
+    }
+    final outer = jsonDecode(response.body) as Map<String, dynamic>;
+    final content = (outer['message'] as Map<String, dynamic>?)?['content']
+        ?.toString()
+        .trim();
+    if (content == null || content.isEmpty) {
+      throw const FormatException('The model returned an empty answer.');
+    }
+    return content;
+  }
+
   Map<int, OllamaParseResult> _decodeBatch(String raw, int expectedCount) {
     var cleaned = raw.trim();
     if (cleaned.startsWith('```')) {

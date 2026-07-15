@@ -61,4 +61,29 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('returns a grounded conversational answer', () async {
+    late Map<String, dynamic> requestBody;
+    final service = OllamaCloudService(
+      apiKey: 'test',
+      client: MockClient((request) async {
+        requestBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'message': {'content': 'Food spending is down 12% this month.'},
+          }),
+          200,
+        );
+      }),
+    );
+
+    final answer = await service.answer(
+      systemPrompt: 'Use only supplied records.',
+      userPrompt: 'How is food spending?',
+    );
+
+    expect(answer, 'Food spending is down 12% this month.');
+    expect(requestBody['think'], 'medium');
+    expect((requestBody['messages'] as List), hasLength(2));
+  });
 }

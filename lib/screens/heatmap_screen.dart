@@ -17,8 +17,8 @@ class HeatmapScreen extends ConsumerWidget {
     final hidden = ref.watch(privateModeProvider);
     final currency = ref.watch(preferredCurrencyProvider);
     return CommandScaffold(
-      eyebrow: 'Your daily rhythm',
-      title: 'Spending calendar',
+      eyebrow: 'Time leaves a financial fingerprint',
+      title: 'Money rhythm',
       slivers: [
         async.when(
           loading: () => const SliverFillRemaining(
@@ -86,7 +86,9 @@ class HeatmapScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SectionLabel('Last 16 weeks')),
+                const SliverToBoxAdapter(
+                  child: SectionLabel('Sixteen-week pulse'),
+                ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),

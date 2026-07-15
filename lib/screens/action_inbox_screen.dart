@@ -48,8 +48,8 @@ class _ActionInboxScreenState extends ConsumerState<ActionInboxScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(actionInboxProvider);
     return CommandScaffold(
-      eyebrow: 'Decisions, not alerts',
-      title: 'Action inbox',
+      eyebrow: 'Only decisions that change the outcome',
+      title: 'Interventions',
       slivers: [
         async.when(
           loading: () => const SliverFillRemaining(

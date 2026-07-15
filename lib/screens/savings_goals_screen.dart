@@ -17,8 +17,8 @@ class SavingsGoalsScreen extends ConsumerWidget {
     final hidden = ref.watch(privateModeProvider);
     final currency = ref.watch(preferredCurrencyProvider);
     return CommandScaffold(
-      eyebrow: 'Make the future concrete',
-      title: 'Savings goals',
+      eyebrow: 'Money travelling through time',
+      title: 'Future anchors',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _open(context),
         icon: const Icon(Icons.add_rounded),
@@ -105,7 +105,9 @@ class SavingsGoalsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SectionLabel('Your targets')),
+                const SliverToBoxAdapter(
+                  child: SectionLabel('Anchors in motion'),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                   sliver: SliverList.separated(

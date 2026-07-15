@@ -12,8 +12,8 @@ class CustomCategoriesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customCategoryListProvider);
     return CommandScaffold(
-      eyebrow: 'Your organization system',
-      title: 'Category library',
+      eyebrow: 'Teach Flow your personal language',
+      title: 'Meaning system',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _open(context),
         icon: const Icon(Icons.add_rounded),

@@ -37,8 +37,8 @@ class PlanScreen extends ConsumerWidget {
     }).length;
 
     return CommandScaffold(
-      eyebrow: 'Give your money a job',
-      title: 'Plan',
+      eyebrow: 'A simulation of what comes next',
+      title: 'Possible futures',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -53,7 +53,7 @@ class PlanScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'SAFE TO ALLOCATE',
+                    'UNCOMMITTED POSSIBILITY',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w800,
@@ -86,14 +86,14 @@ class PlanScreen extends ConsumerWidget {
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SectionLabel('Your system')),
+        const SliverToBoxAdapter(child: SectionLabel('Change the future')),
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           sliver: SliverList.list(
             children: [
               _PlanDestination(
                 icon: Icons.donut_large_rounded,
-                title: 'Spending limits',
+                title: 'Pressure boundaries',
                 subtitle:
                     '${budgets.length} budgets · $pressure need attention',
                 accent: const Color(0xFFFF7657),
@@ -102,15 +102,15 @@ class PlanScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               _PlanDestination(
                 icon: Icons.repeat_rounded,
-                title: 'Commitments',
-                subtitle: 'Bills and recurring subscriptions',
+                title: 'Inevitable movements',
+                subtitle: 'Bills and repeating commitments',
                 accent: const Color(0xFF6C8CFF),
                 onTap: () => _push(context, const SubscriptionsScreen()),
               ),
               const SizedBox(height: 12),
               _PlanDestination(
                 icon: Icons.flag_rounded,
-                title: 'Savings goals',
+                title: 'Future anchors',
                 subtitle: '${goals.length} goals in progress',
                 accent: const Color(0xFF22A879),
                 onTap: () => _push(context, const SavingsGoalsScreen()),
@@ -118,7 +118,7 @@ class PlanScreen extends ConsumerWidget {
             ],
           ),
         ),
-        const SliverToBoxAdapter(child: SectionLabel('Monthly flow')),
+        const SliverToBoxAdapter(child: SectionLabel('Current trajectory')),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -128,7 +128,7 @@ class PlanScreen extends ConsumerWidget {
                   child: SizedBox(
                     height: 128,
                     child: MetricTile(
-                      label: 'Coming in',
+                      label: 'ENERGY IN',
                       value: money(income),
                       icon: Icons.south_west_rounded,
                       color: context.finance.income,
@@ -140,7 +140,7 @@ class PlanScreen extends ConsumerWidget {
                   child: SizedBox(
                     height: 128,
                     child: MetricTile(
-                      label: 'Going out',
+                      label: 'ENERGY OUT',
                       value: money(expense),
                       icon: Icons.north_east_rounded,
                       color: context.finance.expense,

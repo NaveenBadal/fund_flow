@@ -86,8 +86,8 @@ class SubscriptionsScreen extends ConsumerWidget {
     final hidden = ref.watch(privateModeProvider);
     final preferredCurrency = ref.watch(preferredCurrencyProvider);
     return CommandScaffold(
-      eyebrow: 'Bills and subscriptions',
-      title: 'Commitments',
+      eyebrow: 'Movements that happen without asking',
+      title: 'Inevitable money',
       slivers: [
         async.when(
           loading: () => const SliverFillRemaining(
@@ -178,7 +178,7 @@ class SubscriptionsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SliverToBoxAdapter(
-                  child: SectionLabel('Detected patterns'),
+                  child: SectionLabel('Patterns Flow detected'),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),

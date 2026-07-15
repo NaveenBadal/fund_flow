@@ -21,8 +21,8 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(parsedSmsAuditProvider);
     return CommandScaffold(
-      eyebrow: 'Import transparency',
-      title: 'SMS inbox',
+      eyebrow: 'Nothing enters memory invisibly',
+      title: 'Signal provenance',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(

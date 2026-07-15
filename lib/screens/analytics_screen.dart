@@ -22,8 +22,8 @@ class AnalyticsScreen extends ConsumerWidget {
     final currency = ref.watch(preferredCurrencyProvider);
     final hidden = ref.watch(privateModeProvider);
     return CommandScaffold(
-      eyebrow: 'Movement over time',
-      title: 'Trends',
+      eyebrow: 'Your velocity through time',
+      title: 'Trajectory',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -43,7 +43,7 @@ class AnalyticsScreen extends ConsumerWidget {
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SectionLabel('Monthly movement')),
+        const SliverToBoxAdapter(child: SectionLabel('Temporal movement')),
         monthly.when(
           loading: () => const SliverToBoxAdapter(
             child: SizedBox(
@@ -65,7 +65,7 @@ class AnalyticsScreen extends ConsumerWidget {
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SectionLabel('Where it went')),
+        const SliverToBoxAdapter(child: SectionLabel('Gravity wells')),
         categories.when(
           loading: () => const SliverToBoxAdapter(
             child: Center(child: CircularProgressIndicator()),
@@ -121,7 +121,7 @@ class AnalyticsScreen extends ConsumerWidget {
             );
           },
         ),
-        const SliverToBoxAdapter(child: SectionLabel('Merchant gravity')),
+        const SliverToBoxAdapter(child: SectionLabel('Repeated attraction')),
         merchants.when(
           loading: () => const SliverToBoxAdapter(
             child: Center(child: CircularProgressIndicator()),

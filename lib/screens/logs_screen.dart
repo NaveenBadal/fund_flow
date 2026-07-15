@@ -13,8 +13,8 @@ class LogsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(aiLogProvider);
     return CommandScaffold(
-      eyebrow: 'Advanced troubleshooting',
-      title: 'Diagnostics',
+      eyebrow: 'How the machine reached its conclusions',
+      title: 'Reasoning trace',
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),

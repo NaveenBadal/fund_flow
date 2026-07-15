@@ -81,16 +81,16 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                       children: [
                         Text(
                           widget.initialExpense == null
-                              ? 'New movement'
-                              : 'Movement',
+                              ? 'Create a money memory'
+                              : 'Inspect this memory',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           widget.initialExpense == null
-                              ? 'Add it to your ledger'
-                              : 'Review or adjust the details',
+                              ? 'Flow will include it in future reasoning'
+                              : 'Correct the machine’s understanding',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -125,12 +125,12 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                     ButtonSegment(
                       value: 'expense',
                       icon: Icon(Icons.north_east_rounded),
-                      label: Text('Money out'),
+                      label: Text('Energy out'),
                     ),
                     ButtonSegment(
                       value: 'income',
                       icon: Icon(Icons.south_west_rounded),
-                      label: Text('Money in'),
+                      label: Text('Energy in'),
                     ),
                   ],
                   selected: {_type},
@@ -148,7 +148,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'AMOUNT',
+                        'MAGNITUDE',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: scheme.onInverseSurface.withValues(alpha: .6),
                           letterSpacing: 1.2,
@@ -226,7 +226,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                   controller: _merchant,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                    labelText: 'Merchant or description',
+                    labelText: 'Where did the money meet the world?',
                     prefixIcon: Icon(Icons.storefront_outlined),
                   ),
                 ),
@@ -236,7 +236,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                       ? _category
                       : null,
                   decoration: const InputDecoration(
-                    labelText: 'Category',
+                    labelText: 'Meaning',
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
                   items: categories
@@ -275,7 +275,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                 TextField(
                   controller: _tags,
                   decoration: const InputDecoration(
-                    labelText: 'Tags (optional)',
+                    labelText: 'Personal memory cues (optional)',
                     hintText: 'travel, work, shared',
                     prefixIcon: Icon(Icons.tag_rounded),
                   ),
@@ -297,8 +297,8 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                         : const Icon(Icons.check_rounded),
                     label: Text(
                       widget.initialExpense == null
-                          ? 'Add to ledger'
-                          : 'Save changes',
+                          ? 'Commit to memory'
+                          : 'Update memory',
                     ),
                   ),
                 ),

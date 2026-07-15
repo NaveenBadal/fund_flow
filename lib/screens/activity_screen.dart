@@ -32,8 +32,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final async = ref.watch(expenseListProvider);
     final hidden = ref.watch(privateModeProvider);
     return CommandScaffold(
-      eyebrow: 'Your complete ledger',
-      title: 'Activity',
+      eyebrow: 'Observed · inferred · verified',
+      title: 'Money memory',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -42,7 +42,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               controller: _search,
               elevation: const WidgetStatePropertyAll(0),
               leading: const Icon(Icons.search_rounded),
-              hintText: 'Merchant, category, or tag',
+              hintText: 'Search your financial memory',
               trailing: [
                 if (_query.isNotEmpty)
                   IconButton(
@@ -65,9 +65,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: SegmentedButton<String>(
               showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: 'All', label: Text('All')),
-                ButtonSegment(value: 'Expense', label: Text('Spent')),
-                ButtonSegment(value: 'Income', label: Text('Received')),
+                ButtonSegment(value: 'All', label: Text('All signals')),
+                ButtonSegment(value: 'Expense', label: Text('Outgoing')),
+                ButtonSegment(value: 'Income', label: Text('Incoming')),
               ],
               selected: {_filter},
               onSelectionChanged: (value) =>
@@ -82,7 +82,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           error: (error, _) => SliverFillRemaining(
             child: StatePanel(
               icon: Icons.error_outline_rounded,
-              title: 'Activity unavailable',
+              title: 'Memory is temporarily quiet',
               message: '$error',
             ),
           ),
@@ -100,7 +100,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 hasScrollBody: false,
                 child: StatePanel(
                   icon: Icons.manage_search_rounded,
-                  title: 'Nothing matches',
+                  title: 'No matching signal',
                   message: 'Try a different search or filter.',
                 ),
               );

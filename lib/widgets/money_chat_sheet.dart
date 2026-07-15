@@ -1,0 +1,242 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/expense.dart';
+import '../providers/expense_provider.dart';
+import '../services/money_chat_service.dart';
+import '../services/ollama_cloud_service.dart';
+
+class MoneyChatSheet extends ConsumerStatefulWidget {
+  const MoneyChatSheet({super.key});
+  @override
+  ConsumerState<MoneyChatSheet> createState() => _MoneyChatSheetState();
+}
+
+class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
+  final _controller = TextEditingController();
+  final _messages = <({bool user, String text, int sources})>[];
+  bool _thinking = false;
+
+  static const _prompts = [
+    'What changed in my spending this month?',
+    'Where can I safely spend less?',
+    'Find subscriptions I may have forgotten',
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ask([String? suggested]) async {
+    final question = (suggested ?? _controller.text).trim();
+    if (question.isEmpty || _thinking) return;
+    _controller.clear();
+    setState(() {
+      _messages.add((user: true, text: question, sources: 0));
+      _thinking = true;
+    });
+    try {
+      final expenses =
+          ref.read(expenseListProvider).asData?.value ?? <Expense>[];
+      final service = MoneyChatService(
+        OllamaCloudService(
+          apiKey: ref.read(ollamaApiKeyProvider),
+          baseUrl: ref.read(ollamaBaseUrlProvider),
+          model: ref.read(ollamaModelProvider),
+        ),
+      );
+      final answer = await service.ask(question, expenses);
+      if (!mounted) return;
+      setState(
+        () => _messages.add((
+          user: false,
+          text: answer.text,
+          sources: answer.sources.length,
+        )),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final missingKey = ref.read(ollamaApiKeyProvider).trim().isEmpty;
+      setState(
+        () => _messages.add((
+          user: false,
+          text: missingKey
+              ? 'Connect your AI model in Settings, then I can reason over your money.'
+              : 'I could not complete that analysis. Your transaction data was not changed.',
+          sources: 0,
+        )),
+      );
+    } finally {
+      if (mounted) setState(() => _thinking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Container(
+      height: MediaQuery.sizeOf(context).height * .88,
+      padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + bottom),
+      decoration: const BoxDecoration(
+        color: Color(0xFF090D16),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.blur_circular_rounded, color: Color(0xFFC7FF4A)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ask your money',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Grounded in your private transaction memory',
+                      style: TextStyle(color: Colors.white38, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded, color: Colors.white70),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: _messages.isEmpty
+                ? ListView(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 28),
+                        child: Text(
+                          'I can calculate, compare, trace patterns, and explain.\nWhat do you want to know?',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            height: 1.2,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      for (final prompt in _prompts)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 9),
+                          child: OutlinedButton(
+                            onPressed: () => _ask(prompt),
+                            style: OutlinedButton.styleFrom(
+                              alignment: Alignment.centerLeft,
+                              foregroundColor: Colors.white70,
+                              side: const BorderSide(color: Colors.white12),
+                              padding: const EdgeInsets.all(17),
+                            ),
+                            child: Text(prompt),
+                          ),
+                        ),
+                    ],
+                  )
+                : ListView.builder(
+                    itemCount: _messages.length + (_thinking ? 1 : 0),
+                    itemBuilder: (_, index) {
+                      if (index == _messages.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(18),
+                          child: Text(
+                            'Tracing your money…',
+                            style: TextStyle(color: Color(0xFFC7FF4A)),
+                          ),
+                        );
+                      }
+                      final message = _messages[index];
+                      return Align(
+                        alignment: message.user
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(16),
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          decoration: BoxDecoration(
+                            color: message.user
+                                ? const Color(0xFFC7FF4A)
+                                : Colors.white.withValues(alpha: .07),
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                message.text,
+                                style: TextStyle(
+                                  color: message.user
+                                      ? Colors.black
+                                      : Colors.white,
+                                  height: 1.45,
+                                ),
+                              ),
+                              if (message.sources > 0) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Checked ${message.sources} recent records',
+                                  style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  enabled: !_thinking,
+                  onSubmitted: (_) => _ask(),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Ask about any transaction…',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: .07),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(99),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                onPressed: _thinking ? null : _ask,
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFC7FF4A),
+                  foregroundColor: Colors.black,
+                  fixedSize: const Size(52, 52),
+                ),
+                icon: const Icon(Icons.arrow_upward_rounded),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

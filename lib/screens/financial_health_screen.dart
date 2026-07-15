@@ -11,8 +11,8 @@ class FinancialHealthScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(financialHealthScoreProvider);
     return CommandScaffold(
-      eyebrow: 'Your directional score',
-      title: 'Financial health',
+      eyebrow: 'Capacity to absorb the unexpected',
+      title: 'Resilience field',
       slivers: [
         async.when(
           loading: () => const SliverFillRemaining(
@@ -118,7 +118,7 @@ class FinancialHealthScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SectionLabel('What shapes your score'),
+                  const SectionLabel('Forces shaping resilience'),
                   _Factor(
                     title: 'Savings capacity',
                     value: health.savingsRate,

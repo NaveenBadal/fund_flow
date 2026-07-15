@@ -17,8 +17,8 @@ class BudgetScreen extends ConsumerWidget {
     final hidden = ref.watch(privateModeProvider);
     final categories = ref.watch(allCategoryNamesProvider);
     return CommandScaffold(
-      eyebrow: 'Boundaries with context',
-      title: 'Spending limits',
+      eyebrow: 'Soft constraints that adapt',
+      title: 'Pressure boundaries',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _edit(context, ref, categories, null),
         icon: const Icon(Icons.add_rounded),
@@ -127,7 +127,7 @@ class BudgetScreen extends ConsumerWidget {
                   ),
                 ),
                 const SliverToBoxAdapter(
-                  child: SectionLabel('Category pressure'),
+                  child: SectionLabel('Where pressure is accumulating'),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),

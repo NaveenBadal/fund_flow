@@ -67,8 +67,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final scheme = Theme.of(context).colorScheme;
     final mode = ref.watch(themeModeProvider);
     return CommandScaffold(
-      eyebrow: 'Make Fund Flow yours',
-      title: 'Settings',
+      eyebrow: 'Privacy · memory · intelligence',
+      title: 'Flow DNA',
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),

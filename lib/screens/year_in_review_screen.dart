@@ -31,8 +31,8 @@ class _YearInReviewScreenState extends ConsumerState<YearInReviewScreen> {
     String money(double value) =>
         hidden ? maskAmount(currency) : formatAmount(value, currency);
     return CommandScaffold(
-      eyebrow: 'A year measured in choices',
-      title: 'Year story',
+      eyebrow: 'A year remembered as decisions',
+      title: 'Long memory',
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),

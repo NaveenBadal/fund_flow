@@ -4,11 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/ui/command_ui.dart';
+import '../widgets/money_chat_sheet.dart';
 import 'action_inbox_screen.dart';
-import 'analytics_screen.dart';
-import 'financial_health_screen.dart';
-import 'heatmap_screen.dart';
-import 'year_in_review_screen.dart';
 
 class IntelligenceScreen extends ConsumerWidget {
   const IntelligenceScreen({super.key});
@@ -20,8 +17,8 @@ class IntelligenceScreen extends ConsumerWidget {
         ref.watch(anomalyAlertsProvider).asData?.value ?? const [];
     final health = ref.watch(financialHealthScoreProvider).asData?.value;
     return CommandScaffold(
-      eyebrow: 'Patterns, explained',
-      title: 'Intelligence',
+      eyebrow: 'The patterns behind your choices',
+      title: 'Financial oracle',
       actions: const [
         Padding(
           padding: EdgeInsets.only(right: 12),
@@ -29,6 +26,50 @@ class IntelligenceScreen extends ConsumerWidget {
         ),
       ],
       slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+            child: Material(
+              color: const Color(0xFF090D16),
+              borderRadius: BorderRadius.circular(34),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(34),
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const MoneyChatSheet(),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Row(children: [
+                    Icon(Icons.chat_bubble_outline_rounded,
+                        size: 32, color: Color(0xFFC7FF4A)),
+                    SizedBox(width: 18),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ASK YOUR MONEY ANYTHING', style: TextStyle(
+                          color: Color(0xFFC7FF4A), fontSize: 10,
+                          fontWeight: FontWeight.w800, letterSpacing: 1.3,
+                        )),
+                        SizedBox(height: 6),
+                        Text('Start a private reasoning session', style: TextStyle(
+                          color: Colors.white, fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        )),
+                        SizedBox(height: 4),
+                        Text('Every answer is grounded in your actual records.',
+                          style: TextStyle(color: Colors.white38, fontSize: 11)),
+                      ],
+                    )),
+                    Icon(Icons.arrow_forward_rounded, color: Colors.white54),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -96,7 +137,9 @@ class IntelligenceScreen extends ConsumerWidget {
           ),
         ),
         if (insights.isNotEmpty) ...[
-          const SliverToBoxAdapter(child: SectionLabel('Worth knowing')),
+          const SliverToBoxAdapter(
+            child: SectionLabel('Signals worth interrupting you'),
+          ),
           SliverToBoxAdapter(
             child: SizedBox(
               height: 126,
@@ -155,95 +198,7 @@ class IntelligenceScreen extends ConsumerWidget {
             ),
           ),
         ],
-        const SliverToBoxAdapter(child: SectionLabel('Explore')),
-        SliverLayoutBuilder(
-          builder: (context, constraints) => SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverGrid.count(
-              crossAxisCount: constraints.crossAxisExtent >= 720 ? 4 : 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: constraints.crossAxisExtent >= 720
-                  ? 1.25
-                  : 1.12,
-              children: [
-                _Explore(
-                  title: 'Trends',
-                  caption: 'Charts and comparisons',
-                  icon: Icons.show_chart_rounded,
-                  onTap: () => _push(context, const AnalyticsScreen()),
-                ),
-                _Explore(
-                  title: 'Health',
-                  caption: 'Score and guidance',
-                  icon: Icons.favorite_outline_rounded,
-                  onTap: () => _push(context, const FinancialHealthScreen()),
-                ),
-                _Explore(
-                  title: 'Calendar',
-                  caption: 'Daily spending rhythm',
-                  icon: Icons.calendar_view_month_rounded,
-                  onTap: () => _push(context, const HeatmapScreen()),
-                ),
-                _Explore(
-                  title: 'Year story',
-                  caption: 'Your annual review',
-                  icon: Icons.auto_awesome_rounded,
-                  onTap: () => _push(context, const YearInReviewScreen()),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
-
-  void _push(BuildContext context, Widget page) =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-}
-
-class _Explore extends StatelessWidget {
-  const _Explore({
-    required this.title,
-    required this.caption,
-    required this.icon,
-    required this.onTap,
-  });
-  final String title;
-  final String caption;
-  final IconData icon;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: AppRadius.all(AppRadius.lg),
-    child: InkWell(
-      borderRadius: AppRadius.all(AppRadius.lg),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary),
-            const Spacer(),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              caption,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }

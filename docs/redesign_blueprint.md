@@ -1,8 +1,8 @@
 # Expense Manager — Product Redesign Blueprint
 
-## Product idea
+## Product idea — Flow environment
 
-The app is a private financial cockpit, not a generic expense tracker. It should
+The app is a private financial intelligence environment, not a generic expense tracker. It should
 answer four questions immediately:
 
 1. What changed today?
@@ -13,6 +13,21 @@ answer four questions immediately:
 The interface uses editorial hierarchy, dense but calm data, and purposeful
 color. It avoids nested Material cards, decorative gradients on every surface,
 and dashboards that expose every feature at once.
+
+## Interaction model
+
+There is no permanent navigation bar or feature grid. The product is four
+swipeable mental spaces connected by a summonable Flow Portal:
+
+- **Now** senses what changed and what is safe.
+- **Memory** holds the explainable stream of money events.
+- **Possible** simulates commitments, boundaries, and future anchors.
+- **Oracle** is grounded conversation over the user's actual records.
+
+The portal is available everywhere and provides direct access to grounded chat,
+manual teaching, signal sensing, interventions, and configuration. Charts,
+diagnostics, provenance, and long-form reports are evidence lenses rather than
+primary destinations.
 
 ## Information architecture
 
@@ -106,4 +121,3 @@ charts support conclusions rather than existing as decoration.
   visible and data has changed.
 - Prefer const widgets, slivers, repaint boundaries around charts, and selectors
   for high-frequency state.
-

@@ -16,6 +16,7 @@ import 'screens/plan_screen.dart';
 import 'services/notification_service.dart';
 import 'services/drive_backup_service.dart';
 import 'widgets/global_quick_action.dart';
+import 'widgets/money_chat_sheet.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -290,6 +291,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int _index = 0;
+  bool _portalOpen = false;
 
   static const _pages = [
     DashboardScreen(),
@@ -332,205 +334,225 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   Widget build(BuildContext context) {
     final body = IndexedStack(index: _index, children: _pages);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 900) {
-          return Scaffold(
-            body: Row(
-              children: [
-                SafeArea(
-                  child: NavigationRail(
-                    extended: constraints.maxWidth >= 1180,
-                    selectedIndex: _index,
-                    onDestinationSelected: (i) => setState(() => _index = i),
-                    leading: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.bolt_rounded,
-                            size: 30,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(height: 18),
-                          const GlobalQuickActionButton(small: true),
-                        ],
-                      ),
-                    ),
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home_rounded),
-                        label: Text('Today'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.receipt_long_outlined),
-                        selectedIcon: Icon(Icons.receipt_long_rounded),
-                        label: Text('Activity'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.track_changes_outlined),
-                        selectedIcon: Icon(Icons.track_changes_rounded),
-                        label: Text('Plan'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.auto_graph_outlined),
-                        selectedIcon: Icon(Icons.auto_graph_rounded),
-                        label: Text('Insights'),
-                      ),
-                    ],
-                  ),
-                ),
-                VerticalDivider(
-                  width: 1,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outlineVariant.withValues(alpha: .4),
-                ),
-                Expanded(child: body),
-              ],
-            ),
-          );
-        }
-        return Scaffold(
-          extendBody: true,
-          body: body,
-          bottomNavigationBar: SafeArea(
-            minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: _ActionDock(
-              selectedIndex: _index,
-              onSelected: (i) => setState(() => _index = i),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ActionDock extends StatelessWidget {
-  const _ActionDock({required this.selectedIndex, required this.onSelected});
-
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  static const _items = [
-    (Icons.blur_on_outlined, Icons.blur_on_rounded, 'Now'),
-    (Icons.route_outlined, Icons.route_rounded, 'Flow'),
-    (Icons.all_inclusive_outlined, Icons.all_inclusive_rounded, 'Future'),
-    (Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'Ask AI'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      height: 78,
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer.withValues(alpha: .96),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .45)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .12),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _DockItem(
-            item: _items[0],
-            selected: selectedIndex == 0,
-            onTap: () => onSelected(0),
-          ),
-          _DockItem(
-            item: _items[1],
-            selected: selectedIndex == 1,
-            onTap: () => onSelected(1),
-          ),
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GlobalQuickActionButton(),
-                SizedBox(height: 2),
-                Text(
-                  'Create',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-          _DockItem(
-            item: _items[2],
-            selected: selectedIndex == 2,
-            onTap: () => onSelected(2),
-          ),
-          _DockItem(
-            item: _items[3],
-            selected: selectedIndex == 3,
-            onTap: () => onSelected(3),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DockItem extends StatelessWidget {
-  const _DockItem({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-  final (IconData, IconData, String) item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Expanded(
-      child: Semantics(
-        selected: selected,
-        button: true,
-        label: item.$3,
-        child: InkResponse(
-          onTap: onTap,
-          radius: 30,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? scheme.primaryContainer
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Icon(selected ? item.$2 : item.$1, size: 21),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                item.$3,
-                maxLines: 1,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontSize: 10,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+    return Scaffold(
+      extendBody: true,
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity < -350 && _index < _pages.length - 1) {
+            setState(() => _index++);
+          } else if (velocity > 350 && _index > 0) {
+            setState(() => _index--);
+          }
+        },
+        child: Stack(
+          children: [
+            Positioned.fill(child: body),
+            if (_portalOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => setState(() => _portalOpen = false),
+                  child: ColoredBox(color: Colors.black.withValues(alpha: .48)),
                 ),
               ),
-            ],
-          ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                minimum: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                child: _FlowPortal(
+                  open: _portalOpen,
+                  selectedIndex: _index,
+                  onToggle: () => setState(() => _portalOpen = !_portalOpen),
+                  onAsk: () {
+                    setState(() => _portalOpen = false);
+                    showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const MoneyChatSheet(),
+                    );
+                  },
+                  onSelected: (index) => setState(() {
+                    _index = index;
+                    _portalOpen = false;
+                  }),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _FlowPortal extends StatelessWidget {
+  const _FlowPortal({
+    required this.open,
+    required this.selectedIndex,
+    required this.onToggle,
+    required this.onAsk,
+    required this.onSelected,
+  });
+
+  final bool open;
+  final int selectedIndex;
+  final VoidCallback onToggle;
+  final VoidCallback onAsk;
+  final ValueChanged<int> onSelected;
+
+  static const _items = [
+    (Icons.blur_on_rounded, 'Now', 'What is changing'),
+    (Icons.route_rounded, 'Memory', 'Every money event'),
+    (Icons.all_inclusive_rounded, 'Possible', 'Shape what comes next'),
+    (Icons.auto_awesome_rounded, 'Oracle', 'Patterns and answers'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF090D16);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      width: open ? 430 : 176,
+      constraints: const BoxConstraints(maxWidth: 430),
+      padding: EdgeInsets.all(open ? 10 : 7),
+      decoration: BoxDecoration(
+        color: ink.withValues(alpha: .97),
+        borderRadius: BorderRadius.circular(open ? 32 : 99),
+        border: Border.all(color: Colors.white.withValues(alpha: .12)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 36,
+            offset: Offset(0, 16),
+          ),
+        ],
+      ),
+      child: open
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var index = 0; index < _items.length; index++)
+                  _PortalDestination(
+                    item: _items[index],
+                    selected: selectedIndex == index,
+                    onTap: () => onSelected(index),
+                  ),
+                const Divider(color: Colors.white12, height: 20),
+                ListTile(
+                  onTap: onAsk,
+                  leading: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: Color(0xFFC7FF4A),
+                  ),
+                  title: const Text(
+                    'Ask your money',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Answers grounded in your transactions',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const GlobalQuickActionButton(small: true),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Create a money event',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: onToggle,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : InkWell(
+              borderRadius: BorderRadius.circular(99),
+              onTap: onToggle,
+              child: const SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.blur_circular_rounded, color: Color(0xFFC7FF4A)),
+                    SizedBox(width: 10),
+                    Text(
+                      'Open flow',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _PortalDestination extends StatelessWidget {
+  const _PortalDestination({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+  final (IconData, String, String) item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? Colors.white.withValues(alpha: .09) : Colors.transparent,
+    borderRadius: BorderRadius.circular(22),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              item.$1,
+              color: selected ? const Color(0xFFC7FF4A) : Colors.white54,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.$2,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    item.$3,
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.circle, size: 7, color: Color(0xFFC7FF4A)),
+          ],
+        ),
+      ),
+    ),
+  );
 }

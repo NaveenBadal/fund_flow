@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/app_tokens.dart';
-
-class CommandScaffold extends StatelessWidget {
+class CommandScaffold extends StatefulWidget {
   const CommandScaffold({
     super.key,
     required this.title,
@@ -19,27 +17,39 @@ class CommandScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
 
   @override
+  State<CommandScaffold> createState() => _CommandScaffoldState();
+}
+
+class _CommandScaffoldState extends State<CommandScaffold>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _atmosphere = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 18),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _atmosphere.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surface,
-      floatingActionButton: floatingActionButton,
+      floatingActionButton: widget.floatingActionButton,
       body: Stack(
         children: [
-          Positioned(
-            left: -100,
-            top: -130,
+          Positioned.fill(
             child: IgnorePointer(
-              child: Container(
-                width: 310,
-                height: 310,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      scheme.primary.withValues(alpha: 0.12),
-                      scheme.primary.withValues(alpha: 0),
-                    ],
+              child: AnimatedBuilder(
+                animation: _atmosphere,
+                builder: (_, _) => CustomPaint(
+                  painter: _FlowAtmospherePainter(
+                    phase: _atmosphere.value,
+                    color: scheme.primary,
+                    dark: Theme.of(context).brightness == Brightness.dark,
                   ),
                 ),
               ),
@@ -50,29 +60,69 @@ class CommandScaffold extends StatelessWidget {
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
-              SliverAppBar.large(
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                titleSpacing: 20,
-                actions: actions,
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (eyebrow != null)
-                      Text(
-                        eyebrow!.toUpperCase(),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4,
+              SliverToBoxAdapter(
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 30),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (Navigator.of(context).canPop()) ...[
+                          IconButton(
+                            onPressed: Navigator.of(context).pop,
+                            icon: const Icon(Icons.arrow_back_rounded),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color: scheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    (widget.eyebrow ?? 'FLOW SPACE')
+                                        .toUpperCase(),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: scheme.primary,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.6,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 11),
+                              Text(
+                                widget.title,
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -1.4,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    Text(title),
-                  ],
+                        ...widget.actions,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              ...slivers,
+              ...widget.slivers,
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: Navigator.of(context).canPop() ? 40 : 130,
@@ -86,6 +136,48 @@ class CommandScaffold extends StatelessWidget {
   }
 }
 
+class _FlowAtmospherePainter extends CustomPainter {
+  const _FlowAtmospherePainter({
+    required this.phase,
+    required this.color,
+    required this.dark,
+  });
+  final double phase;
+  final Color color;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * (.82 + phase * .03), size.height * .08);
+    final glow = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color.withValues(alpha: dark ? .11 : .08),
+          color.withValues(alpha: 0),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: size.width * .72));
+    canvas.drawRect(Offset.zero & size, glow);
+    final thread = Paint()
+      ..color = color.withValues(alpha: dark ? .07 : .05)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    final path = Path()..moveTo(-20, size.height * .36);
+    path.cubicTo(
+      size.width * .25,
+      size.height * (.28 + phase * .03),
+      size.width * .68,
+      size.height * .46,
+      size.width + 30,
+      size.height * .30,
+    );
+    canvas.drawPath(path, thread);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlowAtmospherePainter old) =>
+      old.phase != phase;
+}
+
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.title, {super.key, this.action, this.onAction});
   final String title;
@@ -94,16 +186,30 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+    padding: const EdgeInsets.fromLTRB(20, 34, 20, 14),
     child: Row(
       children: [
         Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-            ),
+          child: Row(
+            children: [
+              Text(
+                '◆',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 8,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  title.toUpperCase(),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.15,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         if (action != null)
@@ -135,9 +241,14 @@ class MetricTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: AppRadius.all(AppRadius.lg),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        color: scheme.surface.withValues(alpha: .62),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(7),
+          topRight: Radius.circular(28),
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(7),
+        ),
+        border: Border.all(color: scheme.primary.withValues(alpha: .16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

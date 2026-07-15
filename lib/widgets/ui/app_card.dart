@@ -26,25 +26,27 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final brightness = Theme.of(context).brightness;
-    final surface = color ?? scheme.surfaceContainerLow;
+    final surface = color ?? scheme.surface.withValues(alpha: .72);
 
     final decorated = Container(
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: AppRadius.all(radius),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(radius * .28),
+          topRight: Radius.circular(radius),
+          bottomLeft: Radius.circular(radius),
+          bottomRight: Radius.circular(radius * .28),
+        ),
         border: border
-            ? Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5))
+            ? Border.all(color: scheme.primary.withValues(alpha: 0.14))
             : null,
-        boxShadow: brightness == Brightness.dark
-            ? null
-            : [
-                BoxShadow(
-                  color: scheme.shadow.withValues(alpha: 0.025),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+        boxShadow: [
+          BoxShadow(
+            color: scheme.primary.withValues(alpha: .035),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -52,7 +54,7 @@ class AppCard extends StatelessWidget {
     if (onTap == null) return decorated;
     return Material(
       color: Colors.transparent,
-      borderRadius: AppRadius.all(radius),
+      borderRadius: BorderRadius.circular(radius),
       child: InkWell(
         borderRadius: AppRadius.all(radius),
         onTap: onTap,
