@@ -65,7 +65,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
         () => _messages.add((
           user: false,
           text: answer.text,
-          sources: answer.sources.length,
+          sources: answer.checkedRecords,
           verified: answer.verified,
         )),
       );

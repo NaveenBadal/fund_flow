@@ -95,7 +95,9 @@ class LocalMoneyMcpServer {
   ) => {
     'applied_filter': query.toJson(),
     'matched_count': records.length,
-    'records': records.map(_record).toList(),
+    'totals_by_currency': _totals(records),
+    'records_truncated': records.length > query.limit,
+    'records': records.take(query.limit).map(_record).toList(),
   };
 
   Map<String, dynamic> _summaryResult(
@@ -156,9 +158,17 @@ class LocalMoneyMcpServer {
         'properties': {
           'applied_filter': {'type': 'object'},
           'matched_count': {'type': 'integer'},
+          'totals_by_currency': {'type': 'object'},
+          'records_truncated': {'type': 'boolean'},
           'records': {'type': 'array'},
         },
-        'required': ['applied_filter', 'matched_count', 'records'],
+        'required': [
+          'applied_filter',
+          'matched_count',
+          'totals_by_currency',
+          'records_truncated',
+          'records',
+        ],
       },
     },
     {
@@ -222,7 +232,25 @@ class LocalMoneyMcpServer {
 }
 
 /// MCP client/host adapter over the embedded server transport.
-class LocalMoneyMcpClient {
+abstract interface class MoneyMcpClient {
+  Future<List<Map<String, dynamic>>> listTools();
+
+  Future<McpToolResult> callTool(String name, Map<String, dynamic> arguments);
+}
+
+class McpToolResult {
+  const McpToolResult({
+    required this.content,
+    required this.structuredContent,
+    required this.isError,
+  });
+
+  final String content;
+  final Map<String, dynamic> structuredContent;
+  final bool isError;
+}
+
+class LocalMoneyMcpClient implements MoneyMcpClient {
   LocalMoneyMcpClient(this.server);
 
   final LocalMoneyMcpServer server;
@@ -230,20 +258,51 @@ class LocalMoneyMcpClient {
   bool _initialized = false;
   Set<String> _tools = const {};
 
-  Future<List<Expense>> searchTransactions(TransactionQuery query) async {
+  @override
+  Future<List<Map<String, dynamic>>> listTools() async {
     await _ensureInitialized();
-    if (!_tools.contains('search_transactions')) {
-      throw StateError('MCP search_transactions tool is unavailable.');
+    final listed = await _request('tools/list', {});
+    return (listed['tools'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((tool) => tool.cast<String, dynamic>())
+        .toList();
+  }
+
+  @override
+  Future<McpToolResult> callTool(
+    String name,
+    Map<String, dynamic> arguments,
+  ) async {
+    await _ensureInitialized();
+    if (!_tools.contains(name)) {
+      throw StateError('MCP tool is unavailable: $name');
     }
     final result = await _request('tools/call', {
-      'name': 'search_transactions',
-      'arguments': query.toJson(),
+      'name': name,
+      'arguments': arguments,
     });
-    if (result['isError'] == true) {
+    final blocks = result['content'] as List<dynamic>? ?? const [];
+    final text = blocks
+        .whereType<Map>()
+        .where((block) => block['type'] == 'text')
+        .map((block) => block['text']?.toString() ?? '')
+        .join('\n');
+    final structured = result['structuredContent'] is Map
+        ? (result['structuredContent'] as Map).cast<String, dynamic>()
+        : <String, dynamic>{};
+    return McpToolResult(
+      content: text,
+      structuredContent: structured,
+      isError: result['isError'] == true,
+    );
+  }
+
+  Future<List<Expense>> searchTransactions(TransactionQuery query) async {
+    final result = await callTool('search_transactions', query.toJson());
+    if (result.isError) {
       throw StateError('MCP tool execution failed.');
     }
-    final structured = (result['structuredContent'] as Map)
-        .cast<String, dynamic>();
+    final structured = result.structuredContent;
     final records = structured['records'] as List<dynamic>? ?? const [];
     return records.whereType<Map>().map((value) {
       final json = value.cast<String, dynamic>();

@@ -5,31 +5,28 @@ import '../models/transaction_query.dart';
 import 'local_money_mcp.dart';
 import 'ollama_cloud_service.dart';
 
-typedef TransactionQueryExecutor =
-    Future<List<Expense>> Function(TransactionQuery query);
-
 class MoneyChatAnswer {
   const MoneyChatAnswer({
     required this.text,
     required this.sources,
+    this.checkedRecords = 0,
     this.appliedFilters = const [],
     this.verified = false,
   });
 
   final String text;
   final List<Expense> sources;
+  final int checkedRecords;
   final List<TransactionQuery> appliedFilters;
   final bool verified;
 }
 
-/// A local tool pipeline: plan, query SQLite, validate, answer, then verify.
+/// Ollama-native tool loop backed by an embedded, read-only MCP server.
 class MoneyChatService {
-  const MoneyChatService(this.cloud, {this.mcpClient, this.queryExecutor});
+  const MoneyChatService(this.cloud, {this.mcpClient});
 
   final OllamaCloudService cloud;
-  final LocalMoneyMcpClient? mcpClient;
-  @Deprecated('Use mcpClient; retained for isolated unit tests.')
-  final TransactionQueryExecutor? queryExecutor;
+  final MoneyMcpClient? mcpClient;
 
   static const outOfScopeReply =
       'I’m built only for your money and this app. Ask me about transactions, '
@@ -71,120 +68,160 @@ class MoneyChatService {
 
   Future<MoneyChatAnswer> ask(
     String question, [
-    List<Expense> fallbackTransactions = const [],
+    List<Expense> knownTransactions = const [],
   ]) async {
-    if (!isInScope(question, fallbackTransactions)) {
+    if (!isInScope(question, knownTransactions)) {
       return const MoneyChatAnswer(text: outOfScopeReply, sources: []);
     }
+    final mcp = mcpClient;
+    if (mcp == null) throw StateError('The local MCP client is unavailable.');
 
-    final plan = await _plan(question);
-    if (plan.needsClarification) {
-      return MoneyChatAnswer(
-        text: plan.clarification?.isNotEmpty == true
-            ? plan.clarification!
-            : 'Could you clarify the date or filter you want me to use?',
-        sources: const [],
-      );
-    }
-
-    final retrieved = <_QueryResult>[];
-    if (plan.intent != 'app_help') {
-      if (plan.queries.isEmpty) {
-        return const MoneyChatAnswer(
-          text:
-              'I could not determine a safe transaction filter. Please be more specific.',
-          sources: [],
-        );
-      }
-      for (final query in plan.queries) {
-        final records =
-            mcpClient != null
-                  ? await mcpClient!.searchTransactions(query)
-                  : queryExecutor != null
-                  ? await queryExecutor!(query)
-                  : fallbackTransactions.where(query.matches).toList()
-              ..sort((a, b) => b.date.compareTo(a.date));
-        if (records.any((record) => !query.matches(record))) {
-          throw StateError('Local query verification failed.');
-        }
-        retrieved.add(_QueryResult(query, records));
-      }
-    }
-
-    final packet = _buildPacket(retrieved);
-    final draft = await _answer(question, plan, packet);
-    final verification = await _verify(question, plan, packet, draft);
-    final sources = <Expense>[
-      for (final result in retrieved) ...result.records,
+    final mcpTools = await mcp.listTools();
+    final allowedNames = mcpTools
+        .map((tool) => tool['name']?.toString())
+        .whereType<String>()
+        .toSet();
+    final ollamaTools = mcpTools.map(_toOllamaTool).toList();
+    final now = DateTime.now();
+    final messages = <Map<String, dynamic>>[
+      {
+        'role': 'system',
+        'content':
+            'You are Flow, a precise financial assistant inside a private money '
+            'app. Today is ${now.toIso8601String()} and the device timezone '
+            'offset is ${now.timeZoneOffset}. For every question that depends on '
+            'transaction data, you MUST call the provided tools before answering. '
+            'Use search_transactions for transaction lists and '
+            'summarize_transactions for authoritative counts and totals. For '
+            'comparisons, call tools once for each period. Resolve relative dates '
+            'from today and expand a requested day to local start/end timestamps. '
+            'If essential date information is genuinely ambiguous, ask one short '
+            'clarifying question without calling a tool. Never write SQL. Never '
+            'invent transactions, totals, balances, or tool results. Mention when '
+            'records are truncated. Questions about app settings, privacy, imports, '
+            'updates, and usage do not require a transaction tool. Be concise and '
+            'use Markdown. Never expose raw SMS.',
+      },
+      {'role': 'user', 'content': question},
     ];
+    final toolAudit = <Map<String, dynamic>>[];
+    final appliedFilters = <TransactionQuery>[];
+    final sourceByKey = <String, Expense>{};
+    var checkedRecords = 0;
+    String? draft;
+
+    for (var turn = 0; turn < 4; turn++) {
+      final response = await cloud.chatWithTools(
+        messages: messages,
+        tools: ollamaTools,
+      );
+      messages.add(response.assistantMessage);
+      if (response.toolCalls.isEmpty) {
+        if (response.content.isEmpty) {
+          throw const FormatException('The model returned no final answer.');
+        }
+        draft = response.content;
+        break;
+      }
+
+      for (final call in response.toolCalls) {
+        McpToolResult result;
+        if (!allowedNames.contains(call.name)) {
+          result = McpToolResult(
+            content: 'Unknown tool: ${call.name}',
+            structuredContent: const {},
+            isError: true,
+          );
+        } else {
+          result = await mcp.callTool(call.name, call.arguments);
+        }
+        final structured = result.structuredContent;
+        checkedRecords += (structured['matched_count'] as num?)?.toInt() ?? 0;
+        if (structured['applied_filter'] is Map) {
+          appliedFilters.add(
+            TransactionQuery.fromJson(
+              (structured['applied_filter'] as Map).cast<String, dynamic>(),
+            ),
+          );
+        }
+        for (final raw in structured['records'] as List<dynamic>? ?? const []) {
+          if (raw is! Map) continue;
+          final record = _expenseFromTool(raw.cast<String, dynamic>());
+          sourceByKey['${record.id}:${record.date.toIso8601String()}'] = record;
+        }
+        toolAudit.add({
+          'tool': call.name,
+          'arguments': call.arguments,
+          'result': structured,
+          'is_error': result.isError,
+        });
+        messages.add({
+          'role': 'tool',
+          'tool_name': call.name,
+          'content': result.content.isNotEmpty
+              ? result.content
+              : jsonEncode(structured),
+        });
+      }
+    }
+    if (draft == null) {
+      throw const FormatException('The model exceeded the tool-call limit.');
+    }
+
+    final verification = await _verify(
+      question: question,
+      toolAudit: toolAudit,
+      draft: draft,
+    );
     return MoneyChatAnswer(
       text: verification.answer,
-      sources: sources,
-      appliedFilters: plan.queries,
+      sources: sourceByKey.values.toList(),
+      checkedRecords: checkedRecords,
+      appliedFilters: appliedFilters,
       verified: verification.valid,
     );
   }
 
-  Future<MoneyQueryPlan> _plan(String question) async {
-    final now = DateTime.now();
+  Map<String, dynamic> _toOllamaTool(Map<String, dynamic> tool) => {
+    'type': 'function',
+    'function': {
+      'name': tool['name'],
+      'description': tool['description'],
+      'parameters': tool['inputSchema'],
+    },
+  };
+
+  Expense _expenseFromTool(Map<String, dynamic> json) => Expense(
+    id: json['id'] as int?,
+    amount: (json['amount'] as num).toDouble(),
+    currency: json['currency'].toString(),
+    merchant: json['merchant'].toString(),
+    category: json['category'].toString(),
+    date: DateTime.parse(json['date'].toString()),
+    originalSms: '',
+    type: json['direction'].toString(),
+    tags: (json['tags'] as List<dynamic>? ?? const []).join(','),
+    isRecurring: json['recurring'] == true,
+  );
+
+  Future<_Verification> _verify({
+    required String question,
+    required List<Map<String, dynamic>> toolAudit,
+    required String draft,
+  }) async {
     final raw = await cloud.answer(
       systemPrompt:
-          'You are the query planner for a finance app. Convert the question '
-          'into JSON only; never answer it. Today is ${now.toIso8601String()} '
-          'and the device timezone offset is ${now.timeZoneOffset}. Allowed '
-          'intents: transactions, summary, comparison, app_help. Return: '
-          '{"intent":"...","needs_clarification":false,"clarification":null,'
-          '"queries":[{"label":"primary","from":"ISO-8601 or null",'
-          '"to":"ISO-8601 or null","merchant":null,"category":null,'
-          '"direction":"expense|income|null","currency":null,"text":null,'
-          '"minimum_amount":null,"maximum_amount":null,"limit":100}]}. '
-          'Use at most two queries; comparison queries must be labelled. Expand '
-          'a day to local 00:00:00 through 23:59:59.999999. Resolve relative '
-          'dates from today. If a missing year has a natural most-recent '
-          'interpretation, use it; otherwise request clarification. For app '
-          'help use no queries. Never produce SQL.',
-      userPrompt: question,
-    );
-    return MoneyQueryPlan.fromJson(_jsonObject(raw));
-  }
-
-  Future<String> _answer(
-    String question,
-    MoneyQueryPlan plan,
-    Map<String, dynamic> packet,
-  ) {
-    return cloud.answer(
-      systemPrompt:
-          'You are Flow, a precise financial assistant. Answer only from the '
-          'verified local tool result supplied. Local totals and counts are '
-          'authoritative; do not recalculate or invent records. Mention if a '
-          'record list was truncated. For app_help, answer only about Flow: '
-          'transaction search, AI chat, imports, privacy, settings, updates, '
-          'budgets, and local storage. Be concise and use Markdown. Never expose '
-          'raw SMS. Do not claim access to data outside the tool result.',
-      userPrompt:
-          'QUESTION: $question\nVALIDATED_PLAN: ${jsonEncode(plan.toJson())}'
-          '\nVERIFIED_LOCAL_TOOL_RESULT: ${jsonEncode(packet)}',
-    );
-  }
-
-  Future<_Verification> _verify(
-    String question,
-    MoneyQueryPlan plan,
-    Map<String, dynamic> packet,
-    String draft,
-  ) async {
-    final raw = await cloud.answer(
-      systemPrompt:
-          'Audit a draft financial answer against the question, validated query '
-          'plan, and verified local result. Return JSON only: '
+          'Audit a financial answer against the user question and authoritative '
+          'MCP tool results. Return JSON only: '
           '{"valid":true,"answer":"final answer","issue":null}. Mark invalid '
-          'if it fails the question, changes dates/counts/totals, invents facts, '
-          'or omits an important insufficiency. If invalid, provide a corrected '
-          'answer using only supplied facts.',
+          'if the draft fails the question, changes filters/dates/counts/totals, '
+          'invents facts, or omits important insufficiency or truncation. If '
+          'invalid, correct it using only the MCP results. If no tool was needed '
+          'for an app-help or clarification response, verify relevance and do not '
+          'invent transaction facts.',
       userPrompt:
-          'QUESTION: $question\nPLAN: ${jsonEncode(plan.toJson())}'
-          '\nLOCAL_RESULT: ${jsonEncode(packet)}\nDRAFT: $draft',
+          'QUESTION: $question\nMCP_TOOL_AUDIT: ${jsonEncode(toolAudit)}'
+          '\nDRAFT: $draft',
     );
     final json = _jsonObject(raw);
     final answer = json['answer']?.toString().trim();
@@ -193,10 +230,6 @@ class MoneyChatService {
       answer: answer == null || answer.isEmpty ? draft : answer,
     );
   }
-
-  Map<String, dynamic> _buildPacket(List<_QueryResult> results) => {
-    'queries': [for (final result in results) result.toJson()],
-  };
 
   static Map<String, dynamic> _jsonObject(String raw) {
     var value = raw.trim();
@@ -208,50 +241,10 @@ class MoneyChatService {
     final start = value.indexOf('{');
     final end = value.lastIndexOf('}');
     if (start < 0 || end <= start) {
-      throw const FormatException('AI returned invalid structured output.');
+      throw const FormatException('AI returned invalid verification output.');
     }
     return (jsonDecode(value.substring(start, end + 1)) as Map)
         .cast<String, dynamic>();
-  }
-}
-
-class _QueryResult {
-  const _QueryResult(this.query, this.records);
-
-  final TransactionQuery query;
-  final List<Expense> records;
-
-  Map<String, dynamic> toJson() {
-    final totals = <String, Map<String, double>>{};
-    for (final record in records) {
-      final currency = totals.putIfAbsent(
-        record.currency,
-        () => {'income': 0, 'expense': 0},
-      );
-      currency[record.type] = (currency[record.type] ?? 0) + record.amount;
-    }
-    final visible = records.take(query.limit).toList();
-    return {
-      'label': query.label,
-      'applied_filter': query.toJson(),
-      'matched_count': records.length,
-      'totals_by_currency': totals,
-      'records_truncated': visible.length < records.length,
-      'records': [
-        for (final record in visible)
-          {
-            'id': record.id,
-            'date': record.date.toIso8601String(),
-            'amount': record.amount,
-            'currency': record.currency,
-            'direction': record.type,
-            'merchant': record.displayMerchant,
-            'category': record.category,
-            'tags': record.tagList,
-            'recurring': record.isRecurring,
-          },
-      ],
-    };
   }
 }
 

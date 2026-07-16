@@ -4,7 +4,6 @@ import 'package:expense_manager/services/money_chat_service.dart';
 import 'package:expense_manager/services/local_money_mcp.dart';
 import 'package:expense_manager/services/ollama_cloud_service.dart';
 import 'package:expense_manager/services/database_helper.dart';
-import 'package:expense_manager/models/expense.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -152,114 +151,131 @@ void main() {
     expect(MoneyChatService.isInScope('Write me a poem', const []), isFalse);
   });
 
-  test('money chat plans, retrieves, answers, and verifies', () async {
+  test('money chat runs an Ollama-native MCP tool loop and verifies', () async {
     final requests = <Map<String, dynamic>>[];
     var call = 0;
+    final mcp = _FakeMoneyMcpClient();
     final service = MoneyChatService(
       OllamaCloudService(
         apiKey: 'test',
         client: MockClient((request) async {
           requests.add(jsonDecode(request.body) as Map<String, dynamic>);
           call++;
-          final content = switch (call) {
-            1 => jsonEncode({
-              'intent': 'transactions',
-              'needs_clarification': false,
-              'queries': [
+          final message = switch (call) {
+            1 => {
+              'role': 'assistant',
+              'content': '',
+              'tool_calls': [
                 {
-                  'label': 'primary',
-                  'from': '2026-06-20T00:00:00+05:30',
-                  'to': '2026-06-20T23:59:59.999999+05:30',
-                  'direction': null,
-                  'limit': 100,
+                  'type': 'function',
+                  'function': {
+                    'name': 'search_transactions',
+                    'arguments': {
+                      'label': 'primary',
+                      'from': '2026-06-20T00:00:00+05:30',
+                      'to': '2026-06-20T23:59:59.999999+05:30',
+                      'limit': 100,
+                    },
+                  },
                 },
               ],
-            }),
-            2 => 'You had one transaction on 20 June.',
-            _ => jsonEncode({
-              'valid': true,
-              'answer': 'You had one verified transaction on 20 June.',
-              'issue': null,
-            }),
+            },
+            2 => {
+              'role': 'assistant',
+              'content': 'You had one transaction on 20 June.',
+            },
+            _ => {
+              'role': 'assistant',
+              'content': jsonEncode({
+                'valid': true,
+                'answer': 'You had one verified transaction on 20 June.',
+                'issue': null,
+              }),
+            },
           };
-          return http.Response(
-            jsonEncode({
-              'message': {'content': content},
-            }),
-            200,
-          );
+          return http.Response(jsonEncode({'message': message}), 200);
         }),
       ),
-      queryExecutor: (query) async => [
-        Expense(
-          id: 7,
-          amount: 450,
-          currency: 'INR',
-          merchant: 'Cafe',
-          category: 'Food',
-          date: DateTime.parse('2026-06-20T12:30:00+05:30'),
-          originalSms: 'private raw sms',
-        ),
-      ],
+      mcpClient: mcp,
     );
 
     final answer = await service.ask('Get my transactions from 20 June');
 
     expect(call, 3);
+    expect(mcp.calledTools, ['search_transactions']);
     expect(answer.verified, isTrue);
+    expect(answer.checkedRecords, 1);
     expect(answer.sources.single.id, 7);
     expect(answer.appliedFilters.single.from?.day, 20);
     expect(answer.text, contains('verified transaction'));
-    final answerPrompt =
-        ((requests[1]['messages'] as List)[1]
-                as Map<String, dynamic>)['content']
-            .toString();
-    expect(answerPrompt, contains('"merchant":"Cafe"'));
-    expect(answerPrompt, isNot(contains('private raw sms')));
+    expect(requests.first['tools'], isNotEmpty);
+    final followUpMessages = requests[1]['messages'] as List;
+    expect(
+      followUpMessages.any((message) => message['role'] == 'tool'),
+      isTrue,
+    );
+    final toolMessage = followUpMessages.firstWhere(
+      (message) => message['role'] == 'tool',
+    );
+    expect(toolMessage['content'], contains('"merchant":"Cafe"'));
+    expect(toolMessage['content'], isNot(contains('private raw sms')));
   });
+}
 
-  test(
-    'money chat rejects locally returned records outside the plan',
-    () async {
-      final service = MoneyChatService(
-        OllamaCloudService(
-          apiKey: 'test',
-          client: MockClient((_) async {
-            return http.Response(
-              jsonEncode({
-                'message': {
-                  'content': jsonEncode({
-                    'intent': 'transactions',
-                    'needs_clarification': false,
-                    'queries': [
-                      {
-                        'from': '2026-06-20T00:00:00Z',
-                        'to': '2026-06-20T23:59:59Z',
-                      },
-                    ],
-                  }),
-                },
-              }),
-              200,
-            );
-          }),
-        ),
-        queryExecutor: (_) async => [
-          Expense(
-            amount: 20,
-            currency: 'INR',
-            merchant: 'Wrong day',
-            category: 'Other',
-            date: DateTime.utc(2026, 6, 21),
-            originalSms: '',
-          ),
-        ],
-      );
+class _FakeMoneyMcpClient implements MoneyMcpClient {
+  final calledTools = <String>[];
 
-      expect(
-        () => service.ask('Get my transactions from 20 June'),
-        throwsStateError,
-      );
+  @override
+  Future<List<Map<String, dynamic>>> listTools() async => [
+    {
+      'name': 'search_transactions',
+      'description': 'Search matching local transactions.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'from': {
+            'type': ['string', 'null'],
+          },
+          'to': {
+            'type': ['string', 'null'],
+          },
+          'limit': {'type': 'integer'},
+        },
+      },
     },
-  );
+  ];
+
+  @override
+  Future<McpToolResult> callTool(
+    String name,
+    Map<String, dynamic> arguments,
+  ) async {
+    calledTools.add(name);
+    final result = {
+      'applied_filter': arguments,
+      'matched_count': 1,
+      'totals_by_currency': {
+        'INR': {'income': 0, 'expense': 450},
+      },
+      'records_truncated': false,
+      'records': [
+        {
+          'id': 7,
+          'date': '2026-06-20T12:30:00.000',
+          'amount': 450,
+          'currency': 'INR',
+          'direction': 'expense',
+          'merchant': 'Cafe',
+          'category': 'Food',
+          'tags': <String>[],
+          'recurring': false,
+        },
+      ],
+    };
+    return McpToolResult(
+      content: jsonEncode(result),
+      structuredContent: result,
+      isError: false,
+    );
+  }
 }

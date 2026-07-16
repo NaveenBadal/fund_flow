@@ -19,6 +19,25 @@ class OllamaParseResult {
       type == 'expense' || type == 'income' || type == 'transfer';
 }
 
+class OllamaToolCall {
+  const OllamaToolCall({required this.name, required this.arguments});
+
+  final String name;
+  final Map<String, dynamic> arguments;
+}
+
+class OllamaChatTurn {
+  const OllamaChatTurn({
+    required this.content,
+    required this.toolCalls,
+    required this.assistantMessage,
+  });
+
+  final String content;
+  final List<OllamaToolCall> toolCalls;
+  final Map<String, dynamic> assistantMessage;
+}
+
 /// AI-only, batched Ollama Cloud client.
 ///
 /// A batch shares one prompt evaluation, one TLS exchange, and one generated
@@ -143,6 +162,66 @@ class OllamaCloudService {
       throw const FormatException('The model returned an empty answer.');
     }
     return content;
+  }
+
+  /// Executes one native Ollama function-calling turn. The caller owns the
+  /// agent loop and must append tool results before requesting the next turn.
+  Future<OllamaChatTurn> chatWithTools({
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+  }) async {
+    if (!hasKey) throw StateError('Ollama Cloud API key is not set.');
+    final response = await _withRetry(
+      () => _client
+          .post(
+            Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/api/chat'),
+            headers: _headers,
+            body: jsonEncode({
+              'model': model,
+              'messages': messages,
+              'tools': tools,
+              'stream': false,
+              'think': 'medium',
+              'options': {'temperature': .1, 'num_predict': 1200},
+            }),
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode != 200) {
+      throw OllamaRequestException(response.statusCode, response.body);
+    }
+    final outer = jsonDecode(response.body) as Map<String, dynamic>;
+    final rawMessage = outer['message'];
+    if (rawMessage is! Map) {
+      throw const FormatException('The model returned no assistant message.');
+    }
+    final assistant = rawMessage.cast<String, dynamic>();
+    assistant['role'] = 'assistant';
+    final calls = <OllamaToolCall>[];
+    for (final rawCall
+        in assistant['tool_calls'] as List<dynamic>? ?? const []) {
+      if (rawCall is! Map) continue;
+      final function = rawCall['function'];
+      if (function is! Map) continue;
+      final name = function['name']?.toString().trim();
+      if (name == null || name.isEmpty) continue;
+      final rawArguments = function['arguments'];
+      Map<String, dynamic>? arguments;
+      if (rawArguments is Map) {
+        arguments = rawArguments.cast<String, dynamic>();
+      } else if (rawArguments is String) {
+        final decoded = jsonDecode(rawArguments);
+        if (decoded is Map) arguments = decoded.cast<String, dynamic>();
+      }
+      if (arguments != null) {
+        calls.add(OllamaToolCall(name: name, arguments: arguments));
+      }
+    }
+    return OllamaChatTurn(
+      content: assistant['content']?.toString().trim() ?? '',
+      toolCalls: calls,
+      assistantMessage: assistant,
+    );
   }
 
   Map<int, OllamaParseResult> _decodeBatch(String raw, int expectedCount) {
