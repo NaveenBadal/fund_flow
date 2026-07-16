@@ -21,31 +21,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _steps = [
     _Step(
       number: '01',
-      title: 'Your money gains a memory.',
+      title: 'See your money clearly',
       body:
-          'Not a dashboard. A living model that remembers every movement and understands how they connect.',
-      icon: Icons.radar_rounded,
+          'Flow keeps incoming and outgoing transactions together in one simple activity list.',
+      icon: Icons.receipt_long_outlined,
     ),
     _Step(
       number: '02',
-      title: 'Signals become meaning.',
+      title: 'Find transactions automatically',
       body:
-          'Flow listens for financial signals, rejects duplicate echoes, and shows how every conclusion was formed.',
-      icon: Icons.receipt_long_rounded,
+          'Import supported bank messages, avoid duplicates, and review where each transaction came from.',
+      icon: Icons.sms_outlined,
     ),
     _Step(
       number: '03',
-      title: 'Calibrate your reality.',
+      title: 'Set your preferences',
       body:
           'Choose your currency and add an optional income estimate and safety buffer.',
       icon: Icons.tune_rounded,
     ),
     _Step(
       number: '04',
-      title: 'Intelligence with boundaries.',
+      title: 'Private AI assistance',
       body:
-          'Allow SMS access to find bank transactions automatically. Messages are reviewed only when you start a sync, and you can continue without it.',
-      icon: Icons.sms_outlined,
+          'Allow SMS access to import bank transactions. You choose when original messages can be shared with your configured AI.',
+      icon: Icons.privacy_tip_outlined,
     ),
   ];
 
@@ -73,17 +73,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: scheme.inverseSurface,
+                      color: scheme.primaryContainer,
                       borderRadius: AppRadius.all(14),
                     ),
-                    child: Icon(Icons.bolt_rounded, color: scheme.primary),
+                    child: Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: scheme.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'FLOW · PRIVATE INTELLIGENCE',
+                    'Flow',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Spacer(),
@@ -135,7 +137,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     icon: Icon(
                       last ? Icons.check_rounded : Icons.arrow_forward_rounded,
                     ),
-                    label: Text(last ? 'Enable & begin' : 'Continue'),
+                    label: Text(last ? 'Allow and continue' : 'Continue'),
                   ),
                 ],
               ),
@@ -201,7 +203,7 @@ class _SetupView extends StatelessWidget {
         ),
         const SizedBox(height: 34),
         Text(
-          'Make the first forecast yours.',
+          'Choose your money preferences',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
             fontWeight: FontWeight.w800,
             letterSpacing: -1.1,
@@ -290,49 +292,30 @@ class _StepView extends StatelessWidget {
           ),
           const Spacer(),
           Container(
-            height: 250,
+            height: 220,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFF090D16),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(42),
-                bottomLeft: Radius.circular(42),
-                bottomRight: Radius.circular(8),
-              ),
-              border: Border.all(color: Colors.white12),
+              color: scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(AppRadius.xxl),
             ),
-            child: Stack(
-              children: [
-                const Positioned.fill(
-                  child: CustomPaint(painter: _CalibrationFieldPainter()),
+            child: Center(
+              child: Container(
+                width: 104,
+                height: 104,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainer,
+                  shape: BoxShape.circle,
                 ),
-                Center(
-                  child: Container(
-                    width: 108,
-                    height: 108,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .06),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFC7FF4A)),
-                    ),
-                    child: Icon(
-                      step.icon,
-                      size: 44,
-                      color: const Color(0xFFC7FF4A),
-                    ),
-                  ),
-                ),
-              ],
+                child: Icon(step.icon, size: 44, color: scheme.primary),
+              ),
             ),
           ),
           const Spacer(),
           Text(
             step.title,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.4,
-              height: .98,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              height: 1.1,
             ),
           ),
           const SizedBox(height: 18),
@@ -348,31 +331,4 @@ class _StepView extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CalibrationFieldPainter extends CustomPainter {
-  const _CalibrationFieldPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final line = Paint()
-      ..color = const Color(0xFF65EAD1).withValues(alpha: .17)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    final center = Offset(size.width / 2, size.height / 2);
-    for (final radius in [72.0, 104.0, 142.0]) {
-      canvas.drawCircle(center, radius, line);
-    }
-    final dot = Paint()..color = const Color(0xFFC7FF4A);
-    for (final point in [
-      Offset(size.width * .16, size.height * .28),
-      Offset(size.width * .8, size.height * .2),
-      Offset(size.width * .76, size.height * .78),
-    ]) {
-      canvas.drawCircle(point, 2.5, dot);
-      canvas.drawLine(point, center, line);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

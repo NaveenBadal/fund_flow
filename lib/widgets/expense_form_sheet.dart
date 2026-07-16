@@ -63,18 +63,12 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     }
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF090D16),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF65EAD1),
-            brightness: Brightness.dark,
-            surface: const Color(0xFF090D16),
-          ),
-        ),
+        data: Theme.of(context),
         child: DraggableScrollableSheet(
           expand: false,
           initialChildSize: .94,
@@ -94,19 +88,16 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                           children: [
                             Text(
                               widget.initialExpense == null
-                                  ? 'Create a money memory'
-                                  : 'Inspect this memory',
+                                  ? 'Add transaction'
+                                  : 'Edit transaction',
                               style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               widget.initialExpense == null
-                                  ? 'Flow will include it in future reasoning'
-                                  : 'Correct the machine’s understanding',
+                                  ? 'Enter the amount and where it came from or went'
+                                  : 'Update the transaction details',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
@@ -141,12 +132,12 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                         ButtonSegment(
                           value: 'expense',
                           icon: Icon(Icons.north_east_rounded),
-                          label: Text('Energy out'),
+                          label: Text('Money out'),
                         ),
                         ButtonSegment(
                           value: 'income',
                           icon: Icon(Icons.south_west_rounded),
-                          label: Text('Energy in'),
+                          label: Text('Money in'),
                         ),
                       ],
                       selected: {_type},
@@ -157,27 +148,18 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                     Container(
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .06),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(8),
-                          topRight: Radius.circular(34),
-                          bottomLeft: Radius.circular(34),
-                          bottomRight: Radius.circular(8),
-                        ),
-                        border: Border.all(color: Colors.white12),
+                        color: scheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'MAGNITUDE',
+                            'Amount',
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
-                                  color: scheme.onInverseSurface.withValues(
-                                    alpha: .6,
-                                  ),
-                                  letterSpacing: 1.2,
-                                  fontWeight: FontWeight.w800,
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
                                 ),
                           ),
                           Row(
@@ -186,10 +168,10 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                               DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: _currency,
-                                  dropdownColor: scheme.inverseSurface,
+                                  dropdownColor: scheme.surfaceContainer,
                                   style: Theme.of(context).textTheme.titleLarge
                                       ?.copyWith(
-                                        color: scheme.onInverseSurface,
+                                        color: scheme.onSurface,
                                         fontWeight: FontWeight.w700,
                                       ),
                                   items:
@@ -230,13 +212,13 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                                       .textTheme
                                       .displaySmall
                                       ?.copyWith(
-                                        color: scheme.onInverseSurface,
+                                        color: scheme.onSurface,
                                         fontWeight: FontWeight.w700,
                                       ),
                                   decoration: InputDecoration.collapsed(
                                     hintText: '0.00',
                                     hintStyle: TextStyle(
-                                      color: scheme.onInverseSurface.withValues(
+                                      color: scheme.onSurface.withValues(
                                         alpha: .35,
                                       ),
                                     ),
@@ -253,8 +235,9 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                       controller: _merchant,
                       textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
-                        labelText: 'Where did the money meet the world?',
-                        prefixIcon: Icon(Icons.storefront_outlined),
+                        labelText: 'Source or destination',
+                        hintText: 'Person, business, account, or bank',
+                        prefixIcon: Icon(Icons.swap_horiz_rounded),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -263,7 +246,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                           ? _category
                           : null,
                       decoration: const InputDecoration(
-                        labelText: 'Meaning',
+                        labelText: 'Category',
                         prefixIcon: Icon(Icons.category_outlined),
                       ),
                       items: categories
@@ -304,7 +287,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                     TextField(
                       controller: _tags,
                       decoration: const InputDecoration(
-                        labelText: 'Personal memory cues (optional)',
+                        labelText: 'Tags (optional)',
                         hintText: 'travel, work, shared',
                         prefixIcon: Icon(Icons.tag_rounded),
                       ),
@@ -328,8 +311,8 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                             : const Icon(Icons.check_rounded),
                         label: Text(
                           widget.initialExpense == null
-                              ? 'Commit to memory'
-                              : 'Update memory',
+                              ? 'Add transaction'
+                              : 'Save changes',
                         ),
                       ),
                     ),
@@ -397,7 +380,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
         await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Delete movement?'),
+            title: const Text('Delete transaction?'),
             content: const Text(
               'This will remove it from every report and budget.',
             ),

@@ -1,159 +1,152 @@
-import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 
 import 'app_tokens.dart';
 
-/// Central theme factory. Produces cohesive light/dark [ThemeData] from a
-/// seed or dynamic [ColorScheme], with a two-typeface system:
-/// Space Grotesk for display/headings, Inter for body/labels, tabular
-/// figures on numeric styles so currency columns align perfectly.
-///
-/// Fonts are bundled (see pubspec `fonts:`) — no runtime network fetch, so
-/// typography renders correctly offline.
 class AppTheme {
   const AppTheme._();
 
-  /// Brand fallback seed when the platform provides no dynamic color.
-  static const seed = Color(0xFF65EAD1);
-
-  static const _bodyFont = 'Inter';
-  static const _displayFont = 'Space Grotesk';
-
-  static const _sub = FlexSubThemesData(
-    blendOnLevel: 8,
-    blendOnColors: false,
-    useMaterial3Typography: true,
-    useM2StyleDividerInM3: false,
-    alignedDropdown: true,
-    useInputDecoratorThemeInDialogs: true,
-    cardRadius: AppRadius.xl,
-    defaultRadius: AppRadius.md,
-    inputDecoratorRadius: AppRadius.md,
-    inputDecoratorBorderType: FlexInputBorderType.outline,
-    inputDecoratorIsFilled: true,
-    chipRadius: AppRadius.pill,
-    chipSchemeColor: SchemeColor.primaryContainer,
-    fabUseShape: true,
-    fabRadius: AppRadius.lg,
-    navigationBarHeight: 74,
-    navigationBarIndicatorSchemeColor: SchemeColor.primaryContainer,
-    navigationBarSelectedLabelSchemeColor: SchemeColor.onSurface,
-    elevatedButtonRadius: AppRadius.pill,
-    filledButtonRadius: AppRadius.pill,
-    outlinedButtonRadius: AppRadius.pill,
-    textButtonRadius: AppRadius.pill,
-    bottomSheetRadius: AppRadius.xxl,
-    dialogRadius: AppRadius.xl,
-    snackBarRadius: AppRadius.md,
-    tooltipRadius: AppRadius.sm,
-  );
-
-  static ThemeData light(ColorScheme? dynamicScheme) =>
-      _build(Brightness.light, dynamicScheme);
-
-  static ThemeData dark(ColorScheme? dynamicScheme) =>
-      _build(Brightness.dark, dynamicScheme);
-
-  static ThemeData _build(Brightness brightness, ColorScheme? dynamicScheme) {
-    final isLight = brightness == Brightness.light;
-
-    final ThemeData base = dynamicScheme != null
-        ? (isLight
-              ? FlexThemeData.light(
-                  colorScheme: dynamicScheme,
-                  subThemesData: _sub,
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                )
-              : FlexThemeData.dark(
-                  colorScheme: dynamicScheme,
-                  subThemesData: _sub.copyWith(blendOnLevel: 16),
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                ))
-        : (isLight
-              ? FlexThemeData.light(
-                  colors: const FlexSchemeColor(
-                    primary: Color(0xFF006B61),
-                    primaryContainer: Color(0xFFB9F3E9),
-                    secondary: Color(0xFF4F5F7E),
-                    secondaryContainer: Color(0xFFDCE5FF),
-                    tertiary: Color(0xFF705A00),
-                    tertiaryContainer: Color(0xFFFFE178),
-                  ),
-                  surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
-                  blendLevel: 4,
-                  subThemesData: _sub,
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                )
-              : FlexThemeData.dark(
-                  colors: const FlexSchemeColor(
-                    primary: Color(0xFF65EAD1),
-                    primaryContainer: Color(0xFF004F47),
-                    secondary: Color(0xFFBAC7EA),
-                    secondaryContainer: Color(0xFF333F5C),
-                    tertiary: Color(0xFFFFDF67),
-                    tertiaryContainer: Color(0xFF544600),
-                  ),
-                  surfaceMode: FlexSurfaceMode.levelSurfacesLowScaffold,
-                  blendLevel: 8,
-                  subThemesData: _sub.copyWith(blendOnLevel: 16),
-                  visualDensity: FlexColorScheme.comfortablePlatformDensity,
-                  useMaterial3: true,
-                ));
-
-    return base.copyWith(
-      scaffoldBackgroundColor: base.colorScheme.surface,
-      textTheme: _textTheme(base.textTheme),
-      appBarTheme: base.appBarTheme.copyWith(
-        centerTitle: false,
-        scrolledUnderElevation: 0.5,
-        titleTextStyle: TextStyle(
-          fontFamily: _displayFont,
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
-          color: base.colorScheme.onSurface,
-        ),
-      ),
-      extensions: [isLight ? FinanceColors.light : FinanceColors.dark],
-    );
-  }
-
+  static const seed = Color(0xFF1A73E8);
   static const _tabular = [FontFeature.tabularFigures()];
 
-  /// Space Grotesk on the large/heading roles, Inter on the reading roles.
-  static TextTheme _textTheme(TextTheme base) {
-    final body = base.apply(fontFamily: _bodyFont);
+  static ThemeData light(ColorScheme? _) => _build(Brightness.light);
+  static ThemeData dark(ColorScheme? _) => _build(Brightness.dark);
 
-    TextStyle? head(TextStyle? s, FontWeight w) => s?.copyWith(
-      fontFamily: _displayFont,
-      fontWeight: w,
-      fontFeatures: _tabular,
-      letterSpacing: -0.5,
+  static ThemeData _build(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: seed,
+          brightness: brightness,
+          surface: dark ? const Color(0xFF111315) : const Color(0xFFF8F9FA),
+        ).copyWith(
+          primary: dark ? const Color(0xFF8AB4F8) : const Color(0xFF1A73E8),
+          onPrimary: dark ? const Color(0xFF062E6F) : Colors.white,
+          surface: dark ? const Color(0xFF111315) : const Color(0xFFF8F9FA),
+          surfaceContainer: dark
+              ? const Color(0xFF1B1D1F)
+              : const Color(0xFFFFFFFF),
+          surfaceContainerHigh: dark
+              ? const Color(0xFF242629)
+              : const Color(0xFFF1F3F4),
+          onSurface: dark ? const Color(0xFFE8EAED) : const Color(0xFF202124),
+          onSurfaceVariant: dark
+              ? const Color(0xFF9AA0A6)
+              : const Color(0xFF5F6368),
+          outlineVariant: dark
+              ? const Color(0xFF3C4043)
+              : const Color(0xFFE1E3E6),
+          error: dark ? const Color(0xFFF28B82) : const Color(0xFFD93025),
+        );
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      fontFamily: 'Inter',
+      visualDensity: VisualDensity.standard,
     );
-
-    return body.copyWith(
-      displayLarge: head(body.displayLarge, FontWeight.w700),
-      displayMedium: head(body.displayMedium, FontWeight.w700),
-      displaySmall: head(body.displaySmall, FontWeight.w700),
-      headlineLarge: head(body.headlineLarge, FontWeight.w700),
-      headlineMedium: head(body.headlineMedium, FontWeight.w800),
-      headlineSmall: head(body.headlineSmall, FontWeight.w700),
-      titleLarge: body.titleLarge?.copyWith(
-        fontFamily: _displayFont,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.3,
+    final text = base.textTheme.apply(
+      bodyColor: scheme.onSurface,
+      displayColor: scheme.onSurface,
+    );
+    return base.copyWith(
+      textTheme: text.copyWith(
+        headlineMedium: text.headlineMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.4,
+        ),
+        headlineSmall: text.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.25,
+        ),
+        titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+        titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        bodyLarge: text.bodyLarge?.copyWith(height: 1.4),
+        bodyMedium: text.bodyMedium?.copyWith(height: 1.4),
+        labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
       ),
-      titleMedium: body.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      titleSmall: body.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-      labelLarge: body.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: text.headlineSmall?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: scheme.surfaceContainer,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHigh,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderSide: BorderSide(color: scheme.primary, width: 2),
+        ),
+      ),
+      chipTheme: base.chipTheme.copyWith(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide(color: scheme.outlineVariant),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
+      extensions: [dark ? FinanceColors.dark : FinanceColors.light],
     );
   }
 
-  /// Tabular numeric style for currency values — use on any amount so digits
-  /// stay column-aligned regardless of value.
   static TextStyle money(TextStyle? base) => (base ?? const TextStyle())
-      .copyWith(fontFeatures: _tabular, fontWeight: FontWeight.w800);
+      .copyWith(fontFeatures: _tabular, fontWeight: FontWeight.w600);
 }

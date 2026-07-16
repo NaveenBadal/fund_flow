@@ -25,13 +25,14 @@ class MoneyChatSheet extends ConsumerStatefulWidget {
 
 class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   final _controller = TextEditingController();
+  final _scrollController = ScrollController();
   bool _thinking = false;
   String _stage = 'Understanding your request…';
 
   static const _prompts = [
-    'What changed in my spending this month?',
-    'Where can I safely spend less?',
-    'Find subscriptions I may have forgotten',
+    'Summarize this month',
+    'Find transactions that need review',
+    'Where can I spend less?',
   ];
 
   @override
@@ -46,7 +47,19 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   @override
   void dispose() {
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _ask([String? suggested]) async {
@@ -56,6 +69,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
     _controller.clear();
     setState(() => _thinking = true);
     await ref.read(assistantConversationProvider.notifier).addUser(question);
+    _scrollToLatest();
     try {
       final service = MoneyChatService(
         OllamaCloudService(
@@ -99,6 +113,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
           );
       if (!mounted) return;
       setState(() {});
+      _scrollToLatest();
     } catch (error) {
       if (!mounted) return;
       final missingKey = ref.read(ollamaApiKeyProvider).trim().isEmpty;
@@ -178,81 +193,60 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(assistantConversationProvider).value ?? const [];
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFF090D16),
+      appBar: AppBar(
+        title: const Text('Ask Flow'),
+        actions: [
+          IconButton(
+            tooltip: 'Clear conversation',
+            onPressed: messages.isEmpty
+                ? null
+                : () =>
+                      ref.read(assistantConversationProvider.notifier).clear(),
+            icon: const Icon(Icons.delete_sweep_outlined),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: SafeArea(
-        child: Container(
-          height: widget.fullScreen
-              ? null
-              : MediaQuery.sizeOf(context).height * .88,
+        top: false,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-          decoration: const BoxDecoration(color: Color(0xFF090D16)),
           child: Column(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.blur_circular_rounded,
-                    color: Color(0xFFC7FF4A),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ask Flow',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          'Your transactions and app controls, in one place',
-                          style: TextStyle(color: Colors.white38, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Clear conversation',
-                    onPressed: messages.isEmpty
-                        ? null
-                        : () => ref
-                              .read(assistantConversationProvider.notifier)
-                              .clear(),
-                    icon: const Icon(
-                      Icons.delete_sweep_outlined,
-                      color: Colors.white54,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close assistant',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
               Expanded(
                 child: messages.isEmpty
                     ? ListView(
+                        controller: _scrollController,
                         children: [
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 28),
-                            child: Text(
-                              'I can calculate, compare, trace patterns, and explain.\nWhat do you want to know?',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                height: 1.2,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 40, 4, 28),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome_outlined,
+                                  size: 34,
+                                  color: scheme.primary,
+                                ),
+                                const SizedBox(height: 20),
+                                Text(
+                                  'How can I help with your money?',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Ask about transactions, find patterns, correct details, or change app settings.',
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
                             ),
                           ),
                           for (final prompt in _prompts)
@@ -262,8 +256,6 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                 onPressed: () => _ask(prompt),
                                 style: OutlinedButton.styleFrom(
                                   alignment: Alignment.centerLeft,
-                                  foregroundColor: Colors.white70,
-                                  side: const BorderSide(color: Colors.white12),
                                   padding: const EdgeInsets.all(17),
                                 ),
                                 child: Text(prompt),
@@ -272,6 +264,10 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                         ],
                       )
                     : ListView.builder(
+                        controller: _scrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.only(top: 8, bottom: 16),
                         itemCount: messages.length + (_thinking ? 1 : 0),
                         itemBuilder: (_, index) {
                           if (index == messages.length) {
@@ -279,9 +275,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                               padding: const EdgeInsets.all(18),
                               child: Text(
                                 _stage,
-                                style: const TextStyle(
-                                  color: Color(0xFFC7FF4A),
-                                ),
+                                style: TextStyle(color: scheme.primary),
                               ),
                             );
                           }
@@ -296,9 +290,9 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                               constraints: const BoxConstraints(maxWidth: 520),
                               decoration: BoxDecoration(
                                 color: message.user
-                                    ? const Color(0xFFC7FF4A)
-                                    : Colors.white.withValues(alpha: .07),
-                                borderRadius: BorderRadius.circular(22),
+                                    ? scheme.primaryContainer
+                                    : scheme.surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(18),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,8 +300,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                   if (message.user)
                                     Text(
                                       message.text,
-                                      style: const TextStyle(
-                                        color: Colors.black,
+                                      style: TextStyle(
+                                        color: scheme.onPrimaryContainer,
                                         height: 1.45,
                                       ),
                                     )
@@ -318,38 +312,37 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                       ),
                                       selectable: true,
                                       styleSheet: MarkdownStyleSheet(
-                                        p: const TextStyle(
-                                          color: Colors.white,
+                                        p: TextStyle(
+                                          color: scheme.onSurface,
                                           height: 1.5,
                                           fontSize: 14,
                                         ),
-                                        strong: const TextStyle(
-                                          color: Color(0xFFC7FF4A),
+                                        strong: TextStyle(
+                                          color: scheme.primary,
                                           fontWeight: FontWeight.w800,
                                         ),
-                                        em: const TextStyle(
-                                          color: Color(0xFF65EAD1),
+                                        em: TextStyle(
+                                          color: scheme.secondary,
                                           fontStyle: FontStyle.italic,
                                         ),
-                                        listBullet: const TextStyle(
-                                          color: Color(0xFFC7FF4A),
+                                        listBullet: TextStyle(
+                                          color: scheme.primary,
                                           fontWeight: FontWeight.w800,
                                         ),
                                         code: TextStyle(
-                                          color: const Color(0xFF65EAD1),
-                                          backgroundColor: Colors.black
-                                              .withValues(alpha: .35),
+                                          color: scheme.onSurface,
+                                          backgroundColor:
+                                              scheme.surfaceContainerHighest,
                                           fontFamily: 'monospace',
                                         ),
-                                        blockquoteDecoration:
-                                            const BoxDecoration(
-                                              border: Border(
-                                                left: BorderSide(
-                                                  color: Color(0xFFC7FF4A),
-                                                  width: 3,
-                                                ),
-                                              ),
+                                        blockquoteDecoration: BoxDecoration(
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: scheme.primary,
+                                              width: 3,
                                             ),
+                                          ),
+                                        ),
                                         blockquotePadding:
                                             const EdgeInsets.only(left: 12),
                                       ),
@@ -359,8 +352,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                     Text(
                                       '${message.verified ? 'Verified' : 'Checked'} against '
                                       '${message.sources} matching local records',
-                                      style: const TextStyle(
-                                        color: Colors.white38,
+                                      style: TextStyle(
+                                        color: scheme.onSurfaceVariant,
                                         fontSize: 10,
                                       ),
                                     ),
@@ -373,10 +366,10 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                           tilePadding: EdgeInsets.zero,
                                           childrenPadding: EdgeInsets.zero,
                                           dense: true,
-                                          title: const Text(
+                                          title: Text(
                                             'How this was answered',
                                             style: TextStyle(
-                                              color: Colors.white54,
+                                              color: scheme.onSurfaceVariant,
                                               fontSize: 11,
                                             ),
                                           ),
@@ -387,8 +380,9 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                                 _formatFilterDetails(
                                                   message.filterDetails,
                                                 ),
-                                                style: const TextStyle(
-                                                  color: Colors.white54,
+                                                style: TextStyle(
+                                                  color:
+                                                      scheme.onSurfaceVariant,
                                                   fontSize: 11,
                                                   height: 1.45,
                                                 ),
@@ -412,14 +406,10 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                       controller: _controller,
                       enabled: !_thinking,
                       onSubmitted: (_) => _ask(),
-                      style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Ask about your money or control the app…',
-                        hintStyle: const TextStyle(color: Colors.white38),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: .07),
+                        hintText: 'Ask about your activity…',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(99),
+                          borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
                         ),
                       ),
@@ -429,8 +419,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                   IconButton.filled(
                     onPressed: _thinking ? null : _ask,
                     style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFFC7FF4A),
-                      foregroundColor: Colors.black,
+                      backgroundColor: scheme.primary,
+                      foregroundColor: scheme.onPrimary,
                       fixedSize: const Size(52, 52),
                     ),
                     icon: const Icon(Icons.arrow_upward_rounded),

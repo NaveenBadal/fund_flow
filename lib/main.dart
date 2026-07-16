@@ -12,7 +12,6 @@ import 'screens/activity_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notification_service.dart';
 import 'services/drive_backup_service.dart';
-import 'widgets/global_quick_action.dart';
 import 'widgets/money_chat_sheet.dart';
 
 void main() async {
@@ -287,8 +286,6 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
-  final _ask = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -304,7 +301,6 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _ask.dispose();
     super.dispose();
   }
 
@@ -329,95 +325,26 @@ class _AppShellState extends ConsumerState<AppShell>
         children: [
           const Positioned.fill(child: ActivityScreen()),
           Align(
-            alignment: Alignment.bottomCenter,
+            alignment: Alignment.bottomRight,
             child: SafeArea(
-              minimum: const EdgeInsets.fromLTRB(18, 0, 18, 14),
-              child: _DirectAskBar(controller: _ask, onAsk: _openChat),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openChat([String? value]) {
-    final prompt = (value ?? _ask.text).trim();
-    _ask.clear();
-    Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MoneyChatSheet(
-          initialPrompt: prompt.isEmpty ? null : prompt,
-          fullScreen: true,
-        ),
-      ),
-    );
-  }
-}
-
-class _DirectAskBar extends StatelessWidget {
-  const _DirectAskBar({required this.controller, required this.onAsk});
-
-  final TextEditingController controller;
-  final ValueChanged<String?> onAsk;
-
-  @override
-  Widget build(BuildContext context) {
-    const ink = Color(0xFF090D16);
-    return Container(
-      constraints: const BoxConstraints(
-        maxWidth: 720,
-        minHeight: 62,
-        maxHeight: 62,
-      ),
-      padding: const EdgeInsets.fromLTRB(7, 7, 7, 7),
-      decoration: BoxDecoration(
-        color: ink.withValues(alpha: .97),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: .12)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black45,
-            blurRadius: 36,
-            offset: Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 8),
-          const Icon(
-            Icons.auto_awesome_rounded,
-            color: Color(0xFFC7FF4A),
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              maxLines: 1,
-              textInputAction: TextInputAction.send,
-              onSubmitted: onAsk,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration.collapsed(
-                hintText: 'Ask your money anything…',
-                hintStyle: TextStyle(color: Colors.white38),
+              minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: FloatingActionButton.extended(
+                heroTag: 'ask-flow',
+                onPressed: _openChat,
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Ask Flow'),
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'Ask Flow',
-            onPressed: () => onAsk(controller.text),
-            style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFC7FF4A),
-              foregroundColor: Colors.black,
-            ),
-            icon: const Icon(Icons.arrow_upward_rounded),
-          ),
-          const SizedBox(width: 4),
-          const GlobalQuickActionButton(small: true),
         ],
       ),
+    );
+  }
+
+  void _openChat() {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const MoneyChatSheet(fullScreen: true)),
     );
   }
 }

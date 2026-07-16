@@ -16,11 +16,11 @@ class AppSpacing {
 
 class AppRadius {
   const AppRadius._();
-  static const double sm = 12;
-  static const double md = 18;
-  static const double lg = 24;
-  static const double xl = 28;
-  static const double xxl = 32;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 20;
+  static const double xxl = 28;
   static const double pill = 999;
 
   static BorderRadius all(double r) => BorderRadius.circular(r);
@@ -91,25 +91,25 @@ class FinanceColors extends ThemeExtension<FinanceColors> {
   final List<Color> accentGradient;
 
   static const light = FinanceColors(
-    income: Color(0xFF16845B),
-    incomeSurface: Color(0xFFDDF4E9),
-    expense: Color(0xFFD95745),
-    expenseSurface: Color(0xFFFBE5DF),
-    warning: Color(0xFF9A6800),
-    warningSurface: Color(0xFFFFEDC1),
-    heroGradient: [Color(0xFF171916), Color(0xFF30352C), Color(0xFFB9F227)],
-    accentGradient: [Color(0xFFB9F227), Color(0xFF73D6B0)],
+    income: Color(0xFF188038),
+    incomeSurface: Color(0xFFE6F4EA),
+    expense: Color(0xFFD93025),
+    expenseSurface: Color(0xFFFCE8E6),
+    warning: Color(0xFFB06000),
+    warningSurface: Color(0xFFFEF7E0),
+    heroGradient: [Color(0xFF1A73E8), Color(0xFF4285F4)],
+    accentGradient: [Color(0xFF1A73E8), Color(0xFF8AB4F8)],
   );
 
   static const dark = FinanceColors(
-    income: Color(0xFF72DDB2),
-    incomeSurface: Color(0xFF13372B),
-    expense: Color(0xFFFF866F),
-    expenseSurface: Color(0xFF42201A),
-    warning: Color(0xFFFFCF62),
-    warningSurface: Color(0xFF3A2E11),
-    heroGradient: [Color(0xFF10120F), Color(0xFF2C3129), Color(0xFFB9F227)],
-    accentGradient: [Color(0xFFB9F227), Color(0xFF72DDB2)],
+    income: Color(0xFF81C995),
+    incomeSurface: Color(0xFF0D3B22),
+    expense: Color(0xFFF28B82),
+    expenseSurface: Color(0xFF44201D),
+    warning: Color(0xFFFDD663),
+    warningSurface: Color(0xFF3D3000),
+    heroGradient: [Color(0xFF8AB4F8), Color(0xFF669DF6)],
+    accentGradient: [Color(0xFF8AB4F8), Color(0xFFAECBFA)],
   );
 
   @override
