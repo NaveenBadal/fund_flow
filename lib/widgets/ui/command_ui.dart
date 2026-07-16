@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-class CommandScaffold extends StatefulWidget {
+import '../../theme/app_tokens.dart';
+
+class CommandScaffold extends StatelessWidget {
   const CommandScaffold({
     super.key,
     required this.title,
@@ -17,276 +19,66 @@ class CommandScaffold extends StatefulWidget {
   final Widget? floatingActionButton;
 
   @override
-  State<CommandScaffold> createState() => _CommandScaffoldState();
-}
-
-class _CommandScaffoldState extends State<CommandScaffold>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _atmosphere = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 18),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _atmosphere.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: scheme.surface,
-      floatingActionButton: widget.floatingActionButton,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _atmosphere,
-                builder: (_, _) => CustomPaint(
-                  painter: _FlowAtmospherePainter(
-                    phase: _atmosphere.value,
-                    color: scheme.primary,
-                    dark: Theme.of(context).brightness == Brightness.dark,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            slivers: [
-              SliverToBoxAdapter(
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 30),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (Navigator.of(context).canPop()) ...[
-                          IconButton(
-                            onPressed: Navigator.of(context).pop,
-                            icon: const Icon(Icons.arrow_back_rounded),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 5,
-                                    height: 5,
-                                    decoration: BoxDecoration(
-                                      color: scheme.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      (widget.eyebrow ?? 'FLOW SPACE')
-                                          .toUpperCase(),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: scheme.primary,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.6,
-                                          ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 11),
-                              Text(
-                                widget.title,
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: -1.4,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ...widget.actions,
-                      ],
+      floatingActionButton: floatingActionButton,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        slivers: [
+          SliverAppBar.large(
+            title: Text(title),
+            actions: actions,
+            backgroundColor: scheme.surface,
+            surfaceTintColor: Colors.transparent,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                children: [
+                  Positioned(
+                    right: -34,
+                    top: -36,
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-              ),
-              ...widget.slivers,
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: Navigator.of(context).canPop() ? 40 : 130,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FlowAtmospherePainter extends CustomPainter {
-  const _FlowAtmospherePainter({
-    required this.phase,
-    required this.color,
-    required this.dark,
-  });
-  final double phase;
-  final Color color;
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width * (.82 + phase * .03), size.height * .08);
-    final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          color.withValues(alpha: dark ? .11 : .08),
-          color.withValues(alpha: 0),
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: size.width * .72));
-    canvas.drawRect(Offset.zero & size, glow);
-    final thread = Paint()
-      ..color = color.withValues(alpha: dark ? .07 : .05)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    final path = Path()..moveTo(-20, size.height * .36);
-    path.cubicTo(
-      size.width * .25,
-      size.height * (.28 + phase * .03),
-      size.width * .68,
-      size.height * .46,
-      size.width + 30,
-      size.height * .30,
-    );
-    canvas.drawPath(path, thread);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FlowAtmospherePainter old) =>
-      old.phase != phase;
-}
-
-class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.title, {super.key, this.action, this.onAction});
-  final String title;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 34, 20, 14),
-    child: Row(
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              Text(
-                '◆',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontSize: 8,
-                ),
-              ),
-              const SizedBox(width: 9),
-              Flexible(
-                child: Text(
-                  title.toUpperCase(),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.15,
+                  Positioned(
+                    right: 80,
+                    top: 76,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: scheme.tertiaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
-                ),
+                  if (eyebrow != null)
+                    Positioned(
+                      left: 72,
+                      bottom: 18,
+                      child: Text(
+                        eyebrow!,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: scheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
-        ),
-        if (action != null)
-          TextButton(onPressed: onAction, child: Text(action!)),
-      ],
-    ),
-  );
-}
-
-class MetricTile extends StatelessWidget {
-  const MetricTile({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color,
-    this.caption,
-  });
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? color;
-  final String? caption;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final accent = color ?? scheme.primary;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: .62),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(7),
-          topRight: Radius.circular(28),
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(7),
-        ),
-        border: Border.all(color: scheme.primary.withValues(alpha: .16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 19, color: accent),
-          const Spacer(),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 5),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              caption!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ],
+          ...slivers,
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
@@ -307,30 +99,46 @@ class StatePanel extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(36),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 18),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _friendlyMessage(message),
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Material(
+          color: scheme.primaryContainer,
+          shape: ExpressiveShape.hero(),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: scheme.surface,
+                  child: Icon(icon, color: scheme.primary),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _friendlyMessage(message),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                if (action != null) ...[const SizedBox(height: 20), action!],
+              ],
+            ),
           ),
         ),
-        if (action != null) ...[const SizedBox(height: 20), action!],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   String _friendlyMessage(String raw) {
     final technical =

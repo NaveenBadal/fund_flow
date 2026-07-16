@@ -73,6 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
+          const _SettingsHero(),
           const _SectionTitle('Appearance'),
           _SettingsCard(
             children: [
@@ -548,16 +549,66 @@ class _SectionTitle extends StatelessWidget {
   );
 }
 
+class _SettingsHero extends StatelessWidget {
+  const _SettingsHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Material(
+        color: scheme.secondaryContainer,
+        shape: ExpressiveShape.hero(),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Positioned(
+              right: -22,
+              top: -28,
+              child: CircleAvatar(
+                radius: 54,
+                backgroundColor: scheme.tertiaryContainer,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 26, 92, 26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.tune_rounded, color: scheme.onSecondaryContainer),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Make Flow yours',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Your appearance, privacy, imports and AI connection — all in one place.',
+                    style: TextStyle(color: scheme.onSecondaryContainer),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.children});
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Column(children: children),
-    ),
+    shape: ExpressiveShape.soft(),
+    clipBehavior: Clip.antiAlias,
+    child: Column(children: children),
   );
 }
 

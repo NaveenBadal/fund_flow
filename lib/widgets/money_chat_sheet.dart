@@ -10,6 +10,7 @@ import '../services/app_control_service.dart';
 import '../services/local_money_mcp.dart';
 import '../services/money_chat_service.dart';
 import '../services/ollama_cloud_service.dart';
+import '../theme/app_tokens.dart';
 
 class MoneyChatSheet extends ConsumerStatefulWidget {
   const MoneyChatSheet({
@@ -273,9 +274,23 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                           if (index == messages.length) {
                             return Padding(
                               padding: const EdgeInsets.all(18),
-                              child: Text(
-                                _stage,
-                                style: TextStyle(color: scheme.primary),
+                              child: Row(
+                                children: [
+                                  SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: scheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _stage,
+                                      style: TextStyle(color: scheme.primary),
+                                    ),
+                                  ),
+                                ],
                               ),
                             );
                           }
@@ -292,7 +307,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                 color: message.user
                                     ? scheme.primaryContainer
                                     : scheme.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: ExpressiveShape.playful(index),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,7 +424,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                       decoration: InputDecoration(
                         hintText: 'Ask about your activity…',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(28),
                           borderSide: BorderSide.none,
                         ),
                       ),

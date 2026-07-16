@@ -291,22 +291,51 @@ class _StepView extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Container(
+          SizedBox(
             height: 220,
             width: double.infinity,
-            decoration: BoxDecoration(
+            child: Material(
               color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(AppRadius.xxl),
-            ),
-            child: Center(
-              child: Container(
-                width: 104,
-                height: 104,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(step.icon, size: 44, color: scheme.primary),
+              shape: ExpressiveShape.hero(),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -24,
+                    top: -34,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: scheme.tertiaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: -18,
+                    bottom: -30,
+                    child: Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      width: 104,
+                      height: 104,
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(step.icon, size: 44, color: scheme.primary),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -64,7 +64,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Activity'), findsOneWidget);
+    expect(find.text('Your activity'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
     expect(find.byTooltip('Hide amounts'), findsOneWidget);
     semantics.dispose();
@@ -96,7 +96,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Make Flow yours'), findsOneWidget);
   });
 
   testWidgets('Ask Flow input stays visible when the keyboard opens', (

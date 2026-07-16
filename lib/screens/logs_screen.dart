@@ -13,8 +13,8 @@ class LogsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(aiLogProvider);
     return CommandScaffold(
-      eyebrow: 'How the machine reached its conclusions',
-      title: 'Reasoning trace',
+      eyebrow: 'Requests, results and errors',
+      title: 'AI activity',
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),
@@ -30,7 +30,7 @@ class LogsScreen extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
             child: Text(
-              'A technical timeline of cloud extraction. Your financial dashboard does not depend on keeping this history.',
+              'A technical history of AI extraction. Clearing it does not remove any transactions.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -63,7 +63,8 @@ class LogsScreen extends ConsumerWidget {
                   sliver: SliverList.separated(
                     itemCount: items.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => _LogEvent(items[index]),
+                    itemBuilder: (context, index) =>
+                        _LogEvent(items[index], index),
                   ),
                 ),
         ),
@@ -96,25 +97,22 @@ class LogsScreen extends ConsumerWidget {
 }
 
 class _LogEvent extends StatelessWidget {
-  const _LogEvent(this.log);
+  const _LogEvent(this.log, this.index);
   final AiLog log;
+  final int index;
   @override
   Widget build(BuildContext context) {
     final failed = log.status.startsWith('Error');
     final color = failed
         ? Theme.of(context).colorScheme.error
         : context.finance.income;
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: .66),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(6),
-          topRight: Radius.circular(26),
-          bottomLeft: Radius.circular(26),
-          bottomRight: Radius.circular(6),
-        ),
-        border: Border.all(color: color.withValues(alpha: .22)),
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      shape: ContinuousRectangleBorder(
+        borderRadius: ExpressiveShape.playful(index),
+        side: BorderSide(color: color.withValues(alpha: .22)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         shape: const Border(),
         collapsedShape: const Border(),

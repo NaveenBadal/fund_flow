@@ -12,8 +12,8 @@ class CustomCategoriesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customCategoryListProvider);
     return CommandScaffold(
-      eyebrow: 'Teach Flow your personal language',
-      title: 'Meaning system',
+      eyebrow: 'Personalize how transactions are grouped',
+      title: 'Categories',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _open(context),
         icon: const Icon(Icons.add_rounded),
@@ -63,6 +63,7 @@ class CustomCategoriesScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final item = items[index];
                       return _CategoryCell(
+                        index: index,
                         item: item,
                         onTap: () => _open(context, item),
                         onDelete: () => _delete(context, ref, item),
@@ -114,23 +115,22 @@ class CustomCategoriesScreen extends ConsumerWidget {
 
 class _CategoryCell extends StatelessWidget {
   const _CategoryCell({
+    required this.index,
     required this.item,
     required this.onTap,
     required this.onDelete,
   });
+  final int index;
   final CustomCategory item;
   final VoidCallback onTap, onDelete;
   @override
   Widget build(BuildContext context) => Material(
     color: item.color.withValues(alpha: .11),
-    borderRadius: const BorderRadius.only(
-      topLeft: Radius.circular(6),
-      topRight: Radius.circular(28),
-      bottomLeft: Radius.circular(28),
-      bottomRight: Radius.circular(6),
+    shape: ContinuousRectangleBorder(
+      borderRadius: ExpressiveShape.playful(index),
     ),
+    clipBehavior: Clip.antiAlias,
     child: InkWell(
-      borderRadius: BorderRadius.circular(28),
       onTap: onTap,
       onLongPress: onDelete,
       child: Padding(

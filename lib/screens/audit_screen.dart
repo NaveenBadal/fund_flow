@@ -21,8 +21,8 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(parsedSmsAuditProvider);
     return CommandScaffold(
-      eyebrow: 'Nothing enters memory invisibly',
-      title: 'Signal provenance',
+      eyebrow: 'See what happened during import',
+      title: 'Import history',
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -31,7 +31,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Every message the importer has considered, including why non-transactions were skipped.',
+                  'Review messages that became transactions and understand why others were skipped.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.45,
@@ -98,6 +98,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 itemCount: items.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) => _SmsEvent(
+                  index: index,
                   entry: items[index],
                   onRetry: () => _retry(items[index]['body'] as String? ?? ''),
                 ),
@@ -121,7 +122,12 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
 }
 
 class _SmsEvent extends StatelessWidget {
-  const _SmsEvent({required this.entry, required this.onRetry});
+  const _SmsEvent({
+    required this.index,
+    required this.entry,
+    required this.onRetry,
+  });
+  final int index;
   final Map<String, dynamic> entry;
   final VoidCallback onRetry;
   @override
@@ -133,17 +139,13 @@ class _SmsEvent extends StatelessWidget {
         : _reasonColor(context, reason);
     final rawTime = entry['parsed_at'] as String? ?? '';
     final time = DateTime.tryParse(rawTime)?.toLocal();
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: .66),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(6),
-          topRight: Radius.circular(26),
-          bottomLeft: Radius.circular(26),
-          bottomRight: Radius.circular(6),
-        ),
-        border: Border.all(color: color.withValues(alpha: .18)),
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      shape: ContinuousRectangleBorder(
+        borderRadius: ExpressiveShape.playful(index),
+        side: BorderSide(color: color.withValues(alpha: .18)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         shape: const Border(),
         collapsedShape: const Border(),

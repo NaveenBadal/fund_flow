@@ -39,7 +39,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final hidden = ref.watch(privateModeProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Activity'),
+        toolbarHeight: 72,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your activity'),
+            Text(
+              'Money in motion',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: hidden ? 'Show amounts' : 'Hide amounts',
@@ -329,47 +344,88 @@ class _MonthlySummary extends StatelessWidget {
   final VoidCallback onReceived;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.primaryContainer,
+      shape: ExpressiveShape.hero(),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
         children: [
-          Text('This month', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryValue(
-                  label: 'Money out',
-                  amount: spent,
-                  currency: currency,
-                  hidden: hidden,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  onTap: onSpent,
+          Positioned(
+            right: -34,
+            top: -42,
+            child: _HeroOrb(color: scheme.tertiaryContainer, size: 138),
+          ),
+          Positioned(
+            right: 56,
+            bottom: -48,
+            child: _HeroOrb(color: scheme.secondaryContainer, size: 102),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_graph_rounded, color: scheme.primary),
+                    const SizedBox(width: 10),
+                    Text(
+                      'This month',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: scheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              SizedBox(
-                height: 46,
-                child: VerticalDivider(
-                  color: Theme.of(context).colorScheme.outlineVariant,
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryValue(
+                        label: 'Money out',
+                        amount: spent,
+                        currency: currency,
+                        hidden: hidden,
+                        color: scheme.onSurface,
+                        containerColor: scheme.surface.withValues(alpha: .78),
+                        onTap: onSpent,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _SummaryValue(
+                        label: 'Money in',
+                        amount: received,
+                        currency: currency,
+                        hidden: hidden,
+                        color: context.finance.income,
+                        containerColor: scheme.secondaryContainer,
+                        onTap: onReceived,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Expanded(
-                child: _SummaryValue(
-                  label: 'Money in',
-                  amount: received,
-                  currency: currency,
-                  hidden: hidden,
-                  color: context.finance.income,
-                  onTap: onReceived,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
-    ),
+    );
+  }
+}
+
+class _HeroOrb extends StatelessWidget {
+  const _HeroOrb({required this.color, required this.size});
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
   );
 }
 
@@ -380,6 +436,7 @@ class _SummaryValue extends StatelessWidget {
     required this.currency,
     required this.hidden,
     required this.color,
+    required this.containerColor,
     required this.onTap,
   });
   final String label;
@@ -387,30 +444,37 @@ class _SummaryValue extends StatelessWidget {
   final String currency;
   final bool hidden;
   final Color color;
+  final Color containerColor;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(12),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              hidden ? maskAmount(currency) : formatAmount(amount, currency),
-              style: AppTheme.money(
-                Theme.of(context).textTheme.titleLarge?.copyWith(color: color),
+  Widget build(BuildContext context) => Material(
+    color: containerColor,
+    shape: ExpressiveShape.soft(),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                hidden ? maskAmount(currency) : formatAmount(amount, currency),
+                style: AppTheme.money(
+                  Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: color),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
@@ -521,22 +585,17 @@ class _TransactionGroup extends StatelessWidget {
           ),
         ),
       ),
-      Card(
-        child: Column(
-          children: [
-            for (var index = 0; index < transactions.length; index++) ...[
-              _TransactionRow(
-                item: transactions[index],
-                hidden: hidden,
-                onTap: () => onTap(transactions[index]),
-                onEdit: () => onEdit(transactions[index]),
-              ),
-              if (index != transactions.length - 1)
-                const Divider(height: 1, indent: 72),
-            ],
-          ],
+      for (var index = 0; index < transactions.length; index++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _TransactionRow(
+            index: index,
+            item: transactions[index],
+            hidden: hidden,
+            onTap: () => onTap(transactions[index]),
+            onEdit: () => onEdit(transactions[index]),
+          ),
         ),
-      ),
       const SizedBox(height: 24),
     ],
   );
@@ -544,11 +603,13 @@ class _TransactionGroup extends StatelessWidget {
 
 class _TransactionRow extends StatelessWidget {
   const _TransactionRow({
+    required this.index,
     required this.item,
     required this.hidden,
     required this.onTap,
     required this.onEdit,
   });
+  final int index;
   final Expense item;
   final bool hidden;
   final VoidCallback onTap;
@@ -577,64 +638,70 @@ class _TransactionRow extends StatelessWidget {
       button: true,
       label:
           '${needsReview ? 'Needs review' : item.displayMerchant}, $amount, ${item.category}, ${DateFormat('d MMMM, h:mm a').format(item.date)}',
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onEdit,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: avatarColor,
-                child: Icon(
-                  needsReview
-                      ? Icons.priority_high_rounded
-                      : item.isIncome
-                      ? Icons.south_west_rounded
-                      : categoryIcon(item.category),
-                  color: iconColor,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      needsReview ? 'Needs review' : item.displayMerchant,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      needsReview
-                          ? 'Source or destination wasn’t detected'
-                          : '${item.category} • ${item.originalSms.isEmpty ? 'Manual' : 'SMS'} • ${DateFormat('h:mm a').format(item.date)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: needsReview
-                            ? context.finance.warning
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                amount,
-                style: AppTheme.money(
-                  Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: item.isIncome ? context.finance.income : null,
+      child: Material(
+        color: needsReview
+            ? context.finance.warningSurface
+            : Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: ExpressiveShape.playful(index),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onEdit,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: avatarColor,
+                  child: Icon(
+                    needsReview
+                        ? Icons.priority_high_rounded
+                        : item.isIncome
+                        ? Icons.south_west_rounded
+                        : categoryIcon(item.category),
+                    color: iconColor,
+                    size: 21,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        needsReview ? 'Needs review' : item.displayMerchant,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        needsReview
+                            ? 'Source or destination wasn’t detected'
+                            : '${item.category} • ${item.originalSms.isEmpty ? 'Manual' : 'SMS'} • ${DateFormat('h:mm a').format(item.date)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: needsReview
+                              ? context.finance.warning
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  amount,
+                  style: AppTheme.money(
+                    Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: item.isIncome ? context.finance.income : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -668,19 +735,41 @@ class _TransactionDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Text(
-              item.isIncome ? 'Money received' : 'Money sent',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+          Material(
+            color: item.isIncome
+                ? Theme.of(context).colorScheme.secondaryContainer
+                : Theme.of(context).colorScheme.primaryContainer,
+            shape: ExpressiveShape.hero(),
+            child: SizedBox(
+              width: double.infinity,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 28,
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      item.isIncome
+                          ? Icons.south_west_rounded
+                          : Icons.north_east_rounded,
+                      size: 30,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      item.isIncome ? 'Money received' : 'Money sent',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${item.isIncome ? '+' : '−'}${formatAmount(item.amount, item.currency)}',
+                      style: AppTheme.money(
+                        Theme.of(context).textTheme.headlineMedium,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              '${item.isIncome ? '+' : '−'}${formatAmount(item.amount, item.currency)}',
-              style: AppTheme.money(Theme.of(context).textTheme.headlineMedium),
             ),
           ),
           const SizedBox(height: 28),

@@ -65,7 +65,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
       ),
       child: Theme(
         data: Theme.of(context),
@@ -149,7 +149,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
                       decoration: BoxDecoration(
                         color: scheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        borderRadius: ExpressiveShape.playful(0),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
