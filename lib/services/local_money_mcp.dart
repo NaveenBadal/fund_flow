@@ -11,7 +11,7 @@ typedef AppToolHandler =
       Map<String, dynamic> arguments,
     );
 
-/// Embedded MCP server for private, read-only financial tools.
+/// Embedded MCP server for private financial tools.
 ///
 /// It implements the MCP 2025-11-25 lifecycle and tool methods over an
 /// in-process JSON-RPC transport, keeping SQLite inaccessible to the model.
@@ -62,8 +62,7 @@ class LocalMoneyMcpServer {
         'name': 'flow-local-money',
         'title': 'Flow Local Money Tools',
         'version': '1.0.0',
-        'description':
-            'Private read-only access to the on-device money database',
+        'description': 'Consent-gated access to the on-device money database',
       },
     };
   }
@@ -75,9 +74,13 @@ class LocalMoneyMcpServer {
     final name = params['name']?.toString();
     final isTransactionTool =
         name == 'search_transactions' || name == 'summarize_transactions';
+    final isSourceInspectionTool = name == 'inspect_transaction_source_sms';
     final isMutationTool = _mutationToolNames.contains(name);
     final isAppTool = _appToolNames.contains(name) && appToolHandler != null;
-    if (!isTransactionTool && !isMutationTool && !isAppTool) {
+    if (!isTransactionTool &&
+        !isSourceInspectionTool &&
+        !isMutationTool &&
+        !isAppTool) {
       throw _McpProtocolError(-32602, 'Unknown tool: $name');
     }
     final arguments = params['arguments'];
@@ -104,6 +107,9 @@ class LocalMoneyMcpServer {
     if (isMutationTool) {
       return _callMutationTool(name!, arguments.cast<String, dynamic>());
     }
+    if (isSourceInspectionTool) {
+      return _inspectTransactionSource(arguments.cast<String, dynamic>());
+    }
     final query = TransactionQuery.fromJson(arguments.cast<String, dynamic>());
     if (name == 'summarize_transactions') {
       final structured = await database.summarizeTransactions(query);
@@ -120,6 +126,36 @@ class LocalMoneyMcpServer {
       return _toolError('Database result failed local filter validation.');
     }
     final structured = _searchResult(query, records);
+    return {
+      'content': [
+        {'type': 'text', 'text': jsonEncode(structured)},
+      ],
+      'structuredContent': structured,
+      'isError': false,
+    };
+  }
+
+  Future<Map<String, dynamic>> _inspectTransactionSource(
+    Map<String, dynamic> arguments,
+  ) async {
+    final id = (arguments['id'] as num?)?.toInt();
+    if (id == null) return _toolError('Transaction id is required.');
+    final transaction = await database.getExpenseById(id);
+    if (transaction == null) return _toolError('Transaction was not found.');
+    final sms = transaction.originalSms.trim();
+    if (sms.isEmpty) {
+      return _toolError(
+        'This transaction has no original SMS and cannot be re-analyzed.',
+      );
+    }
+    final structured = {
+      'transaction_id': id,
+      'current_merchant': transaction.displayMerchant,
+      'current_category': transaction.category,
+      'original_sms': sms,
+      'instruction':
+          'Infer corrections only from this SMS. Do not quote the SMS to the user.',
+    };
     return {
       'content': [
         {'type': 'text', 'text': jsonEncode(structured)},
@@ -312,6 +348,20 @@ class LocalMoneyMcpServer {
           'totals_by_currency': {'type': 'object'},
         },
         'required': ['applied_filter', 'matched_count', 'totals_by_currency'],
+      },
+    },
+    {
+      'name': 'inspect_transaction_source_sms',
+      'title': 'Re-analyze a transaction source SMS',
+      'description':
+          'Fetch one transaction original SMS for re-analysis only when the user explicitly requests it and approves sharing it with Ollama.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'integer'},
+        },
+        'required': ['id'],
+        'additionalProperties': false,
       },
     },
     {

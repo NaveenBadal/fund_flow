@@ -36,7 +36,8 @@ void main() {
           merchant: 'Cafe One',
           category: 'Food',
           date: DateTime(2026, 6, 20, 9),
-          originalSms: '',
+          originalSms:
+              'INR 200 debited from account at BLUE TOKAI on 20-06-2026.',
         ),
         Expense(
           amount: 300,
@@ -71,8 +72,16 @@ void main() {
       final matching = await database.queryTransactions(
         const TransactionQuery(category: 'Food'),
       );
-      final transactionId = matching.first.id!;
+      final transactionId = matching
+          .firstWhere((transaction) => transaction.merchant == 'Cafe One')
+          .id!;
       final mcp = LocalMoneyMcpClient(LocalMoneyMcpServer(database));
+      final source = await mcp.callTool('inspect_transaction_source_sms', {
+        'id': transactionId,
+      });
+      expect(source.isError, isFalse);
+      expect(source.structuredContent['original_sms'], contains('BLUE TOKAI'));
+
       final correction = await mcp.callTool('update_transaction', {
         'id': transactionId,
         'category': 'Dining',

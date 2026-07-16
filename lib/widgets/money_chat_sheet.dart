@@ -134,6 +134,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
         arguments['remove'] == true
             ? 'remove the ${arguments['category']} budget'
             : 'set the ${arguments['category']} budget',
+      'inspect_transaction_source_sms' =>
+        'send transaction #${arguments['id'] ?? ''} original SMS to your configured Ollama endpoint for re-analysis',
       _ => 'perform this sensitive action',
     };
     return await showDialog<bool>(
@@ -175,16 +177,16 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
     final messages = ref.watch(assistantConversationProvider).value ?? const [];
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFF090D16),
       body: SafeArea(
         child: Container(
           height: widget.fullScreen
-              ? MediaQuery.sizeOf(context).height
+              ? null
               : MediaQuery.sizeOf(context).height * .88,
-          padding: EdgeInsets.fromLTRB(20, 14, 20, 16 + bottom),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
           decoration: const BoxDecoration(color: Color(0xFF090D16)),
           child: Column(
             children: [

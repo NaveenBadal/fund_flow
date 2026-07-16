@@ -50,6 +50,7 @@ class MoneyChatService {
     'update_transaction',
     'delete_transaction',
     'manage_budget',
+    'inspect_transaction_source_sms',
   };
 
   Future<MoneyChatAnswer> ask(
@@ -88,6 +89,10 @@ class MoneyChatService {
             'For transaction corrections, creation, deletion, recurring flags, or '
             'budgets, first search when an id or exact target is not already known, '
             'then call the matching mutation tool. The host will request confirmation. '
+            'When the user explicitly asks to re-analyze a transaction from its original '
+            'SMS, first find its id, call inspect_transaction_source_sms, infer only fields '
+            'supported by that SMS, then call update_transaction with the corrections. '
+            'Never inspect source SMS for an ordinary search or summary. '
             'Never imply a mutation succeeded unless changed=true was returned. '
             'If essential date information is genuinely ambiguous, ask one short '
             'clarifying question without calling a tool. Never write SQL. Never '
@@ -98,7 +103,7 @@ class MoneyChatService {
             'app or the user’s personal finances, but understand natural wording '
             'rather than relying on keywords. Be concise and use mobile-friendly '
             'Markdown with short paragraphs and bullets. NEVER use Markdown tables. '
-            'Never expose raw SMS.',
+            'Never quote raw SMS in your answer or retain it beyond the tool interaction.',
       },
       for (final message in history.reversed.take(12).toList().reversed)
         {'role': message.user ? 'user' : 'assistant', 'content': message.text},
@@ -216,6 +221,7 @@ class MoneyChatService {
     'update_transaction' => 'transaction correction',
     'delete_transaction' => 'transaction deletion',
     'manage_budget' => 'budget control',
+    'inspect_transaction_source_sms' => 'original SMS inspection',
     _ => name.replaceAll('_', ' '),
   };
 
@@ -280,7 +286,8 @@ class MoneyChatService {
           'invents facts, or omits important insufficiency or truncation. If '
           'invalid, correct it using only the MCP results. If no tool was needed '
           'for an app-help or clarification response, verify relevance and do not '
-          'invent transaction facts.',
+          'invent transaction facts. Never include or quote an original_sms value '
+          'in the answer.',
       userPrompt:
           'QUESTION: $question\nMCP_TOOL_AUDIT: ${jsonEncode(toolAudit)}'
           '\nDRAFT: $draft',

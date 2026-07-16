@@ -312,7 +312,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       icon: Icons.chat_bubble_outline_rounded,
                       title: 'During assistant chat',
                       detail:
-                          'Raw SMS text is never sent. Only the minimum structured transaction fields returned by a local MCP query are shared.',
+                          'Ordinary questions share only structured MCP results. An original SMS is shared only when you explicitly request re-analysis and approve the confirmation.',
                     ),
                     SizedBox(height: 14),
                     _PrivacyFact(

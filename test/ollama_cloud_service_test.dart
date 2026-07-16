@@ -73,6 +73,7 @@ void main() {
       containsAll([
         'search_transactions',
         'summarize_transactions',
+        'inspect_transaction_source_sms',
         'set_theme',
         'set_amount_visibility',
       ]),
