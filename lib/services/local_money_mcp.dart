@@ -74,7 +74,7 @@ class LocalMoneyMcpServer {
     final name = params['name']?.toString();
     final isTransactionTool =
         name == 'search_transactions' || name == 'summarize_transactions';
-    final isSourceInspectionTool = name == 'inspect_transaction_source_sms';
+    final isSourceInspectionTool = name == 'reanalyze_transaction_sms';
     final isMutationTool = _mutationToolNames.contains(name);
     final isAppTool = _appToolNames.contains(name) && appToolHandler != null;
     if (!isTransactionTool &&
@@ -351,7 +351,7 @@ class LocalMoneyMcpServer {
       },
     },
     {
-      'name': 'inspect_transaction_source_sms',
+      'name': 'reanalyze_transaction_sms',
       'title': 'Re-analyze a transaction source SMS',
       'description':
           'Fetch one transaction original SMS for re-analysis only when the user explicitly requests it and approves sharing it with Ollama.',

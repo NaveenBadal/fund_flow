@@ -134,7 +134,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
         arguments['remove'] == true
             ? 'remove the ${arguments['category']} budget'
             : 'set the ${arguments['category']} budget',
-      'inspect_transaction_source_sms' =>
+      'reanalyze_transaction_sms' =>
         'send transaction #${arguments['id'] ?? ''} original SMS to your configured Ollama endpoint for re-analysis',
       _ => 'perform this sensitive action',
     };

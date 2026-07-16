@@ -73,7 +73,7 @@ void main() {
       containsAll([
         'search_transactions',
         'summarize_transactions',
-        'inspect_transaction_source_sms',
+        'reanalyze_transaction_sms',
         'set_theme',
         'set_amount_visibility',
       ]),
@@ -349,6 +349,68 @@ void main() {
       expect(answer.verified, isTrue);
     },
   );
+
+  test('SMS re-analysis must wait for a later user approval turn', () async {
+    var call = 0;
+    final mcp = _FakeMoneyMcpClient();
+    final service = MoneyChatService(
+      OllamaCloudService(
+        apiKey: 'test',
+        client: MockClient((_) async {
+          call++;
+          final message = switch (call) {
+            1 => {
+              'role': 'assistant',
+              'content': '',
+              'tool_calls': [
+                {
+                  'type': 'function',
+                  'function': {
+                    'name': 'reanalyze_transaction_sms',
+                    'arguments': {'id': 7},
+                  },
+                },
+              ],
+            },
+            2 => {
+              'role': 'assistant',
+              'content': '',
+              'tool_calls': [
+                {
+                  'type': 'function',
+                  'function': {
+                    'name': 'update_transaction',
+                    'arguments': {'id': 7, 'merchant': 'Blue Tokai'},
+                  },
+                },
+              ],
+            },
+            3 => {
+              'role': 'assistant',
+              'content':
+                  'I found Blue Tokai instead of Unknown. Would you like me to update it?',
+            },
+            _ => {
+              'role': 'assistant',
+              'content': jsonEncode({
+                'valid': true,
+                'answer':
+                    'I found Blue Tokai instead of Unknown. Would you like me to update it?',
+              }),
+            },
+          };
+          return http.Response(jsonEncode({'message': message}), 200);
+        }),
+      ),
+      mcpClient: mcp,
+      approveTool: (_, _) async => true,
+    );
+
+    final answer = await service.ask('Re-analyze transaction 7 SMS');
+
+    expect(mcp.calledTools, ['reanalyze_transaction_sms']);
+    expect(answer.text, contains('Would you like me to update it?'));
+  });
 }
 
 class _FakeMoneyMcpClient implements MoneyMcpClient {
@@ -386,6 +448,29 @@ class _FakeMoneyMcpClient implements MoneyMcpClient {
         'required': ['mode'],
       },
     ),
+    const McpToolDefinition(
+      name: 'reanalyze_transaction_sms',
+      description: 'Re-analyze one original SMS after consent.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'integer'},
+        },
+        'required': ['id'],
+      },
+    ),
+    const McpToolDefinition(
+      name: 'update_transaction',
+      description: 'Update a transaction after approval.',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'integer'},
+          'merchant': {'type': 'string'},
+        },
+        'required': ['id'],
+      },
+    ),
   ];
 
   @override
@@ -394,6 +479,18 @@ class _FakeMoneyMcpClient implements MoneyMcpClient {
     Map<String, dynamic> arguments,
   ) async {
     calledTools.add(name);
+    if (name == 'reanalyze_transaction_sms') {
+      final result = {
+        'transaction_id': arguments['id'],
+        'current_merchant': 'Unknown',
+        'original_sms': 'Paid INR 450 at BLUE TOKAI',
+      };
+      return McpToolResult(
+        content: jsonEncode(result),
+        structuredContent: result,
+        isError: false,
+      );
+    }
     if (name == 'set_theme') {
       final result = {'changed': true, 'theme': arguments['mode']};
       return McpToolResult(

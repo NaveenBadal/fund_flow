@@ -76,7 +76,7 @@ void main() {
           .firstWhere((transaction) => transaction.merchant == 'Cafe One')
           .id!;
       final mcp = LocalMoneyMcpClient(LocalMoneyMcpServer(database));
-      final source = await mcp.callTool('inspect_transaction_source_sms', {
+      final source = await mcp.callTool('reanalyze_transaction_sms', {
         'id': transactionId,
       });
       expect(source.isError, isFalse);

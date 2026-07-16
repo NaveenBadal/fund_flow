@@ -50,7 +50,7 @@ class MoneyChatService {
     'update_transaction',
     'delete_transaction',
     'manage_budget',
-    'inspect_transaction_source_sms',
+    'reanalyze_transaction_sms',
   };
 
   Future<MoneyChatAnswer> ask(
@@ -90,8 +90,11 @@ class MoneyChatService {
             'budgets, first search when an id or exact target is not already known, '
             'then call the matching mutation tool. The host will request confirmation. '
             'When the user explicitly asks to re-analyze a transaction from its original '
-            'SMS, first find its id, call inspect_transaction_source_sms, infer only fields '
-            'supported by that SMS, then call update_transaction with the corrections. '
+            'SMS, first find its id, call reanalyze_transaction_sms, and infer only fields '
+            'supported by that SMS. Then show the current and proposed values and ask whether '
+            'the user wants to update them. STOP and wait for their reply. Never call '
+            'update_transaction in the same user turn as reanalyze_transaction_sms. If the '
+            'user replies yes, call update_transaction using the previously proposed values. '
             'Never inspect source SMS for an ordinary search or summary. '
             'Never imply a mutation succeeded unless changed=true was returned. '
             'If essential date information is genuinely ambiguous, ask one short '
@@ -113,6 +116,7 @@ class MoneyChatService {
     final appliedFilters = <TransactionQuery>[];
     final sourceByKey = <String, Expense>{};
     var checkedRecords = 0;
+    var reanalyzedSmsThisTurn = false;
     String? draft;
 
     for (var turn = 0; turn < 4; turn++) {
@@ -141,6 +145,16 @@ class MoneyChatService {
             structuredContent: const {},
             isError: true,
           );
+        } else if (call.name == 'update_transaction' && reanalyzedSmsThisTurn) {
+          result = const McpToolResult(
+            content:
+                'Do not update yet. Present the proposed corrections and ask the user to approve them. Wait for the next user message.',
+            structuredContent: {
+              'changed': false,
+              'awaiting_user_confirmation': true,
+            },
+            isError: false,
+          );
         } else {
           final allowed =
               !_confirmationRequired.contains(call.name) ||
@@ -155,6 +169,9 @@ class MoneyChatService {
                 );
         }
         final structured = result.structuredContent;
+        if (call.name == 'reanalyze_transaction_sms' && !result.isError) {
+          reanalyzedSmsThisTurn = true;
+        }
         if (!result.isError) onToolCompleted?.call(call.name, structured);
         checkedRecords += (structured['matched_count'] as num?)?.toInt() ?? 0;
         if (structured['applied_filter'] is Map) {
@@ -221,7 +238,7 @@ class MoneyChatService {
     'update_transaction' => 'transaction correction',
     'delete_transaction' => 'transaction deletion',
     'manage_budget' => 'budget control',
-    'inspect_transaction_source_sms' => 'original SMS inspection',
+    'reanalyze_transaction_sms' => 'original SMS re-analysis',
     _ => name.replaceAll('_', ' '),
   };
 
