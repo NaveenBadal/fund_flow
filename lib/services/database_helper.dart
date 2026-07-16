@@ -6,6 +6,7 @@ import '../models/expense.dart';
 import '../models/ai_log.dart';
 import '../models/merchant_stats.dart';
 import '../models/savings_goal.dart';
+import '../models/transaction_query.dart';
 import 'transaction_duplicate_detector.dart';
 
 class DatabaseHelper {
@@ -314,6 +315,51 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       orderBy: 'date DESC',
     );
     return result.map(Expense.fromMap).toList();
+  }
+
+  /// Executes the bounded query language used by the money assistant.
+  /// Values are always bound parameters; model-generated SQL is never accepted.
+  Future<List<Expense>> queryTransactions(TransactionQuery query) async {
+    final db = await instance.database;
+    final clauses = <String>[];
+    final arguments = <Object?>[];
+
+    void add(String clause, Object? value) {
+      clauses.add(clause);
+      arguments.add(value);
+    }
+
+    if (query.from != null) add('date >= ?', query.from!.toIso8601String());
+    if (query.to != null) add('date <= ?', query.to!.toIso8601String());
+    if (query.merchant != null) {
+      clauses.add(
+        '(LOWER(merchant) LIKE ? OR LOWER(COALESCE(normalized_merchant, merchant)) LIKE ?)',
+      );
+      final value = '%${query.merchant!.toLowerCase()}%';
+      arguments.addAll([value, value]);
+    }
+    if (query.category != null) {
+      add('LOWER(category) = ?', query.category!.toLowerCase());
+    }
+    if (query.direction != null) add('type = ?', query.direction);
+    if (query.currency != null) add('UPPER(currency) = ?', query.currency);
+    if (query.minimumAmount != null) add('amount >= ?', query.minimumAmount);
+    if (query.maximumAmount != null) add('amount <= ?', query.maximumAmount);
+    if (query.text != null) {
+      clauses.add(
+        '(LOWER(merchant) LIKE ? OR LOWER(COALESCE(normalized_merchant, merchant)) LIKE ? '
+        'OR LOWER(category) LIKE ? OR LOWER(tags) LIKE ?)',
+      );
+      final value = '%${query.text!.toLowerCase()}%';
+      arguments.addAll([value, value, value, value]);
+    }
+    final rows = await db.query(
+      'expenses',
+      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      whereArgs: arguments,
+      orderBy: 'date DESC',
+    );
+    return rows.map(Expense.fromMap).toList();
   }
 
   Future<List<Expense>> getExpensesByMerchant(String merchant) async {

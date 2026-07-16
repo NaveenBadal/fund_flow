@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/expense.dart';
 import '../providers/expense_provider.dart';
+import '../services/local_money_mcp.dart';
 import '../services/money_chat_service.dart';
 import '../services/ollama_cloud_service.dart';
 
@@ -16,7 +16,7 @@ class MoneyChatSheet extends ConsumerStatefulWidget {
 
 class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   final _controller = TextEditingController();
-  final _messages = <({bool user, String text, int sources})>[];
+  final _messages = <({bool user, String text, int sources, bool verified})>[];
   bool _thinking = false;
 
   static const _prompts = [
@@ -45,26 +45,28 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
     if (question.isEmpty || _thinking) return;
     _controller.clear();
     setState(() {
-      _messages.add((user: true, text: question, sources: 0));
+      _messages.add((user: true, text: question, sources: 0, verified: false));
       _thinking = true;
     });
     try {
-      final expenses =
-          ref.read(expenseListProvider).asData?.value ?? <Expense>[];
       final service = MoneyChatService(
         OllamaCloudService(
           apiKey: ref.read(ollamaApiKeyProvider),
           baseUrl: ref.read(ollamaBaseUrlProvider),
           model: ref.read(ollamaModelProvider),
         ),
+        mcpClient: LocalMoneyMcpClient(
+          LocalMoneyMcpServer(ref.read(databaseProvider)),
+        ),
       );
-      final answer = await service.ask(question, expenses);
+      final answer = await service.ask(question);
       if (!mounted) return;
       setState(
         () => _messages.add((
           user: false,
           text: answer.text,
           sources: answer.sources.length,
+          verified: answer.verified,
         )),
       );
     } catch (error) {
@@ -77,6 +79,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
               ? 'Connect your AI model in Settings, then I can reason over your money.'
               : 'I could not complete that analysis. Your transaction data was not changed.',
           sources: 0,
+          verified: false,
         )),
       );
     } finally {
@@ -241,7 +244,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                               if (message.sources > 0) ...[
                                 const SizedBox(height: 10),
                                 Text(
-                                  'Checked ${message.sources} recent records',
+                                  '${message.verified ? 'Verified' : 'Checked'} against '
+                                  '${message.sources} matching local records',
                                   style: const TextStyle(
                                     color: Colors.white38,
                                     fontSize: 10,
