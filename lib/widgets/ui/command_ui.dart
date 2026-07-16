@@ -90,17 +90,21 @@ class _CommandScaffoldState extends State<CommandScaffold>
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    (widget.eyebrow ?? 'FLOW SPACE')
-                                        .toUpperCase(),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: scheme.primary,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 1.6,
-                                        ),
+                                  Flexible(
+                                    child: Text(
+                                      (widget.eyebrow ?? 'FLOW SPACE')
+                                          .toUpperCase(),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: scheme.primary,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.6,
+                                          ),
+                                    ),
                                   ),
                                 ],
                               ),

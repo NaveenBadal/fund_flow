@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../models/expense.dart';
 import '../models/transaction_query.dart';
+import '../models/budget.dart';
 import 'database_helper.dart';
 
 typedef AppToolHandler =
@@ -74,8 +75,9 @@ class LocalMoneyMcpServer {
     final name = params['name']?.toString();
     final isTransactionTool =
         name == 'search_transactions' || name == 'summarize_transactions';
+    final isMutationTool = _mutationToolNames.contains(name);
     final isAppTool = _appToolNames.contains(name) && appToolHandler != null;
-    if (!isTransactionTool && !isAppTool) {
+    if (!isTransactionTool && !isMutationTool && !isAppTool) {
       throw _McpProtocolError(-32602, 'Unknown tool: $name');
     }
     final arguments = params['arguments'];
@@ -99,14 +101,25 @@ class LocalMoneyMcpServer {
         return _toolError('App action failed: $error');
       }
     }
+    if (isMutationTool) {
+      return _callMutationTool(name!, arguments.cast<String, dynamic>());
+    }
     final query = TransactionQuery.fromJson(arguments.cast<String, dynamic>());
+    if (name == 'summarize_transactions') {
+      final structured = await database.summarizeTransactions(query);
+      return {
+        'content': [
+          {'type': 'text', 'text': jsonEncode(structured)},
+        ],
+        'structuredContent': structured,
+        'isError': false,
+      };
+    }
     final records = await database.queryTransactions(query);
     if (records.any((record) => !query.matches(record))) {
       return _toolError('Database result failed local filter validation.');
     }
-    final structured = name == 'search_transactions'
-        ? _searchResult(query, records)
-        : _summaryResult(query, records);
+    final structured = _searchResult(query, records);
     return {
       'content': [
         {'type': 'text', 'text': jsonEncode(structured)},
@@ -114,6 +127,97 @@ class LocalMoneyMcpServer {
       'structuredContent': structured,
       'isError': false,
     };
+  }
+
+  Future<Map<String, dynamic>> _callMutationTool(
+    String name,
+    Map<String, dynamic> arguments,
+  ) async {
+    try {
+      Map<String, dynamic> structured;
+      if (name == 'create_transaction') {
+        final expense = Expense(
+          amount: _positiveNumber(arguments, 'amount'),
+          currency: arguments['currency']?.toString().toUpperCase() ?? 'INR',
+          merchant: _requiredText(arguments, 'merchant'),
+          category: _requiredText(arguments, 'category'),
+          date: DateTime.parse(_requiredText(arguments, 'date')),
+          originalSms: '',
+          type: arguments['direction']?.toString() == 'income'
+              ? 'income'
+              : 'expense',
+          tags: arguments['tags']?.toString() ?? '',
+          isRecurring: arguments['recurring'] == true,
+        );
+        final id = await database.insertExpense(expense);
+        structured = {'changed': true, 'transaction_id': id};
+      } else if (name == 'update_transaction') {
+        final id = (arguments['id'] as num?)?.toInt();
+        if (id == null) throw ArgumentError('id is required');
+        final existing = await database.getExpenseById(id);
+        if (existing == null) throw ArgumentError('transaction not found');
+        final updated = existing.copyWith(
+          amount: arguments['amount'] == null
+              ? null
+              : _positiveNumber(arguments, 'amount'),
+          currency: arguments['currency']?.toString().toUpperCase(),
+          merchant: arguments['merchant']?.toString(),
+          category: arguments['category']?.toString(),
+          date: arguments['date'] == null
+              ? null
+              : DateTime.parse(arguments['date'].toString()),
+          type: arguments['direction']?.toString(),
+          tags: arguments['tags']?.toString(),
+          isRecurring: arguments['recurring'] as bool?,
+        );
+        await database.updateExpense(updated);
+        structured = {'changed': true, 'transaction_id': id};
+      } else if (name == 'delete_transaction') {
+        final id = (arguments['id'] as num?)?.toInt();
+        if (id == null) throw ArgumentError('id is required');
+        final deleted = await database.deleteExpense(id);
+        structured = {'changed': deleted == 1, 'transaction_id': id};
+      } else {
+        final category = _requiredText(arguments, 'category');
+        final remove = arguments['remove'] == true;
+        if (remove) {
+          await database.deleteBudget(category);
+        } else {
+          await database.insertOrUpdateBudget(
+            Budget(
+              category: category,
+              limitAmount: _positiveNumber(arguments, 'limit_amount'),
+              currency:
+                  arguments['currency']?.toString().toUpperCase() ?? 'INR',
+            ),
+          );
+        }
+        structured = {'changed': true, 'category': category, 'removed': remove};
+      }
+      return {
+        'content': [
+          {'type': 'text', 'text': jsonEncode(structured)},
+        ],
+        'structuredContent': structured,
+        'isError': false,
+      };
+    } catch (error) {
+      return _toolError('Transaction action failed: $error');
+    }
+  }
+
+  String _requiredText(Map<String, dynamic> values, String key) {
+    final value = values[key]?.toString().trim();
+    if (value == null || value.isEmpty) throw ArgumentError('$key is required');
+    return value;
+  }
+
+  double _positiveNumber(Map<String, dynamic> values, String key) {
+    final value = values[key] as num?;
+    if (value == null || value <= 0) {
+      throw ArgumentError('$key must be positive');
+    }
+    return value.toDouble();
   }
 
   Map<String, dynamic> _searchResult(
@@ -125,15 +229,6 @@ class LocalMoneyMcpServer {
     'totals_by_currency': _totals(records),
     'records_truncated': records.length > query.limit,
     'records': records.take(query.limit).map(_record).toList(),
-  };
-
-  Map<String, dynamic> _summaryResult(
-    TransactionQuery query,
-    List<Expense> records,
-  ) => {
-    'applied_filter': query.toJson(),
-    'matched_count': records.length,
-    'totals_by_currency': _totals(records),
   };
 
   Map<String, dynamic> _record(Expense record) => {
@@ -219,6 +314,86 @@ class LocalMoneyMcpServer {
         'required': ['applied_filter', 'matched_count', 'totals_by_currency'],
       },
     },
+    {
+      'name': 'create_transaction',
+      'title': 'Create a transaction',
+      'description':
+          'Create a manual transaction after explicit user confirmation.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'amount': {'type': 'number', 'exclusiveMinimum': 0},
+          'currency': {'type': 'string'},
+          'merchant': {'type': 'string'},
+          'category': {'type': 'string'},
+          'date': {'type': 'string', 'format': 'date-time'},
+          'direction': {
+            'type': 'string',
+            'enum': ['expense', 'income'],
+          },
+          'tags': {'type': 'string'},
+          'recurring': {'type': 'boolean'},
+        },
+        'required': ['amount', 'merchant', 'category', 'date', 'direction'],
+        'additionalProperties': false,
+      },
+    },
+    {
+      'name': 'update_transaction',
+      'title': 'Correct a transaction',
+      'description':
+          'Update only explicitly supplied fields on an existing transaction after confirmation.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'integer'},
+          'amount': {'type': 'number', 'exclusiveMinimum': 0},
+          'currency': {'type': 'string'},
+          'merchant': {'type': 'string'},
+          'category': {'type': 'string'},
+          'date': {'type': 'string', 'format': 'date-time'},
+          'direction': {
+            'type': 'string',
+            'enum': ['expense', 'income'],
+          },
+          'tags': {'type': 'string'},
+          'recurring': {'type': 'boolean'},
+        },
+        'required': ['id'],
+        'additionalProperties': false,
+      },
+    },
+    {
+      'name': 'delete_transaction',
+      'title': 'Delete a transaction',
+      'description':
+          'Permanently delete one transaction by id after explicit confirmation.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'integer'},
+        },
+        'required': ['id'],
+        'additionalProperties': false,
+      },
+    },
+    {
+      'name': 'manage_budget',
+      'title': 'Create, update, or remove a budget',
+      'description':
+          'Set a category budget or remove it after explicit confirmation.',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'category': {'type': 'string'},
+          'limit_amount': {'type': 'number', 'exclusiveMinimum': 0},
+          'currency': {'type': 'string'},
+          'remove': {'type': 'boolean'},
+        },
+        'required': ['category'],
+        'additionalProperties': false,
+      },
+    },
   ];
 
   static const _appToolNames = {
@@ -229,6 +404,13 @@ class LocalMoneyMcpServer {
     'set_notification_capture',
     'set_currency',
     'set_sync_lookback',
+  };
+
+  static const _mutationToolNames = {
+    'create_transaction',
+    'update_transaction',
+    'delete_transaction',
+    'manage_budget',
   };
 
   static final List<Map<String, dynamic>> _appTools = [
@@ -377,9 +559,51 @@ class LocalMoneyMcpServer {
 
 /// MCP client/host adapter over the embedded server transport.
 abstract interface class MoneyMcpClient {
-  Future<List<Map<String, dynamic>>> listTools();
+  Future<List<McpToolDefinition>> listTools();
 
   Future<McpToolResult> callTool(String name, Map<String, dynamic> arguments);
+}
+
+class McpToolDefinition {
+  const McpToolDefinition({
+    required this.name,
+    required this.description,
+    required this.inputSchema,
+    this.title,
+    this.outputSchema,
+  });
+
+  final String name;
+  final String? title;
+  final String description;
+  final Map<String, dynamic> inputSchema;
+  final Map<String, dynamic>? outputSchema;
+
+  factory McpToolDefinition.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString().trim();
+    final schema = json['inputSchema'];
+    if (name == null || name.isEmpty || schema is! Map) {
+      throw const FormatException('Invalid MCP tool definition.');
+    }
+    return McpToolDefinition(
+      name: name,
+      title: json['title']?.toString(),
+      description: json['description']?.toString() ?? '',
+      inputSchema: schema.cast<String, dynamic>(),
+      outputSchema: json['outputSchema'] is Map
+          ? (json['outputSchema'] as Map).cast<String, dynamic>()
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toOllamaFunction() => {
+    'type': 'function',
+    'function': {
+      'name': name,
+      'description': description,
+      'parameters': inputSchema,
+    },
+  };
 }
 
 class McpToolResult {
@@ -403,12 +627,12 @@ class LocalMoneyMcpClient implements MoneyMcpClient {
   Set<String> _tools = const {};
 
   @override
-  Future<List<Map<String, dynamic>>> listTools() async {
+  Future<List<McpToolDefinition>> listTools() async {
     await _ensureInitialized();
     final listed = await _request('tools/list', {});
     return (listed['tools'] as List<dynamic>? ?? const [])
         .whereType<Map>()
-        .map((tool) => tool.cast<String, dynamic>())
+        .map((tool) => McpToolDefinition.fromJson(tool.cast<String, dynamic>()))
         .toList();
   }
 

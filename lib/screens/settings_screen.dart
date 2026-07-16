@@ -290,6 +290,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   child: const DevelopmentUpdateDnaControl(),
                 ),
+              _DnaNode(
+                code: '06',
+                title: 'Data & AI privacy',
+                description: 'Exactly what leaves this device and when.',
+                open: _open == 'privacy',
+                onTap: () => setState(
+                  () => _open = _open == 'privacy' ? null : 'privacy',
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _PrivacyFact(
+                      icon: Icons.sms_rounded,
+                      title: 'During SMS extraction',
+                      detail:
+                          'The selected bank SMS text is sent to your configured Ollama endpoint so it can identify transaction fields.',
+                    ),
+                    SizedBox(height: 14),
+                    _PrivacyFact(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'During assistant chat',
+                      detail:
+                          'Raw SMS text is never sent. Only the minimum structured transaction fields returned by a local MCP query are shared.',
+                    ),
+                    SizedBox(height: 14),
+                    _PrivacyFact(
+                      icon: Icons.storage_rounded,
+                      title: 'On this device',
+                      detail:
+                          'Transactions, tool filtering, app settings, and verification evidence remain local unless explicitly included in an AI request.',
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -397,6 +431,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _push(Widget page) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+}
+
+class _PrivacyFact extends StatelessWidget {
+  const _PrivacyFact({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(detail, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _Expression extends StatelessWidget {

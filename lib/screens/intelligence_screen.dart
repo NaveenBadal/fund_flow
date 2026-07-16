@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/ui/command_ui.dart';
-import '../widgets/money_chat_sheet.dart';
 import 'action_inbox_screen.dart';
 
 class IntelligenceScreen extends ConsumerWidget {
@@ -26,71 +25,6 @@ class IntelligenceScreen extends ConsumerWidget {
         ),
       ],
       slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-            child: Material(
-              color: const Color(0xFF090D16),
-              borderRadius: BorderRadius.circular(34),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(34),
-                onTap: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => const MoneyChatSheet(),
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        size: 32,
-                        color: Color(0xFFC7FF4A),
-                      ),
-                      SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ASK YOUR MONEY ANYTHING',
-                              style: TextStyle(
-                                color: Color(0xFFC7FF4A),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.3,
-                              ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Start a private reasoning session',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Every answer is grounded in your actual records.',
-                              style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white54),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),

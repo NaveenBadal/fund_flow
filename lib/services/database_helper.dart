@@ -7,6 +7,7 @@ import '../models/ai_log.dart';
 import '../models/merchant_stats.dart';
 import '../models/savings_goal.dart';
 import '../models/transaction_query.dart';
+import '../models/assistant_message.dart';
 import 'transaction_duplicate_detector.dart';
 
 class DatabaseHelper {
@@ -27,7 +28,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 11,
+      version: 14,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -43,6 +44,8 @@ class DatabaseHelper {
     await _createAppMetadataTable(db);
     await _createSavingsGoalsTable(db);
     await _createDismissedActionsTable(db);
+    await _createExpenseIndexes(db);
+    await _createAssistantMessagesTable(db);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -106,6 +109,13 @@ class DatabaseHelper {
       } catch (_) {}
     }
     if (oldVersion < 11) await _createDismissedActionsTable(db);
+    if (oldVersion < 12) await _createExpenseIndexes(db);
+    if (oldVersion < 13) await _createAssistantMessagesTable(db);
+    if (oldVersion < 14) {
+      await db.execute(
+        "ALTER TABLE assistant_messages ADD COLUMN filter_details TEXT NOT NULL DEFAULT ''",
+      );
+    }
   }
 
   // ─── Table definitions ───────────────────────────────────────────────────
@@ -127,6 +137,72 @@ CREATE TABLE expenses (
   normalized_merchant TEXT    DEFAULT NULL
 )
 ''');
+  }
+
+  Future<void> _createExpenseIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_category_date ON expenses(category, date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_type_date ON expenses(type, date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_currency_date ON expenses(currency, date DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_merchant_date ON expenses(normalized_merchant, merchant, date DESC)',
+    );
+  }
+
+  Future<void> _createAssistantMessagesTable(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS assistant_messages (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  is_user   INTEGER NOT NULL,
+  text      TEXT    NOT NULL,
+  sources   INTEGER NOT NULL DEFAULT 0,
+  verified  INTEGER NOT NULL DEFAULT 0,
+  filter_details TEXT NOT NULL DEFAULT '',
+  timestamp TEXT    NOT NULL
+)
+''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_assistant_messages_time ON assistant_messages(timestamp)',
+    );
+  }
+
+  Future<List<AssistantMessage>> getAssistantMessages({int limit = 100}) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'assistant_messages',
+      orderBy: 'timestamp DESC',
+      limit: limit,
+    );
+    return rows.reversed.map(AssistantMessage.fromMap).toList();
+  }
+
+  Future<AssistantMessage> insertAssistantMessage(
+    AssistantMessage message,
+  ) async {
+    final db = await instance.database;
+    final id = await db.insert('assistant_messages', message.toMap());
+    return AssistantMessage(
+      id: id,
+      user: message.user,
+      text: message.text,
+      sources: message.sources,
+      verified: message.verified,
+      filterDetails: message.filterDetails,
+      timestamp: message.timestamp,
+    );
+  }
+
+  Future<void> clearAssistantMessages() async {
+    final db = await instance.database;
+    await db.delete('assistant_messages');
   }
 
   Future _createAiLogsTable(Database db) async {
@@ -306,6 +382,17 @@ CREATE TABLE IF NOT EXISTS app_metadata (
     return result.map((json) => Expense.fromMap(json)).toList();
   }
 
+  Future<Expense?> getExpenseById(int id) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'expenses',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : Expense.fromMap(rows.single);
+  }
+
   Future<List<Expense>> getEntriesForPeriod(DateTime from, DateTime to) async {
     final db = await instance.database;
     final result = await db.query(
@@ -321,6 +408,46 @@ CREATE TABLE IF NOT EXISTS app_metadata (
   /// Values are always bound parameters; model-generated SQL is never accepted.
   Future<List<Expense>> queryTransactions(TransactionQuery query) async {
     final db = await instance.database;
+    final filter = _transactionFilter(query);
+    final rows = await db.query(
+      'expenses',
+      where: filter.where,
+      whereArgs: filter.arguments,
+      orderBy: 'date DESC',
+    );
+    return rows.map(Expense.fromMap).toList();
+  }
+
+  Future<Map<String, dynamic>> summarizeTransactions(
+    TransactionQuery query,
+  ) async {
+    final db = await instance.database;
+    final filter = _transactionFilter(query);
+    final rows = await db.rawQuery('''
+SELECT currency, type, COUNT(*) AS record_count, COALESCE(SUM(amount), 0) AS total
+FROM expenses
+${filter.where == null ? '' : 'WHERE ${filter.where}'}
+GROUP BY currency, type
+''', filter.arguments);
+    var count = 0;
+    final totals = <String, Map<String, double>>{};
+    for (final row in rows) {
+      count += (row['record_count'] as num).toInt();
+      final currency = row['currency'].toString();
+      final type = row['type'].toString();
+      totals.putIfAbsent(currency, () => {'income': 0, 'expense': 0})[type] =
+          (row['total'] as num).toDouble();
+    }
+    return {
+      'applied_filter': query.toJson(),
+      'matched_count': count,
+      'totals_by_currency': totals,
+    };
+  }
+
+  ({String? where, List<Object?> arguments}) _transactionFilter(
+    TransactionQuery query,
+  ) {
     final clauses = <String>[];
     final arguments = <Object?>[];
 
@@ -353,13 +480,10 @@ CREATE TABLE IF NOT EXISTS app_metadata (
       final value = '%${query.text!.toLowerCase()}%';
       arguments.addAll([value, value, value, value]);
     }
-    final rows = await db.query(
-      'expenses',
+    return (
       where: clauses.isEmpty ? null : clauses.join(' AND '),
-      whereArgs: arguments,
-      orderBy: 'date DESC',
+      arguments: arguments,
     );
-    return rows.map(Expense.fromMap).toList();
   }
 
   Future<List<Expense>> getExpensesByMerchant(String merchant) async {

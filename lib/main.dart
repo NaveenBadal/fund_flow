@@ -343,12 +343,14 @@ class _AppShellState extends ConsumerState<AppShell>
   void _openChat([String? value]) {
     final prompt = (value ?? _ask.text).trim();
     _ask.clear();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          MoneyChatSheet(initialPrompt: prompt.isEmpty ? null : prompt),
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MoneyChatSheet(
+          initialPrompt: prompt.isEmpty ? null : prompt,
+          fullScreen: true,
+        ),
+      ),
     );
   }
 }

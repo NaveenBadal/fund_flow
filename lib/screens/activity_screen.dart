@@ -22,6 +22,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   final _search = TextEditingController();
   String _query = '';
   String _direction = 'all';
+  DateTimeRange? _dateRange;
+  String? _category;
 
   @override
   void dispose() {
@@ -34,7 +36,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final async = ref.watch(expenseListProvider);
     final hidden = ref.watch(privateModeProvider);
     return CommandScaffold(
-      eyebrow: 'Observed · inferred · verified',
+      eyebrow: 'Search · review · understand',
       title: 'Total Activity',
       actions: [
         IconButton(
@@ -61,8 +63,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           ),
           error: (error, _) => SliverFillRemaining(
             child: StatePanel(
-              icon: Icons.memory_rounded,
-              title: 'Memory is temporarily quiet',
+              icon: Icons.receipt_long_rounded,
+              title: 'Transactions are temporarily unavailable',
               message: '$error',
             ),
           ),
@@ -73,7 +75,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   (_direction == 'in' ? event.isIncome : !event.isIncome);
               final words = '${event.merchant} ${event.category} ${event.tags}'
                   .toLowerCase();
-              return direction && words.contains(_query);
+              final inRange =
+                  _dateRange == null ||
+                  (!event.date.isBefore(_dateRange!.start) &&
+                      event.date.isBefore(
+                        _dateRange!.end.add(const Duration(days: 1)),
+                      ));
+              final inCategory =
+                  _category == null || event.category == _category;
+              return direction &&
+                  inRange &&
+                  inCategory &&
+                  words.contains(_query);
             }).toList();
             final thisMonth = all.where((e) {
               final now = DateTime.now();
@@ -95,16 +108,39 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _MemoryLens(
-                      controller: _search,
-                      query: _query,
-                      direction: _direction,
-                      understood: understood,
-                      automated: automated,
-                      onQuery: (value) =>
-                          setState(() => _query = value.trim().toLowerCase()),
-                      onDirection: (value) =>
-                          setState(() => _direction = value),
+                    child: Column(
+                      children: [
+                        _MemoryLens(
+                          controller: _search,
+                          query: _query,
+                          direction: _direction,
+                          understood: understood,
+                          automated: automated,
+                          onQuery: (value) => setState(
+                            () => _query = value.trim().toLowerCase(),
+                          ),
+                          onDirection: (value) =>
+                              setState(() => _direction = value),
+                        ),
+                        const SizedBox(height: 12),
+                        _ActivityFilters(
+                          dateRange: _dateRange,
+                          category: _category,
+                          categories:
+                              all
+                                  .map((event) => event.category)
+                                  .toSet()
+                                  .toList()
+                                ..sort(),
+                          onDateRange: _pickDateRange,
+                          onCategory: (value) =>
+                              setState(() => _category = value),
+                          onClear: () => setState(() {
+                            _dateRange = null;
+                            _category = null;
+                          }),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -113,15 +149,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     hasScrollBody: false,
                     child: StatePanel(
                       icon: Icons.blur_off_rounded,
-                      title: 'No memory resonates',
-                      message:
-                          'Change the words or widen the signal direction.',
+                      title: 'No matching transactions',
+                      message: 'Try different words or change the type filter.',
                     ),
                   )
                 else ...[
-                  const SliverToBoxAdapter(
-                    child: SectionLabel('Memory fragments'),
-                  ),
+                  const SliverToBoxAdapter(child: SectionLabel('Transactions')),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
                     sliver: SliverList.builder(
@@ -146,6 +179,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     );
   }
 
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 10),
+      lastDate: now.add(const Duration(days: 1)),
+      initialDateRange: _dateRange,
+      helpText: 'Filter transactions by date',
+    );
+    if (selected != null && mounted) setState(() => _dateRange = selected);
+  }
+
   Future<void> _edit(Expense expense) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -166,6 +211,69 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 if (sheetContext.mounted) Navigator.pop(sheetContext);
               },
       ),
+    );
+  }
+}
+
+class _ActivityFilters extends StatelessWidget {
+  const _ActivityFilters({
+    required this.dateRange,
+    required this.category,
+    required this.categories,
+    required this.onDateRange,
+    required this.onCategory,
+    required this.onClear,
+  });
+  final DateTimeRange? dateRange;
+  final String? category;
+  final List<String> categories;
+  final VoidCallback onDateRange;
+  final ValueChanged<String?> onCategory;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = dateRange != null || category != null;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onDateRange,
+            icon: const Icon(Icons.date_range_rounded, size: 18),
+            label: Text(
+              dateRange == null
+                  ? 'Any date'
+                  : '${DateFormat('d MMM').format(dateRange!.start)} – ${DateFormat('d MMM').format(dateRange!.end)}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: PopupMenuButton<String?>(
+            onSelected: onCategory,
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: null, child: Text('All categories')),
+              for (final value in categories)
+                PopupMenuItem(value: value, child: Text(value)),
+            ],
+            child: InputChip(
+              avatar: const Icon(Icons.category_outlined, size: 18),
+              label: Text(
+                category ?? 'All categories',
+                overflow: TextOverflow.ellipsis,
+              ),
+              onPressed: null,
+            ),
+          ),
+        ),
+        if (active)
+          IconButton(
+            tooltip: 'Clear filters',
+            onPressed: onClear,
+            icon: const Icon(Icons.filter_alt_off_rounded),
+          ),
+      ],
     );
   }
 }
@@ -208,7 +316,7 @@ class _MemoryLens extends StatelessWidget {
           onChanged: onQuery,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            hintText: 'Recall “coffee last winter” or “salary”…',
+            hintText: 'Search merchant, category, tag, or salary…',
             hintStyle: const TextStyle(color: Colors.white38),
             prefixIcon: const Icon(
               Icons.manage_search_rounded,
@@ -257,11 +365,11 @@ class _MemoryLens extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '$understood understood',
+                  '$understood this month',
                   style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
                 Text(
-                  '$automated sensed automatically',
+                  '$automated imported automatically',
                   style: const TextStyle(color: Colors.white30, fontSize: 9),
                 ),
               ],
@@ -283,18 +391,28 @@ class _LensChoice extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(99),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: active ? const Color(0xFFC7FF4A) : Colors.white38,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: active,
+    label: switch (label) {
+      'ALL' => 'All transactions',
+      'OUT' => 'Expenses only',
+      'IN' => 'Income only',
+      _ => label,
+    },
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(99),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? const Color(0xFFC7FF4A) : Colors.white38,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
         ),
       ),
     ),
@@ -401,50 +519,58 @@ class _MemoryEvent extends StatelessWidget {
     final color = event.isIncome
         ? context.finance.income
         : categoryColor(event.category);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        child: Row(
-          children: [
-            Icon(
-              event.isIncome
-                  ? Icons.call_received_rounded
-                  : categoryIcon(event.category),
-              color: color,
-              size: 18,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.displayMerchant,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  Text(
-                    '${DateFormat('h:mm a').format(event.date)} · ${event.category} · ${event.originalSms.isEmpty ? 'taught' : 'sensed'}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 10,
+    final amount = hidden
+        ? 'hidden amount'
+        : '${event.isIncome ? 'income' : 'expense'} ${formatAmount(event.amount, event.currency)}';
+    return Semantics(
+      button: true,
+      label:
+          '${event.displayMerchant}, $amount, ${event.category}, ${DateFormat('d MMMM, h:mm a').format(event.date)}',
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            children: [
+              Icon(
+                event.isIncome
+                    ? Icons.call_received_rounded
+                    : categoryIcon(event.category),
+                color: color,
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.displayMerchant,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  ),
-                ],
+                    Text(
+                      '${DateFormat('h:mm a').format(event.date)} · ${event.category} · ${event.originalSms.isEmpty ? 'manual' : 'automatic'}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              hidden
-                  ? maskAmount(event.currency)
-                  : '${event.isIncome ? '+' : '−'}${formatAmount(event.amount, event.currency)}',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: event.isIncome ? color : null,
+              Text(
+                hidden
+                    ? maskAmount(event.currency)
+                    : '${event.isIncome ? '+' : '−'}${formatAmount(event.amount, event.currency)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: event.isIncome ? color : null,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

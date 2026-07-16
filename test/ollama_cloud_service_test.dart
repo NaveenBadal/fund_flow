@@ -5,11 +5,30 @@ import 'package:expense_manager/services/local_money_mcp.dart';
 import 'package:expense_manager/services/ollama_cloud_service.dart';
 import 'package:expense_manager/services/database_helper.dart';
 import 'package:expense_manager/widgets/money_chat_sheet.dart';
+import 'package:expense_manager/models/assistant_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('assistant messages round-trip through their persisted shape', () {
+    final original = AssistantMessage(
+      id: 4,
+      user: false,
+      text: 'Verified answer',
+      sources: 3,
+      verified: true,
+      timestamp: DateTime(2026, 7, 16, 10, 30),
+    );
+    final restored = AssistantMessage.fromMap(original.toMap());
+
+    expect(restored.id, 4);
+    expect(restored.text, 'Verified answer');
+    expect(restored.sources, 3);
+    expect(restored.verified, isTrue);
+    expect(restored.timestamp, original.timestamp);
+  });
+
   test('chat converts markdown tables into mobile-friendly rows', () {
     final result = mobileFriendlyMarkdown(
       '| Date | Amount |\n| --- | --- |\n| 20 Jun | ₹450 |',
@@ -242,7 +261,16 @@ void main() {
       mcpClient: mcp,
     );
 
-    final answer = await service.ask('Get my transactions from 20 June');
+    final answer = await service.ask(
+      'What about that date?',
+      history: [
+        AssistantMessage(
+          user: true,
+          text: 'Get my transactions from 20 June',
+          timestamp: DateTime(2026, 7, 16),
+        ),
+      ],
+    );
 
     expect(call, 3);
     expect(mcp.calledTools, ['search_transactions']);
@@ -252,6 +280,13 @@ void main() {
     expect(answer.appliedFilters.single.from?.day, 20);
     expect(answer.text, contains('verified transaction'));
     expect(requests.first['tools'], isNotEmpty);
+    final firstMessages = requests.first['messages'] as List;
+    expect(
+      firstMessages.any(
+        (message) => message['content'] == 'Get my transactions from 20 June',
+      ),
+      isTrue,
+    );
     final followUpMessages = requests[1]['messages'] as List;
     expect(
       followUpMessages.any((message) => message['role'] == 'tool'),
@@ -319,11 +354,11 @@ class _FakeMoneyMcpClient implements MoneyMcpClient {
   final calledTools = <String>[];
 
   @override
-  Future<List<Map<String, dynamic>>> listTools() async => [
-    {
-      'name': 'search_transactions',
-      'description': 'Search matching local transactions.',
-      'inputSchema': {
+  Future<List<McpToolDefinition>> listTools() async => [
+    const McpToolDefinition(
+      name: 'search_transactions',
+      description: 'Search matching local transactions.',
+      inputSchema: {
         'type': 'object',
         'properties': {
           'from': {
@@ -335,11 +370,11 @@ class _FakeMoneyMcpClient implements MoneyMcpClient {
           'limit': {'type': 'integer'},
         },
       },
-    },
-    {
-      'name': 'set_theme',
-      'description': 'Actually change the app theme.',
-      'inputSchema': {
+    ),
+    const McpToolDefinition(
+      name: 'set_theme',
+      description: 'Actually change the app theme.',
+      inputSchema: {
         'type': 'object',
         'properties': {
           'mode': {
@@ -349,7 +384,7 @@ class _FakeMoneyMcpClient implements MoneyMcpClient {
         },
         'required': ['mode'],
       },
-    },
+    ),
   ];
 
   @override
