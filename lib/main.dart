@@ -286,12 +286,24 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int _destination = 0;
-  late final PageController _pageController;
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    _pages = [
+      ActivityScreen(
+        key: const PageStorageKey('activity'),
+        onOpenSettings: () => _selectDestination(2),
+      ),
+      MoneyChatSheet(
+        key: const PageStorageKey('ask-flow'),
+        fullScreen: true,
+        onOpenSettings: () => _selectDestination(2),
+        onOpenActivity: () => _selectDestination(0),
+      ),
+      const SettingsScreen(key: PageStorageKey('settings')),
+    ];
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(developmentUpdateProvider.notifier).check(silent: true);
@@ -303,7 +315,6 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   void dispose() {
-    _pageController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -325,29 +336,21 @@ class _AppShellState extends ConsumerState<AppShell>
     if (value == _destination) return;
     HapticFeedback.selectionClick();
     setState(() => _destination = value);
-    _pageController.animateToPage(
-      value,
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : AppMotion.medium,
-      curve: AppMotion.emphasizedDecelerate,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final pages = PageView(
-      controller: _pageController,
-      physics: const NeverScrollableScrollPhysics(),
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final pages = Stack(
+      fit: StackFit.expand,
       children: [
-        ActivityScreen(onOpenSettings: () => _selectDestination(2)),
-        MoneyChatSheet(
-          fullScreen: true,
-          onOpenSettings: () => _selectDestination(2),
-          onOpenActivity: () => _selectDestination(0),
-        ),
-        const SettingsScreen(),
+        for (var index = 0; index < _pages.length; index++)
+          _DestinationLayer(
+            active: index == _destination,
+            reduceMotion: reduceMotion,
+            child: _pages[index],
+          ),
       ],
     );
     return LayoutBuilder(
@@ -413,6 +416,48 @@ class _AppShellState extends ConsumerState<AppShell>
           ),
         );
       },
+    );
+  }
+}
+
+/// Keeps every primary destination mounted so expensive history, Markdown, and
+/// settings trees are never constructed during a navigation animation.
+class _DestinationLayer extends StatelessWidget {
+  const _DestinationLayer({
+    required this.active,
+    required this.reduceMotion,
+    required this.child,
+  });
+
+  final bool active;
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = reduceMotion ? Duration.zero : AppMotion.fast;
+    return TickerMode(
+      enabled: active,
+      child: ExcludeSemantics(
+        excluding: !active,
+        child: IgnorePointer(
+          ignoring: !active,
+          child: FocusScope(
+            canRequestFocus: active,
+            child: AnimatedOpacity(
+              opacity: active ? 1 : 0,
+              duration: duration,
+              curve: AppMotion.emphasizedDecelerate,
+              child: AnimatedScale(
+                scale: active ? 1 : .992,
+                duration: duration,
+                curve: AppMotion.emphasizedDecelerate,
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
