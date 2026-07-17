@@ -833,42 +833,53 @@ class _FirstRunOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.primaryContainer,
-      shape: ExpressiveShape.hero(),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 30),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: scheme.onPrimaryContainer.withValues(alpha: .1),
-                borderRadius: AppRadius.all(AppRadius.lg),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(64),
+          bottomLeft: Radius.circular(64),
+          bottomRight: Radius.circular(36),
+        ),
+        boxShadow: PremiumShadows.ambient(context, color: scheme.primary),
+      ),
+      child: Material(
+        color: scheme.primaryContainer,
+        shape: ExpressiveShape.hero(),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: scheme.onPrimaryContainer.withValues(alpha: .1),
+                  borderRadius: AppRadius.all(AppRadius.lg),
+                ),
+                child: Icon(
+                  Icons.insights_rounded,
+                  color: scheme.onPrimaryContainer,
+                ),
               ),
-              child: Icon(
-                Icons.insights_rounded,
-                color: scheme.onPrimaryContainer,
+              const SizedBox(height: 24),
+              Text(
+                'Your money,\none clear timeline',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: scheme.onPrimaryContainer,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Your money,\none clear timeline',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: scheme.onPrimaryContainer,
+              const SizedBox(height: 10),
+              Text(
+                'Add your first transaction or import supported bank messages. Flow will organise the rest.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: scheme.onPrimaryContainer.withValues(alpha: .78),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Add your first transaction or import supported bank messages. Flow will organise the rest.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: scheme.onPrimaryContainer.withValues(alpha: .78),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
