@@ -436,22 +436,22 @@ class _DestinationLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duration = reduceMotion ? Duration.zero : AppMotion.fast;
-    return TickerMode(
-      enabled: active,
-      child: ExcludeSemantics(
-        excluding: !active,
-        child: IgnorePointer(
-          ignoring: !active,
-          child: FocusScope(
-            canRequestFocus: active,
-            child: AnimatedOpacity(
-              opacity: active ? 1 : 0,
-              duration: duration,
-              curve: AppMotion.emphasizedDecelerate,
-              child: AnimatedScale(
-                scale: active ? 1 : .992,
-                duration: duration,
-                curve: AppMotion.emphasizedDecelerate,
+    return AnimatedOpacity(
+      opacity: active ? 1 : 0,
+      duration: duration,
+      curve: AppMotion.emphasizedDecelerate,
+      child: AnimatedScale(
+        scale: active ? 1 : .992,
+        duration: duration,
+        curve: AppMotion.emphasizedDecelerate,
+        child: TickerMode(
+          enabled: active,
+          child: ExcludeSemantics(
+            excluding: !active,
+            child: IgnorePointer(
+              ignoring: !active,
+              child: FocusScope(
+                canRequestFocus: active,
                 child: child,
               ),
             ),
