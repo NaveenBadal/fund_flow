@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../models/ai_log.dart';
 import '../providers/expense_provider.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/ui/flow_ui.dart';
 
@@ -81,19 +84,54 @@ class LogsScreen extends ConsumerWidget {
     final yes =
         await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Clear diagnostics?'),
-            content: const Text('This only removes technical request history.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: CutSurface(
+              accent: FlowColor.coral,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CoordinateLabel(
+                    'Diagnostics / destructive',
+                    color: FlowColor.coral,
+                    line: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Clear AI trace?',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Transactions remain intact. Only technical request history is removed.',
+                    style: TextStyle(color: FlowColor.quiet(context)),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DecisionPort(
+                          label: 'KEEP TRACE',
+                          color: FlowColor.proof,
+                          onTap: () => Navigator.pop(context, false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _DecisionPort(
+                          label: 'CLEAR TRACE',
+                          color: FlowColor.coral,
+                          onTap: () => Navigator.pop(context, true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Clear'),
-              ),
-            ],
+            ),
           ),
         ) ??
         false;
@@ -108,49 +146,46 @@ class _LogEvent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = log.status.startsWith('Error');
-    final color = failed
-        ? Theme.of(context).colorScheme.error
-        : context.finance.income;
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: ContinuousRectangleBorder(
-        borderRadius: ExpressiveShape.playful(index),
-        side: BorderSide(color: color.withValues(alpha: .22)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .12),
-            borderRadius: AppRadius.all(12),
-          ),
-          child: Icon(
-            failed ? Icons.close_rounded : Icons.check_rounded,
-            color: color,
-            size: 19,
-          ),
-        ),
-        title: Text(
-          failed ? 'Extraction failed' : 'Extraction complete',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(DateFormat('d MMM · HH:mm:ss').format(log.timestamp)),
+    final color = failed ? FlowColor.coral : FlowColor.mint;
+    return CutSurface(
+      accent: color,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              children: [
-                _CodeBlock(label: 'REQUEST', value: log.requestPrompt),
-                const SizedBox(height: 10),
-                _CodeBlock(label: 'RESPONSE', value: log.responseBody),
-                const SizedBox(height: 10),
-                _CodeBlock(label: 'STATUS', value: log.status),
-              ],
-            ),
+          CoordinateLabel(
+            failed ? 'AI trace / failed' : 'AI trace / proven',
+            color: color,
+            line: true,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  failed ? 'Extraction failed' : 'Extraction complete',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '#${(index + 1).toString().padLeft(3, '0')}',
+                style: TextStyle(color: color, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            DateFormat('d MMM · HH:mm:ss').format(log.timestamp),
+            style: TextStyle(color: FlowColor.quiet(context)),
+          ),
+          const SizedBox(height: 16),
+          Column(
+            children: [
+              _CodeBlock(label: 'REQUEST', value: log.requestPrompt),
+              const SizedBox(height: 10),
+              _CodeBlock(label: 'RESPONSE', value: log.responseBody),
+              const SizedBox(height: 10),
+              _CodeBlock(label: 'STATUS', value: log.status),
+            ],
           ),
         ],
       ),
@@ -163,22 +198,17 @@ class _CodeBlock extends StatelessWidget {
   final String label;
   final String value;
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
+  Widget build(BuildContext context) => CutSurface(
+    color: FlowColor.canvas(context),
+    border: false,
     padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Theme.of(
-        context,
-      ).colorScheme.surfaceContainerHighest.withValues(alpha: .55),
-      borderRadius: AppRadius.all(AppRadius.sm),
-    ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
+            color: FlowColor.proof,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.1,
           ),
@@ -191,6 +221,36 @@ class _CodeBlock extends StatelessWidget {
           ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace', height: 1.4),
         ),
       ],
+    ),
+  );
+}
+
+class _DecisionPort extends StatelessWidget {
+  const _DecisionPort({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: CutSurface(
+      accent: color,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+            letterSpacing: .6,
+          ),
+        ),
+      ),
     ),
   );
 }

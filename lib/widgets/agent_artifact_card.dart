@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/agent_artifact.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
 import '../theme/app_tokens.dart';
 import '../utils/currency_utils.dart';
 
@@ -18,99 +21,99 @@ class AgentArtifactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (artifact.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
     final accent = _accent(context);
     return Semantics(
       container: true,
       label: artifact.title,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(34),
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(16),
-        ),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              accent.withValues(alpha: .075),
-              scheme.surfaceContainer,
-            ),
-            border: BorderDirectional(
-              start: BorderSide(color: accent, width: 4),
-            ),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: CutSurface(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: .075),
+            FlowColor.raised(context),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: .14),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(_icon, size: 20, color: accent),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+          accent: accent,
+          padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    color: accent.withValues(alpha: .14),
+                    child: Icon(_icon, size: 20, color: accent),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CoordinateLabel(
+                          'Verified / local result',
+                          color: accent,
+                        ),
+                        Text(
+                          artifact.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        if (artifact.subtitle.isNotEmpty)
                           Text(
-                            'VERIFIED LOCAL RESULT',
+                            artifact.subtitle,
                             style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: accent,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: .8,
-                                ),
+                                ?.copyWith(color: FlowColor.quiet(context)),
                           ),
-                          Text(
-                            artifact.title,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          if (artifact.subtitle.isNotEmpty)
-                            Text(
-                              artifact.subtitle,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
-                    Icon(Icons.verified_user_outlined, size: 18, color: accent),
+                  ),
+                  Icon(Icons.verified_user_outlined, size: 18, color: accent),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _content(context),
+              if (artifact.actions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final action in artifact.actions)
+                      InkWell(
+                        onTap: () => onPrompt(action),
+                        child: CutSurface(
+                          accent: accent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  action,
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 7),
+                              Icon(
+                                Icons.arrow_outward,
+                                size: 14,
+                                color: accent,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _content(context),
-                if (artifact.actions.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final action in artifact.actions)
-                        OutlinedButton.icon(
-                          onPressed: () => onPrompt(action),
-                          icon: Icon(
-                            Icons.arrow_outward_rounded,
-                            size: 16,
-                            color: accent,
-                          ),
-                          label: Text(action),
-                        ),
-                    ],
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ),
       ),

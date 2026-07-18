@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/custom_category.dart';
 import '../providers/expense_provider.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
+import '../flow_os/primitives/loom_mark.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/ui/flow_ui.dart';
 
@@ -20,17 +24,19 @@ class CustomCategoriesScreen extends ConsumerWidget {
     return FlowScaffold(
       eyebrow: 'Personalize how transactions are grouped',
       title: 'Categories',
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _open(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New category'),
-      ),
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(inset, 0, inset, 18),
-            child: const Text(
-              'Built-in categories cover the essentials. Add only the distinctions that change how you understand your spending.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Built-in categories cover the essentials. Add only distinctions that improve what Flow can explain.',
+                ),
+                const SizedBox(height: 18),
+                _CategoryCommand(onTap: () => _open(context)),
+              ],
             ),
           ),
         ),
@@ -86,7 +92,8 @@ class CustomCategoriesScreen extends ConsumerWidget {
       showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        showDragHandle: true,
+        backgroundColor: Colors.transparent,
+        showDragHandle: false,
         builder: (_) => _CategorySheet(category: category),
       );
   Future<void> _delete(
@@ -97,19 +104,54 @@ class CustomCategoriesScreen extends ConsumerWidget {
     final yes =
         await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Delete ${category.name}?'),
-            content: const Text('Existing movements keep their current label.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: CutSurface(
+              accent: FlowColor.coral,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CoordinateLabel(
+                    'Classification / destructive',
+                    color: FlowColor.coral,
+                    line: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Remove ${category.name}?',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Existing movements keep their current label.',
+                    style: TextStyle(color: FlowColor.quiet(context)),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _CategoryPort(
+                          label: 'KEEP',
+                          color: FlowColor.proof,
+                          onTap: () => Navigator.pop(context, false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _CategoryPort(
+                          label: 'REMOVE',
+                          color: FlowColor.coral,
+                          onTap: () => Navigator.pop(context, true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
-              ),
-            ],
+            ),
           ),
         ) ??
         false;
@@ -132,49 +174,44 @@ class _CategoryCell extends StatelessWidget {
   final bool horizontal;
   final VoidCallback onTap, onDelete;
   @override
-  Widget build(BuildContext context) => Material(
-    color: item.color.withValues(alpha: .11),
-    shape: ContinuousRectangleBorder(
-      borderRadius: ExpressiveShape.playful(index),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onTap,
-      onLongPress: onDelete,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: horizontal
-            ? Row(
-                children: [
-                  _CategoryIcon(item: item),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(child: _CategoryLabel(item: item)),
-                  IconButton(
-                    tooltip: 'Delete ${item.name}',
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _CategoryIcon(item: item),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: 'Delete ${item.name}',
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  _CategoryLabel(item: item),
-                ],
-              ),
-      ),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    onLongPress: onDelete,
+    child: CutSurface(
+      color: item.color.withValues(alpha: .09),
+      accent: item.color,
+      padding: const EdgeInsets.all(18),
+      child: horizontal
+          ? Row(
+              children: [
+                _CategoryIcon(item: item),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(child: _CategoryLabel(item: item)),
+                IconButton(
+                  tooltip: 'Delete ${item.name}',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _CategoryIcon(item: item),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Delete ${item.name}',
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                _CategoryLabel(item: item),
+              ],
+            ),
     ),
   );
 }
@@ -187,10 +224,7 @@ class _CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: 42,
     height: 42,
-    decoration: BoxDecoration(
-      color: item.color,
-      borderRadius: AppRadius.all(14),
-    ),
+    color: item.color,
     child: Icon(item.iconData, color: Colors.white, size: 20),
   );
 }
@@ -213,9 +247,10 @@ class _CategoryLabel extends StatelessWidget {
         ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
       ),
       Text(
-        'Custom category',
+        'AI CLASSIFICATION · CUSTOM',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          color: FlowColor.quiet(context),
+          letterSpacing: .6,
         ),
       ),
     ],
@@ -248,129 +283,122 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      4,
-      20,
-      MediaQuery.viewInsetsOf(context).bottom + 28,
-    ),
-    child: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
+  Widget build(BuildContext context) => ColoredBox(
+    color: FlowColor.canvas(context),
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        22,
+        20,
+        MediaQuery.viewInsetsOf(context).bottom + 28,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CoordinateLabel('AI / classification node', line: true),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
                   color: _color,
-                  borderRadius: AppRadius.all(18),
+                  child: Icon(_icon, color: Colors.white),
                 ),
-                child: Icon(_icon, color: Colors.white),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Text(
-                  widget.category == null ? 'Create category' : 'Edit category',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Text(
+                    widget.category == null
+                        ? 'Create category'
+                        : 'Edit category',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          TextField(
-            controller: _name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Category name'),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'COLOR',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
+              ],
             ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final color in CustomCategory.presetColors)
-                GestureDetector(
-                  onTap: () => setState(() => _color = color),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
+            const SizedBox(height: 22),
+            CutSurface(
+              accent: _color,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CoordinateLabel('Node name'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _name,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration.collapsed(
+                      hintText: 'Category name',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const CoordinateLabel('Signal color', line: true),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final color in CustomCategory.presetColors)
+                  GestureDetector(
+                    onTap: () => setState(() => _color = color),
+                    child: Container(
+                      width: 36,
+                      height: 36,
                       color: color,
-                      shape: BoxShape.circle,
-                      border: color == _color
-                          ? Border.all(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              width: 3,
+                      child: color == _color
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 18,
                             )
                           : null,
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'SYMBOL',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
+              ],
             ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final icon in CustomCategory.presetIcons)
-                InkWell(
-                  borderRadius: AppRadius.all(13),
-                  onTap: () => setState(() => _icon = icon),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
+            const SizedBox(height: 20),
+            const CoordinateLabel('Recognition symbol', line: true),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final icon in CustomCategory.presetIcons)
+                  InkWell(
+                    onTap: () => setState(() => _icon = icon),
+                    child: Container(
+                      width: 44,
+                      height: 44,
                       color: icon.codePoint == _icon.codePoint
                           ? _color.withValues(alpha: .18)
-                          : Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest,
-                      borderRadius: AppRadius.all(13),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: icon.codePoint == _icon.codePoint
-                          ? _color
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 20,
+                          : FlowColor.raised(context),
+                      child: Icon(
+                        icon,
+                        color: icon.codePoint == _icon.codePoint
+                            ? _color
+                            : FlowColor.quiet(context),
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: _save,
-              child: const Text('Save category'),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            _CategoryPort(
+              label: 'COMMIT CLASSIFICATION',
+              color: FlowColor.proof,
+              onTap: _save,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -393,4 +421,80 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
         );
     if (mounted) Navigator.pop(context);
   }
+}
+
+class _CategoryCommand extends StatelessWidget {
+  const _CategoryCommand({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: CutSurface(
+      color: FlowColor.loom.withValues(alpha: .14),
+      accent: FlowColor.proof,
+      child: Row(
+        children: [
+          const LoomMark(size: 32),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TEACH FLOW A CLASS',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .7,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Add only when AI needs a new distinction',
+                  style: TextStyle(
+                    color: FlowColor.quiet(context),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.add, color: FlowColor.proof),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CategoryPort extends StatelessWidget {
+  const _CategoryPort({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        accent: color,
+        color: color.withValues(alpha: .12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+              letterSpacing: .7,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

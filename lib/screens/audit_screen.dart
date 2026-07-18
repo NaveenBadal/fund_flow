@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../providers/expense_provider.dart';
 import '../services/database_helper.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/ui/flow_ui.dart';
 
@@ -42,23 +45,25 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                SegmentedButton<_Filter>(
-                  expandedInsets: EdgeInsets.zero,
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: _Filter.all, label: Text('All')),
-                    ButtonSegment(
-                      value: _Filter.imported,
-                      label: Text('Imported'),
-                    ),
-                    ButtonSegment(
-                      value: _Filter.skipped,
-                      label: Text('Skipped'),
-                    ),
-                  ],
-                  selected: {_filter},
-                  onSelectionChanged: (value) =>
-                      setState(() => _filter = value.first),
+                const CoordinateLabel('Evidence routing', line: true),
+                const SizedBox(height: 10),
+                Row(
+                  children: _Filter.values
+                      .map(
+                        (value) => Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              right: value == _Filter.skipped ? 0 : 7,
+                            ),
+                            child: _AuditPort(
+                              label: value.name,
+                              selected: _filter == value,
+                              onTap: () => setState(() => _filter = value),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
             ),
@@ -102,7 +107,6 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 itemCount: items.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) => _SmsEvent(
-                  index: index,
                   entry: items[index],
                   onRetry: () => _retry(items[index]['body'] as String? ?? ''),
                 ),
@@ -126,91 +130,64 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
 }
 
 class _SmsEvent extends StatelessWidget {
-  const _SmsEvent({
-    required this.index,
-    required this.entry,
-    required this.onRetry,
-  });
-  final int index;
+  const _SmsEvent({required this.entry, required this.onRetry});
   final Map<String, dynamic> entry;
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
     final imported = entry['has_expense'] == 1;
     final reason = entry['skip_reason'] as String? ?? '';
-    final color = imported
-        ? context.finance.income
-        : _reasonColor(context, reason);
+    final color = imported ? FlowColor.mint : _reasonColor(context, reason);
     final rawTime = entry['parsed_at'] as String? ?? '';
     final time = DateTime.tryParse(rawTime)?.toLocal();
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: ContinuousRectangleBorder(
-        borderRadius: ExpressiveShape.playful(index),
-        side: BorderSide(color: color.withValues(alpha: .18)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .12),
-            borderRadius: AppRadius.all(13),
-          ),
-          child: Icon(
-            imported ? Icons.receipt_long_rounded : Icons.sms_outlined,
+    return CutSurface(
+      accent: color,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CoordinateLabel(
+            imported ? 'Parsed / ledger proof' : 'Rejected / ${_label(reason)}',
             color: color,
-            size: 19,
+            line: true,
           ),
-        ),
-        title: Text(
-          entry['body'] as String? ?? '',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          time == null ? rawTime : DateFormat('d MMM · h:mm a').format(time),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .12),
-            borderRadius: AppRadius.all(99),
+          const SizedBox(height: 12),
+          Text(
+            entry['body'] as String? ?? '',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.45),
           ),
-          child: Text(
-            imported ? 'Imported' : _label(reason),
+          const SizedBox(height: 10),
+          Text(
+            time == null ? rawTime : DateFormat('d MMM · h:mm a').format(time),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
+              color: FlowColor.quiet(context),
+              letterSpacing: .7,
             ),
           ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    imported
-                        ? 'A transaction was created from this message.'
-                        : 'Skipped because: ${_label(reason)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  imported
+                      ? 'Transaction committed from this message.'
+                      : 'AI exclusion: ${_label(reason)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: FlowColor.quiet(context),
                   ),
                 ),
-                if (!imported)
-                  TextButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: const Text('Retry'),
+              ),
+              if (!imported)
+                InkWell(
+                  onTap: onRetry,
+                  child: const CoordinateLabel(
+                    'Queue again',
+                    color: FlowColor.amber,
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ],
       ),
@@ -230,6 +207,42 @@ class _SmsEvent extends StatelessWidget {
   };
   Color _reasonColor(BuildContext context, String reason) =>
       reason == 'parse_error' || reason == 'no_response'
-      ? context.finance.expense
-      : context.finance.warning;
+      ? FlowColor.coral
+      : FlowColor.amber;
+}
+
+class _AuditPort extends StatelessWidget {
+  const _AuditPort({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        color: selected
+            ? FlowColor.loom.withValues(alpha: .18)
+            : FlowColor.raised(context),
+        accent: selected ? FlowColor.proof : FlowColor.rule(context),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: Center(
+          child: Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: selected ? FlowColor.proof : FlowColor.quiet(context),
+              fontWeight: FontWeight.w900,
+              letterSpacing: .8,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
