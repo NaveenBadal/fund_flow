@@ -61,6 +61,8 @@ void main() {
       ],
     );
     expect(requestBody['model'], 'agent-model');
+    expect(requestBody['think'], 'low');
+    expect(requestBody['options'], {'temperature': 0});
     expect(requestBody['tools'], hasLength(1));
     expect(turn.toolCalls.single.name, 'settings_get');
     expect(turn.toolCalls.single.arguments, isEmpty);
@@ -156,6 +158,7 @@ void main() {
     () async {
       String? sent;
       String? returned;
+      Uri? requestUri;
       final candidate = MessageCandidate(
         sender: 'Bank',
         body: 'Payment body',
@@ -175,7 +178,10 @@ void main() {
         },
       });
       final client = AiClient(
-        client: MockClient((_) async => http.Response(responseBody, 200)),
+        client: MockClient((request) async {
+          requestUri = request.url;
+          return http.Response(responseBody, 200);
+        }),
       );
       addTearDown(client.close);
 
@@ -192,6 +198,12 @@ void main() {
 
       expect(sent, contains('Payment body'));
       expect(sent, isNot(contains('secret-not-logged')));
+      expect(requestUri?.path, '/v1/chat/completions');
+      final request = jsonDecode(sent!) as Map<String, Object?>;
+      expect(request['reasoning_effort'], 'low');
+      expect(request['temperature'], 0);
+      expect(request['max_tokens'], 2400);
+      expect(request['response_format'], isA<Map>());
       expect(returned, responseBody);
     },
   );

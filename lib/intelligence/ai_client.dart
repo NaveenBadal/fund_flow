@@ -18,6 +18,13 @@ class AiClient {
     return Uri.parse('$base/api/chat');
   }
 
+  Uri _openAiUri(String endpoint) {
+    final base = endpoint.endsWith('/')
+        ? endpoint.substring(0, endpoint.length - 1)
+        : endpoint;
+    return Uri.parse('$base/v1/chat/completions');
+  }
+
   Future<bool> validate({
     required String endpoint,
     required String apiKey,
@@ -75,17 +82,27 @@ class AiClient {
       final requestBody = jsonEncode({
         'model': model,
         'stream': false,
-        // Reasoning models (e.g. gpt-oss) otherwise spend tens of seconds and
-        // thousands of tokens thinking before a mechanical extraction, and the
-        // reasoning trace tempts them off the required schema.
-        'think': false,
-        'format': IngestionPrompt.responseSchema,
+        // Ollama Cloud does not enforce `format` on its native API. Its
+        // OpenAI-compatible endpoint supports response_format and exposes the
+        // GPT-OSS reasoning control, giving extraction both a strict contract
+        // and a small reasoning budget.
+        'reasoning_effort': 'low',
+        'temperature': 0,
+        'max_tokens': 2400,
+        'response_format': {
+          'type': 'json_schema',
+          'json_schema': {
+            'name': 'fund_flow_message_results',
+            'strict': true,
+            'schema': IngestionPrompt.responseSchema,
+          },
+        },
         'messages': messages,
       });
       onRequest?.call(requestBody);
       final response = await _client
           .post(
-            _uri(endpoint),
+            _openAiUri(endpoint),
             headers: {
               'Authorization': 'Bearer $apiKey',
               'Content-Type': 'application/json',
@@ -103,6 +120,13 @@ class AiClient {
         if (decoded is Map) {
           final message = decoded['message'];
           if (message is Map) content = message['content']?.toString();
+          final choices = decoded['choices'];
+          if (content == null && choices is List && choices.isNotEmpty) {
+            final choice = choices.first;
+            if (choice is Map && choice['message'] is Map) {
+              content = (choice['message'] as Map)['content']?.toString();
+            }
+          }
         }
         if (content == null || content.trim().isEmpty) {
           throw const IngestionSchemaException(
@@ -186,6 +210,11 @@ class _ConfiguredAiProvider implements AgentProvider {
       ..body = jsonEncode({
         'model': _model,
         'stream': true,
+        // GPT-OSS cannot disable reasoning completely. Low effort materially
+        // improves first-token latency while retaining enough planning for
+        // choosing and sequencing local MCP tools.
+        'think': 'low',
+        'options': {'temperature': 0},
         'messages': messages,
         'tools': tools.map((tool) => tool.toProviderJson()).toList(),
       });

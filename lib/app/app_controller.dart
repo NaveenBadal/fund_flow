@@ -14,11 +14,29 @@ import '../domain/import_audit.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
 import '../ingestion/ai_message_ingestion.dart';
+import '../ingestion/message_candidate.dart';
 import '../ingestion/notification_source.dart';
 import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
 import '../update/app_updater.dart';
 import 'app_state.dart';
+
+const _maximumIngestionMessages = 8;
+const _maximumIngestionCharacters = 6000;
+
+int _ingestionBatchLength(List<MessageCandidate> values, int start) {
+  var characters = 0;
+  var count = 0;
+  while (start + count < values.length && count < _maximumIngestionMessages) {
+    final value = values[start + count];
+    // Include a small allowance for IDs, timestamps and JSON field names.
+    final next = (value.sender?.length ?? 0) + value.body.length + 160;
+    if (count > 0 && characters + next > _maximumIngestionCharacters) break;
+    characters += next;
+    count++;
+  }
+  return count;
+}
 
 final storeProvider = Provider((ref) {
   final store = FundFlowStore();
@@ -150,11 +168,16 @@ class AppController extends AsyncNotifier<AppState> {
             alreadySeen: seen,
           );
       final acknowledged = <String>[];
-      for (var start = 0; start < unseen.length; start += 12) {
-        final items = unseen.skip(start).take(12).toList();
+      var batchPosition = 0;
+      for (var start = 0; start < unseen.length;) {
+        final candidateValues = unseen
+            .map((item) => item.candidate)
+            .toList(growable: false);
+        final count = _ingestionBatchLength(candidateValues, start);
+        final items = unseen.skip(start).take(count).toList();
         final batchId = await ref
             .read(storeProvider)
-            .beginImportBatch(runId: auditRunId, position: start ~/ 12);
+            .beginImportBatch(runId: auditRunId, position: batchPosition);
         await ref
             .read(storeProvider)
             .assignImportBatch(
@@ -215,6 +238,8 @@ class AppController extends AsyncNotifier<AppState> {
             acknowledged.add(item.id);
           }
         }
+        start += items.length;
+        batchPosition++;
       }
       for (final item in pending) {
         if (seen.contains(item.candidate.fingerprint)) {
@@ -421,7 +446,8 @@ class AppController extends AsyncNotifier<AppState> {
       var imported = 0;
       var checked = 0;
       var skipped = seen.length;
-      for (var start = 0; start < unseen.length; start += 12) {
+      var batchPosition = 0;
+      for (var start = 0; start < unseen.length;) {
         if (_stopImportRequested) {
           await ref
               .read(storeProvider)
@@ -452,10 +478,13 @@ class AppController extends AsyncNotifier<AppState> {
             ),
           ),
         );
-        final batch = unseen.skip(start).take(12).toList();
+        final batch = unseen
+            .skip(start)
+            .take(_ingestionBatchLength(unseen, start))
+            .toList();
         final batchId = await ref
             .read(storeProvider)
-            .beginImportBatch(runId: auditRunId, position: start ~/ 12);
+            .beginImportBatch(runId: auditRunId, position: batchPosition);
         await ref
             .read(storeProvider)
             .assignImportBatch(
@@ -521,10 +550,12 @@ class AppController extends AsyncNotifier<AppState> {
               checked: checked,
               imported: imported,
               skipped: skipped,
-              message: 'Saved batch ${(start ~/ 12) + 1}',
+              message: 'Saved batch ${batchPosition + 1}',
             ),
           ),
         );
+        start += batch.length;
+        batchPosition++;
       }
       await ref
           .read(storeProvider)
