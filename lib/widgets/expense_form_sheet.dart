@@ -142,7 +142,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
               ),
               sliver: SliverList.list(
                 children: [
-                  const CoordinateLabel('01 / direction', line: true),
+                  const CoordinateLabel('Money direction', line: true),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -168,7 +168,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                     ],
                   ),
                   const SizedBox(height: 22),
-                  const CoordinateLabel('02 / value', line: true),
+                  const CoordinateLabel('Amount', line: true),
                   const SizedBox(height: 10),
                   CutSurface(
                     accent: _amountError == null
@@ -256,7 +256,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                   ),
                   if (_amountError != null) _ErrorLine(_amountError!),
                   const SizedBox(height: 22),
-                  const CoordinateLabel('03 / identity', line: true),
+                  const CoordinateLabel('Transaction details', line: true),
                   const SizedBox(height: 10),
                   _EvidenceField(
                     label: 'SOURCE OR DESTINATION',
@@ -335,9 +335,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                   ],
                   const SizedBox(height: 28),
                   _FormCommit(
-                    label: editing
-                        ? 'COMMIT CORRECTION'
-                        : 'COMMIT MANUAL EVIDENCE',
+                    label: editing ? 'Save changes' : 'Add transaction',
                     saving: _saving,
                     onTap: _saving ? null : _save,
                   ),
@@ -622,7 +620,7 @@ class _FormCommit extends StatelessWidget {
             const SizedBox(width: 13),
             Expanded(
               child: Text(
-                saving ? 'WRITING TO LEDGER…' : label,
+                saving ? 'Saving…' : label,
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -677,7 +675,7 @@ class _SourcePanel extends StatelessWidget {
                     );
                   }
                 },
-                child: const CoordinateLabel('Copy raw evidence'),
+                child: const CoordinateLabel('Copy original message'),
               ),
             ),
           ],

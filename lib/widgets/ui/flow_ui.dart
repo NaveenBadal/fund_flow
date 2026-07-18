@@ -7,7 +7,7 @@ import '../../flow_os/primitives/loom_mark.dart';
 import '../../theme/app_tokens.dart';
 
 /// Adaptive frame for secondary evidence and control workspaces. It shares the
-/// Flow Loom grammar without impersonating a generic app bar or card page.
+/// Quiet Current composition for secondary local tools.
 class FlowScaffold extends StatelessWidget {
   const FlowScaffold({
     super.key,

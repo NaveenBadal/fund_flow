@@ -216,7 +216,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
                 const SizedBox(height: 28),
                 Text(
-                  'LOCAL RECORDS / USER CONTROLLED / PROOF BOUND',
+                  'Your records stay under your control',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
@@ -337,7 +337,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const CoordinateLabel('MODEL / REASONING PROFILE'),
+                const CoordinateLabel('AI model'),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 7,
@@ -518,7 +518,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             _SystemSheetHeader(
               coordinate: 'PRIVACY / DATA BOUNDARY',
-              title: 'WHERE EVIDENCE LIVES',
+              title: 'Where your data lives',
               description:
                   'A precise map of what Flow processes, what the configured AI receives, and what remains on this device.',
             ),

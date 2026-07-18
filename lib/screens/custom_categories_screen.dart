@@ -297,7 +297,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CoordinateLabel('AI / classification node', line: true),
+            const CoordinateLabel('AI classification', line: true),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -326,7 +326,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const CoordinateLabel('Node name'),
+                  const CoordinateLabel('Category name'),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _name,
@@ -340,7 +340,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
               ),
             ),
             const SizedBox(height: 20),
-            const CoordinateLabel('Signal color', line: true),
+            const CoordinateLabel('Color', line: true),
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
@@ -365,7 +365,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
               ],
             ),
             const SizedBox(height: 20),
-            const CoordinateLabel('Recognition symbol', line: true),
+            const CoordinateLabel('Icon', line: true),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -393,7 +393,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
             ),
             const SizedBox(height: 24),
             _CategoryPort(
-              label: 'COMMIT CLASSIFICATION',
+              label: 'Save category',
               color: FlowColor.proof,
               onTap: _save,
             ),

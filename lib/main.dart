@@ -95,7 +95,7 @@ class _AppGate extends ConsumerWidget {
                 const LoomMark(size: 48, state: LoomState.review),
                 const SizedBox(height: 16),
                 const CoordinateLabel(
-                  'Boot / settings unavailable',
+                  'Settings unavailable',
                   color: FlowColor.coral,
                 ),
                 const SizedBox(height: 10),
@@ -105,7 +105,7 @@ class _AppGate extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 _GateAction(
-                  label: 'RETRY SECURE BOOT',
+                  label: 'Try again',
                   onTap: () => ref.invalidate(settingsInitializer),
                 ),
               ],
@@ -256,7 +256,7 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
               const LoomMark(size: 72, state: LoomState.offline),
               const SizedBox(height: 24),
               const CoordinateLabel(
-                'Privacy gate / local identity',
+                'Protected with device security',
                 line: true,
               ),
               const SizedBox(height: 14),
@@ -278,7 +278,7 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
               ),
               const SizedBox(height: 28),
               _GateAction(
-                label: _authenticating ? 'PROVING IDENTITY…' : 'UNLOCK FLOW',
+                label: _authenticating ? 'Authenticating…' : 'Unlock',
                 onTap: _authenticating ? null : _authenticate,
                 icon: Icons.fingerprint,
               ),
@@ -289,7 +289,7 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
                       .read(appLockEnabledProvider.notifier)
                       .setEnabled(false),
                   child: const CoordinateLabel(
-                    'Recovery / disable app lock',
+                    'Disable app lock',
                     color: FlowColor.coral,
                   ),
                 ),

@@ -93,7 +93,7 @@ class LogsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const CoordinateLabel(
-                    'Diagnostics / destructive',
+                    'Clear technical history',
                     color: FlowColor.coral,
                     line: true,
                   ),
@@ -114,7 +114,7 @@ class LogsScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: _DecisionPort(
-                          label: 'KEEP TRACE',
+                          label: 'Cancel',
                           color: FlowColor.proof,
                           onTap: () => Navigator.pop(context, false),
                         ),
@@ -122,7 +122,7 @@ class LogsScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _DecisionPort(
-                          label: 'CLEAR TRACE',
+                          label: 'Clear history',
                           color: FlowColor.coral,
                           onTap: () => Navigator.pop(context, true),
                         ),
@@ -153,7 +153,7 @@ class _LogEvent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CoordinateLabel(
-            failed ? 'AI trace / failed' : 'AI trace / proven',
+            failed ? 'AI request failed' : 'AI request completed',
             color: color,
             line: true,
           ),

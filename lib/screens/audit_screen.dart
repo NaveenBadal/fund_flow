@@ -45,7 +45,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const CoordinateLabel('Evidence routing', line: true),
+                const CoordinateLabel('Show', line: true),
                 const SizedBox(height: 10),
                 Row(
                   children: _Filter.values
@@ -147,7 +147,7 @@ class _SmsEvent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CoordinateLabel(
-            imported ? 'Parsed / ledger proof' : 'Rejected / ${_label(reason)}',
+            imported ? 'Added to activity' : 'Skipped · ${_label(reason)}',
             color: color,
             line: true,
           ),
@@ -172,8 +172,8 @@ class _SmsEvent extends StatelessWidget {
               Expanded(
                 child: Text(
                   imported
-                      ? 'Transaction committed from this message.'
-                      : 'AI exclusion: ${_label(reason)}',
+                      ? 'A transaction was created from this message.'
+                      : 'Reason skipped: ${_label(reason)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: FlowColor.quiet(context),
                   ),
@@ -234,7 +234,7 @@ class _AuditPort extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         child: Center(
           child: Text(
-            label.toUpperCase(),
+            label[0].toUpperCase() + label.substring(1),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: selected ? FlowColor.proof : FlowColor.quiet(context),
               fontWeight: FontWeight.w900,

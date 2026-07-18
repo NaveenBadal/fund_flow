@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../foundation/flow_color.dart';
-import '../primitives/coordinate_label.dart';
-import '../primitives/cut_surface.dart';
-import '../primitives/loom_mark.dart';
 
 class AgentDecisionSheet extends StatelessWidget {
   const AgentDecisionSheet({
@@ -14,7 +11,6 @@ class AgentDecisionSheet extends StatelessWidget {
     this.notice,
     this.destructive = false,
   });
-
   final String title;
   final String description;
   final String confirmLabel;
@@ -23,85 +19,95 @@ class AgentDecisionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final signal = destructive ? FlowColor.coral : FlowColor.proof;
+    final signal = destructive
+        ? FlowColor.expense(context)
+        : FlowColor.intelligence(context);
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                LoomMark(
-                  size: 44,
-                  state: destructive ? LoomState.review : LoomState.checking,
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CoordinateLabel(
-                        destructive
-                            ? 'AGENT / DESTRUCTIVE DECISION'
-                            : 'AGENT / USER AUTHORITY',
-                        color: signal,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        title.toUpperCase(),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: FlowColor.content(context),
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            CutSurface(
-              cut: 10,
-              color: FlowColor.plane(context),
-              accent: signal,
-              padding: const EdgeInsets.all(15),
-              child: Text(
-                description,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: FlowColor.content(context),
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: FlowColor.rule(context),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
+            const SizedBox(height: 24),
+            Text(
+              destructive
+                  ? 'Please review this change'
+                  : 'Your approval is needed',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: signal),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontFamily: 'Space Grotesk',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              description,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(height: 1.5),
+            ),
             if (notice != null) ...[
-              const SizedBox(height: 11),
-              Text(
-                notice!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: FlowColor.quiet(context),
-                  height: 1.4,
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: FlowColor.plane(context),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 19,
+                      color: FlowColor.quiet(context),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        notice!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: FlowColor.quiet(context),
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
-                  child: _DecisionPort(
-                    label: 'CANCEL',
-                    onTap: () => Navigator.pop(context, false),
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
-                  child: _DecisionPort(
-                    label: confirmLabel.toUpperCase(),
-                    signal: signal,
-                    active: true,
-                    onTap: () => Navigator.pop(context, true),
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: signal),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: Text(confirmLabel),
                   ),
                 ),
               ],
@@ -111,46 +117,4 @@ class AgentDecisionSheet extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DecisionPort extends StatelessWidget {
-  const _DecisionPort({
-    required this.label,
-    required this.onTap,
-    this.signal = FlowColor.proof,
-    this.active = false,
-  });
-  final String label;
-  final VoidCallback onTap;
-  final Color signal;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: label,
-    excludeSemantics: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: CutSurface(
-        cut: 8,
-        color: active ? signal : FlowColor.plane(context),
-        accent: active ? signal : FlowColor.rule(context),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
-        child: Center(
-          child: Text(
-            active ? '$label →' : label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: active ? Colors.white : FlowColor.quiet(context),
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .7,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
 }

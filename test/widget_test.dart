@@ -96,9 +96,9 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('OPEN SMS TO FLOW?'), findsOneWidget);
-    expect(find.bySemanticsLabel('KEEP CLOSED'), findsOneWidget);
-    expect(find.bySemanticsLabel('OPEN CHANNEL →'), findsOneWidget);
+    expect(find.text('Allow access to transaction messages?'), findsOneWidget);
+    expect(find.text('Not now'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
   });
 
   testWidgets('Command Column stays bounded in compact and extended modes', (
@@ -158,8 +158,8 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.bySemanticsLabel('CANCEL'), findsOneWidget);
-    expect(find.bySemanticsLabel('APPLY'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Apply'), findsOneWidget);
   });
 
   testWidgets('Flow command rail remains bounded at 200% text', (tester) async {
