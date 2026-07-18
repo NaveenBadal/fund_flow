@@ -1,74 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
+import '../flow_os/primitives/loom_mark.dart';
 import '../providers/development_update_provider.dart';
 import '../services/development_update_service.dart';
-import '../theme/app_tokens.dart';
 
 class DevelopmentUpdateBanner extends ConsumerWidget {
   const DevelopmentUpdateBanner({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(developmentUpdateProvider);
-    if (state.phase != DevelopmentUpdatePhase.available &&
-        state.phase != DevelopmentUpdatePhase.downloading &&
-        state.phase != DevelopmentUpdatePhase.ready &&
-        state.phase != DevelopmentUpdatePhase.permissionRequired) {
+    if (!const {
+      DevelopmentUpdatePhase.available,
+      DevelopmentUpdatePhase.downloading,
+      DevelopmentUpdatePhase.ready,
+      DevelopmentUpdatePhase.permissionRequired,
+    }.contains(state.phase)) {
       return const SizedBox.shrink();
     }
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-      child: Material(
-        color: scheme.primaryContainer,
-        shape: ExpressiveShape.hero(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => showDevelopmentUpdateSheet(context),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.system_update_rounded, color: scheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        state.phase == DevelopmentUpdatePhase.ready ||
-                                state.phase ==
-                                    DevelopmentUpdatePhase.permissionRequired
-                            ? 'Development update ready'
-                            : state.phase == DevelopmentUpdatePhase.downloading
-                            ? 'Downloading update…'
-                            : '${state.update?.versionName} is available',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        state.update?.releaseNotes ??
-                            'Tap to continue the update.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (state.phase ==
-                          DevelopmentUpdatePhase.downloading) ...[
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(value: state.progress),
-                      ],
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_rounded, size: 20),
-              ],
-            ),
-          ),
-        ),
+      child: _UpdatePort(
+        label:
+            state.phase == DevelopmentUpdatePhase.ready ||
+                state.phase == DevelopmentUpdatePhase.permissionRequired
+            ? 'BUILD READY'
+            : state.phase == DevelopmentUpdatePhase.downloading
+            ? 'RECEIVING BUILD'
+            : 'BUILD AVAILABLE',
+        detail:
+            state.update?.releaseNotes ?? 'Open verified development channel',
+        progress: state.phase == DevelopmentUpdatePhase.downloading
+            ? state.progress
+            : null,
+        onTap: () => showDevelopmentUpdateSheet(context),
       ),
     );
   }
@@ -76,7 +44,6 @@ class DevelopmentUpdateBanner extends ConsumerWidget {
 
 class DevelopmentUpdateSettingsCard extends ConsumerWidget {
   const DevelopmentUpdateSettingsCard({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!githubDevelopmentUpdatesEnabled) return const SizedBox.shrink();
@@ -84,40 +51,30 @@ class DevelopmentUpdateSettingsCard extends ConsumerWidget {
     final busy =
         state.phase == DevelopmentUpdatePhase.checking ||
         state.phase == DevelopmentUpdatePhase.downloading;
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: ContinuousRectangleBorder(
-        borderRadius: ExpressiveShape.playful(1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: const Icon(Icons.system_update_alt_rounded),
-        title: const Text(
-          'Development updates',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(_status(state)),
-        trailing: busy
-            ? const Icon(Icons.hourglass_top_rounded)
-            : const Icon(Icons.chevron_right_rounded),
-        onTap: busy
-            ? null
-            : () async {
-                if (state.phase == DevelopmentUpdatePhase.idle ||
-                    state.phase == DevelopmentUpdatePhase.upToDate ||
-                    state.phase == DevelopmentUpdatePhase.error) {
-                  await ref.read(developmentUpdateProvider.notifier).check();
-                }
-                if (context.mounted) await showDevelopmentUpdateSheet(context);
-              },
-      ),
+    return _UpdatePort(
+      label: 'DEVELOPMENT CHANNEL',
+      detail: _status(state),
+      progress: state.phase == DevelopmentUpdatePhase.downloading
+          ? state.progress
+          : null,
+      onTap: busy
+          ? null
+          : () async {
+              if (state.phase == DevelopmentUpdatePhase.idle ||
+                  state.phase == DevelopmentUpdatePhase.upToDate ||
+                  state.phase == DevelopmentUpdatePhase.error) {
+                await ref.read(developmentUpdateProvider.notifier).check();
+              }
+              if (context.mounted) {
+                await showDevelopmentUpdateSheet(context);
+              }
+            },
     );
   }
 
   String _status(DevelopmentUpdateState state) => switch (state.phase) {
     DevelopmentUpdatePhase.idle => 'GitHub development channel',
-    DevelopmentUpdatePhase.checking => 'Checking GitHub…',
+    DevelopmentUpdatePhase.checking => 'Checking signed release…',
     DevelopmentUpdatePhase.upToDate =>
       '${state.installedVersion ?? 'Installed build'} is current',
     DevelopmentUpdatePhase.available =>
@@ -125,92 +82,150 @@ class DevelopmentUpdateSettingsCard extends ConsumerWidget {
     DevelopmentUpdatePhase.downloading =>
       'Downloading ${(state.progress * 100).round()}%',
     DevelopmentUpdatePhase.ready => 'Downloaded and verified',
-    DevelopmentUpdatePhase.permissionRequired =>
-      'Android install permission required',
+    DevelopmentUpdatePhase.permissionRequired => 'Android permission required',
     DevelopmentUpdatePhase.error => state.message ?? 'Update check failed',
     DevelopmentUpdatePhase.disabled => 'Disabled in this build',
   };
+}
+
+class _UpdatePort extends StatelessWidget {
+  const _UpdatePort({
+    required this.label,
+    required this.detail,
+    required this.onTap,
+    this.progress,
+  });
+  final String label, detail;
+  final VoidCallback? onTap;
+  final double? progress;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: onTap != null,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        color: FlowColor.loom.withValues(alpha: .12),
+        accent: progress == null ? FlowColor.proof : FlowColor.amber,
+        child: Row(
+          children: [
+            LoomMark(
+              size: 34,
+              state: progress == null ? LoomState.ready : LoomState.checking,
+              progress: progress,
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: FlowColor.quiet(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward, color: FlowColor.proof, size: 18),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> showDevelopmentUpdateSheet(BuildContext context) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
       builder: (_) => const _DevelopmentUpdateSheet(),
     );
 
 class _DevelopmentUpdateSheet extends ConsumerWidget {
   const _DevelopmentUpdateSheet();
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(developmentUpdateProvider);
     final update = state.update;
-    final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 52,
-              height: 52,
-              child: Material(
-                color: scheme.primaryContainer,
-                shape: ContinuousRectangleBorder(
-                  borderRadius: ExpressiveShape.playful(0),
-                ),
-                child: Icon(Icons.system_update_rounded, color: scheme.primary),
+    return ColoredBox(
+      color: FlowColor.canvas(context),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const CoordinateLabel(
+                'System / verified build channel',
+                line: true,
               ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              update == null
-                  ? 'Development updates'
-                  : 'Fund Flow ${update.versionName}',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _description(state),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                height: 1.45,
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  const LoomMark(size: 48),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      update == null
+                          ? 'Development build'
+                          : 'Fund Flow ${update.versionName}',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            if (state.phase == DevelopmentUpdatePhase.downloading) ...[
-              const SizedBox(height: 20),
-              LinearProgressIndicator(value: state.progress),
-              const SizedBox(height: 7),
-              Text('${(state.progress * 100).round()}% downloaded'),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: _action(ref, state),
-                icon: Icon(_actionIcon(state)),
-                label: Text(_actionLabel(state)),
-              ),
-            ),
-            if (state.installedVersion != null) ...[
-              const SizedBox(height: 12),
-              Center(
+              const SizedBox(height: 16),
+              CutSurface(
+                accent: state.phase == DevelopmentUpdatePhase.error
+                    ? FlowColor.coral
+                    : FlowColor.proof,
                 child: Text(
-                  'Installed ${state.installedVersion} (${state.installedBuild})',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                  _description(state),
+                  style: TextStyle(
+                    color: FlowColor.quiet(context),
+                    height: 1.45,
                   ),
                 ),
               ),
+              if (state.phase == DevelopmentUpdatePhase.downloading) ...[
+                const SizedBox(height: 14),
+                _ThreadProgress(state.progress),
+                const SizedBox(height: 6),
+                CoordinateLabel(
+                  '${(state.progress * 100).round()} / 100 received',
+                  color: FlowColor.amber,
+                ),
+              ],
+              const SizedBox(height: 20),
+              _UpdateDecision(
+                label: _actionLabel(state),
+                enabled: _action(ref, state) != null,
+                onTap: _action(ref, state),
+              ),
+              if (state.installedVersion != null) ...[
+                const SizedBox(height: 12),
+                CoordinateLabel(
+                  'Installed ${state.installedVersion} / ${state.installedBuild}',
+                  color: FlowColor.quiet(context),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -229,37 +244,84 @@ class _DevelopmentUpdateSheet extends ConsumerWidget {
           () => ref.read(developmentUpdateProvider.notifier).check(),
         _ => null,
       };
-
   String _actionLabel(DevelopmentUpdateState state) => switch (state.phase) {
-    DevelopmentUpdatePhase.available => 'Download verified update',
-    DevelopmentUpdatePhase.downloading => 'Downloading…',
-    DevelopmentUpdatePhase.ready => 'Install update',
-    DevelopmentUpdatePhase.permissionRequired => 'Allow and install',
-    DevelopmentUpdatePhase.checking => 'Checking…',
-    _ => 'Check again',
+    DevelopmentUpdatePhase.available => 'RECEIVE VERIFIED BUILD',
+    DevelopmentUpdatePhase.downloading => 'RECEIVING…',
+    DevelopmentUpdatePhase.ready => 'INSTALL VERIFIED BUILD',
+    DevelopmentUpdatePhase.permissionRequired => 'ALLOW AND INSTALL',
+    DevelopmentUpdatePhase.checking => 'CHECKING…',
+    _ => 'CHECK CHANNEL',
   };
-
-  IconData _actionIcon(DevelopmentUpdateState state) => switch (state.phase) {
-    DevelopmentUpdatePhase.available => Icons.download_rounded,
-    DevelopmentUpdatePhase.ready ||
-    DevelopmentUpdatePhase.permissionRequired => Icons.install_mobile_rounded,
-    _ => Icons.refresh_rounded,
-  };
-
   String _description(DevelopmentUpdateState state) {
     if (state.phase == DevelopmentUpdatePhase.permissionRequired) {
-      return 'Android opened “Install unknown apps.” Allow Fund Flow Dev, return here, and tap Allow and install again.';
+      return 'Android opened “Install unknown apps.” Allow Fund Flow Dev, return here, then install again.';
     }
     if (state.phase == DevelopmentUpdatePhase.ready) {
-      return 'The APK checksum is valid. Android will ask you to approve replacing the current development build.';
+      return 'Checksum proven. Android will ask you to approve replacing the current development build.';
     }
     if (state.phase == DevelopmentUpdatePhase.error) {
-      return state.message ?? 'The update channel could not be reached.';
+      return state.message ?? 'The development channel could not be reached.';
     }
     if (state.phase == DevelopmentUpdatePhase.upToDate) {
-      return 'You already have the newest published GitHub development build.';
+      return 'This is the newest published GitHub development build.';
     }
     return state.update?.releaseNotes ??
         'Check GitHub Releases for a newer signed development build.';
   }
+}
+
+class _ThreadProgress extends StatelessWidget {
+  const _ThreadProgress(this.value);
+  final double value;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (_, c) => Stack(
+      children: [
+        Container(height: 4, color: FlowColor.rule(context)),
+        Container(
+          height: 4,
+          width: c.maxWidth * value.clamp(0, 1),
+          color: FlowColor.amber,
+        ),
+      ],
+    ),
+  );
+}
+
+class _UpdateDecision extends StatelessWidget {
+  const _UpdateDecision({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+  final String label;
+  final bool enabled;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    child: CutSurface(
+      color: enabled ? FlowColor.loom : FlowColor.plane(context),
+      accent: enabled ? FlowColor.proof : FlowColor.rule(context),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: enabled ? Colors.white : FlowColor.quiet(context),
+                fontWeight: FontWeight.w900,
+                letterSpacing: .7,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward,
+            color: enabled ? FlowColor.proof : FlowColor.quiet(context),
+          ),
+        ],
+      ),
+    ),
+  );
 }

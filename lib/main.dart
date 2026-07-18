@@ -5,6 +5,10 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'flow_os/shell/command_rail.dart';
 import 'flow_os/shell/command_column.dart';
+import 'flow_os/foundation/flow_color.dart';
+import 'flow_os/primitives/coordinate_label.dart';
+import 'flow_os/primitives/cut_surface.dart';
+import 'flow_os/primitives/loom_mark.dart';
 import 'providers/expense_provider.dart';
 import 'providers/development_update_provider.dart';
 import 'providers/notification_ingestion_provider.dart';
@@ -87,16 +91,21 @@ class _AppGate extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.security_rounded, size: 42),
+                const LoomMark(size: 48, state: LoomState.review),
                 const SizedBox(height: 16),
+                const CoordinateLabel(
+                  'Boot / settings unavailable',
+                  color: FlowColor.coral,
+                ),
+                const SizedBox(height: 10),
                 const Text(
                   'Security settings could not be loaded.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref.invalidate(settingsInitializer),
-                  child: const Text('Try again'),
+                _GateAction(
+                  label: 'RETRY SECURE BOOT',
+                  onTap: () => ref.invalidate(settingsInitializer),
                 ),
               ],
             ),
@@ -234,8 +243,6 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
     if (_unlocked) return const AppShell();
 
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
     return Scaffold(
       body: Center(
         child: Padding(
@@ -243,16 +250,13 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: scheme.primaryContainer,
-                child: Icon(
-                  Icons.lock_rounded,
-                  size: 40,
-                  color: scheme.primary,
-                ),
-              ),
+              const LoomMark(size: 72, state: LoomState.offline),
               const SizedBox(height: 24),
+              const CoordinateLabel(
+                'Privacy gate / local identity',
+                line: true,
+              ),
+              const SizedBox(height: 14),
               Text(
                 'App Locked',
                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -265,23 +269,26 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: _authError == null
-                      ? scheme.onSurfaceVariant
-                      : scheme.error,
+                      ? FlowColor.quiet(context)
+                      : FlowColor.coral,
                 ),
               ),
               const SizedBox(height: 28),
-              FilledButton.icon(
-                onPressed: _authenticating ? null : _authenticate,
-                icon: const Icon(Icons.fingerprint_rounded),
-                label: Text(_authenticating ? 'Authenticating…' : 'Unlock'),
+              _GateAction(
+                label: _authenticating ? 'PROVING IDENTITY…' : 'UNLOCK FLOW',
+                onTap: _authenticating ? null : _authenticate,
+                icon: Icons.fingerprint,
               ),
               if (_authError != null) ...[
                 const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () => ref
+                InkWell(
+                  onTap: () => ref
                       .read(appLockEnabledProvider.notifier)
                       .setEnabled(false),
-                  child: const Text('Disable app lock'),
+                  child: const CoordinateLabel(
+                    'Recovery / disable app lock',
+                    color: FlowColor.coral,
+                  ),
                 ),
               ],
             ],
@@ -290,6 +297,47 @@ class _AppLockGateState extends ConsumerState<_AppLockGate>
       ),
     );
   }
+}
+
+class _GateAction extends StatelessWidget {
+  const _GateAction({
+    required this.label,
+    required this.onTap,
+    this.icon = Icons.refresh,
+  });
+  final String label;
+  final VoidCallback? onTap;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        color: onTap == null ? FlowColor.plane(context) : FlowColor.loom,
+        accent: onTap == null ? FlowColor.rule(context) : FlowColor.proof,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: onTap == null ? FlowColor.quiet(context) : FlowColor.proof,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                color: onTap == null ? FlowColor.quiet(context) : Colors.white,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .7,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 // ─── App shell ────────────────────────────────────────────────────────────

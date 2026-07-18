@@ -11,6 +11,7 @@ import '../flow_os/primitives/coordinate_label.dart';
 import '../flow_os/primitives/cut_surface.dart';
 import '../flow_os/primitives/loom_mark.dart';
 import '../flow_os/ingestion/evidence_consent_sheet.dart';
+import '../flow_os/agent/decision_sheet.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
@@ -445,24 +446,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         onReject: item.status == 'needs_review' && item.id != null
             ? () async {
                 final remove =
-                    await showDialog<bool>(
+                    await showModalBottomSheet<bool>(
                       context: sheetContext,
-                      builder: (dialogContext) => AlertDialog(
-                        title: const Text('Not a transaction?'),
-                        content: const Text(
-                          'This removes the extracted record. The source message remains in import history so Flow will not add it again.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, false),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(dialogContext, true),
-                            child: const Text('Remove record'),
-                          ),
-                        ],
+                      backgroundColor: FlowColor.canvas(sheetContext),
+                      showDragHandle: false,
+                      builder: (_) => const AgentDecisionSheet(
+                        title: 'Not a transaction?',
+                        description:
+                            'Remove this extracted record from the trusted ledger?',
+                        notice:
+                            'The source message remains in import history and Flow will not add it again.',
+                        confirmLabel: 'Remove record',
+                        destructive: true,
                       ),
                     ) ??
                     false;
