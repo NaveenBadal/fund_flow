@@ -165,17 +165,21 @@ void main() {
         receivedAt: DateTime(2026, 7, 18),
       );
       final responseBody = jsonEncode({
-        'message': {
-          'content': jsonEncode({
-            'results': [
-              {
-                'id': candidate.fingerprint,
-                'decision': 'not_transaction',
-                'reason': 'No completed movement of money.',
-              },
-            ],
-          }),
-        },
+        'choices': [
+          {
+            'message': {
+              'content': jsonEncode({
+                'results': [
+                  {
+                    'id': candidate.fingerprint,
+                    'decision': 'not_transaction',
+                    'reason': 'No completed movement of money.',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
       });
       final client = AiClient(
         client: MockClient((request) async {

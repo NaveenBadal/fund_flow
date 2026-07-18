@@ -741,7 +741,9 @@ class AppController extends AsyncNotifier<AppState> {
           .where((message) => message.text.trim().isNotEmpty)
           .toList()
           .reversed
-          .take(12)
+          // Keep the hot prompt small. Older turns remain available through
+          // the local conversation_search MCP capability when they matter.
+          .take(4)
           .toList()
           .reversed
           .map(
