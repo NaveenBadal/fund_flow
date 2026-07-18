@@ -17,6 +17,7 @@ import '../models/transaction_query.dart';
 import '../flow_os/ask/flow_masthead.dart';
 import '../flow_os/ask/query_dock.dart';
 import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/ingestion/evidence_consent_sheet.dart';
 import '../flow_os/primitives/coordinate_label.dart';
 import '../flow_os/primitives/cut_surface.dart';
 import '../flow_os/primitives/loom_mark.dart';
@@ -112,56 +113,9 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
     final proceed =
         await showModalBottomSheet<bool>(
           context: context,
-          builder: (sheetContext) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.sms_outlined,
-                    size: 34,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Analyze transaction messages',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Flow scans recent SMS on this device for supported bank and payment messages. Candidate message text is sent to your configured Ollama endpoint for extraction; structured records and provenance stay on this device.',
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Android will ask for SMS access if it has not already been granted.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(sheetContext, false),
-                          child: const Text('Not now'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () => Navigator.pop(sheetContext, true),
-                          child: const Text('Analyze messages'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+          isScrollControlled: true,
+          backgroundColor: FlowColor.canvas(context),
+          builder: (_) => const EvidenceConsentSheet(),
         ) ??
         false;
     if (!proceed || !mounted) return;
@@ -1337,7 +1291,6 @@ class _SyncStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final running = {
       SyncPhase.requestingPermissions,
       SyncPhase.fetchingSms,
@@ -1346,81 +1299,121 @@ class _SyncStateCard extends StatelessWidget {
     final error = sync.phase == SyncPhase.error;
     final incomplete = sync.failed > 0;
     final progress = sync.total > 0 ? sync.current / sync.total : null;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: error ? scheme.errorContainer : scheme.surfaceContainerHigh,
-        borderRadius: AppRadius.all(AppRadius.xl),
-      ),
+    final signal = error || incomplete
+        ? FlowColor.amber
+        : running
+        ? FlowColor.proof
+        : FlowColor.mint;
+    return CutSurface(
+      cut: 13,
+      color: FlowColor.plane(context),
+      accent: signal,
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              FlowOrb(
-                size: 40,
+              LoomMark(
+                size: 42,
                 state: error || incomplete
-                    ? FlowOrbState.attention
+                    ? LoomState.review
                     : running
-                    ? FlowOrbState.syncing
-                    : FlowOrbState.success,
+                    ? LoomState.checking
+                    : LoomState.proven,
                 progress: progress,
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: 13),
               Expanded(
-                child: Text(
-                  error
-                      ? 'Analysis needs your help'
-                      : incomplete
-                      ? 'Some messages need another pass'
-                      : running
-                      ? 'Flow is understanding messages'
-                      : 'Transaction messages updated',
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CoordinateLabel(
+                      running ? 'INGEST / ACTIVE' : 'INGEST / RESULT',
+                      color: signal,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      error
+                          ? 'Analysis needs intervention'
+                          : incomplete
+                          ? 'Some signals remain unresolved'
+                          : running
+                          ? 'Building the evidence field'
+                          : 'Evidence field updated',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: FlowColor.content(context),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 10),
           Text(
             error
                 ? sync.errorMessage ?? 'Flow could not finish this analysis.'
                 : sync.detail ?? 'Preparing analysis…',
+            style: TextStyle(color: FlowColor.quiet(context)),
           ),
-          if (running) ...[
-            if (progress != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              LinearProgressIndicator(value: progress),
-            ],
+          if (running && progress != null) ...[
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                children: [
+                  Container(
+                    height: 5,
+                    color: FlowColor.raised(context),
+                  ),
+                  Container(
+                    width: constraints.maxWidth * progress.clamp(0, 1),
+                    height: 5,
+                    color: FlowColor.proof,
+                  ),
+                ],
+              ),
+            ),
           ],
           if (sync.total > 0) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 12),
             Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+              spacing: 14,
+              runSpacing: 6,
               children: [
-                _BriefPill(label: '${sync.imported} understood'),
-                _BriefPill(label: '${sync.skipped} skipped'),
+                CoordinateLabel('${sync.imported} / UNDERSTOOD'),
+                CoordinateLabel('${sync.skipped} / SKIPPED'),
                 if (sync.failed > 0)
-                  _BriefPill(label: '${sync.failed} retryable'),
-                _BriefPill(label: '${sync.current}/${sync.total} checked'),
+                  CoordinateLabel(
+                    '${sync.failed} / RETRYABLE',
+                    color: FlowColor.amber,
+                  ),
+                CoordinateLabel('${sync.current}:${sync.total} / CHECKED'),
               ],
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: running ? onStop : onRetry,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: running ? onStop : onRetry,
               child: Text(
-                running
+                '${running
                     ? 'Stop safely'
                     : error
                     ? 'Try again'
                     : incomplete
                     ? 'Retry unfinished'
-                    : 'Sync again',
+                    : 'Sync again'} →'
+                    .toUpperCase(),
+                style: TextStyle(
+                  color: signal,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .7,
+                ),
               ),
             ),
           ),

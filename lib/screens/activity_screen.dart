@@ -1537,53 +1537,74 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              alignment: Alignment.center,
+            const CoordinateLabel('PROOF / NO MATCHING SIGNAL'),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: .06),
-                    shape: BoxShape.circle,
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  color: FlowColor.plane(context),
+                  child: Icon(icon, size: 22, color: FlowColor.proof),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    title.toUpperCase(),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: FlowColor.content(context),
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
                   ),
                 ),
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: .12),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Icon(icon, size: 36, color: scheme.primary),
               ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
             Text(
               message,
-              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
+                color: FlowColor.quiet(context),
                 height: 1.45,
               ),
             ),
-            const SizedBox(height: 24),
-            FilledButton(onPressed: onAction, child: Text(action)),
+            const SizedBox(height: 18),
+            Semantics(
+              button: true,
+              label: action,
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onAction,
+                child: CutSurface(
+                  cut: 8,
+                  color: FlowColor.loom,
+                  accent: FlowColor.proof,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 13,
+                  ),
+                  child: Text(
+                    '${action.toUpperCase()} →',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .7,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1596,51 +1617,71 @@ class _ActivityLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
       children: [
         Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: AppRadius.all(AppRadius.md),
-              ),
-              child: Icon(Icons.receipt_long_outlined, color: scheme.primary),
-            ),
-            const SizedBox(width: AppSpacing.md),
+            const LoomMark(size: 44, state: LoomState.checking),
+            const SizedBox(width: 13),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const CoordinateLabel('PROOF / ASSEMBLING'),
+                  const SizedBox(height: 3),
                   Text(
-                    'Loading activity',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Preparing local evidence',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: FlowColor.content(context),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   Text(
-                    'Preparing your local evidence',
+                    'Records appear as soon as each group is ready.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                      color: FlowColor.quiet(context),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.hourglass_top_rounded, color: scheme.primary),
           ],
         ),
-        const SizedBox(height: AppSpacing.region),
+        const SizedBox(height: 24),
         for (var index = 0; index < 5; index++) ...[
-          Container(
-            height: 76,
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHigh.withValues(
-                alpha: 1 - index * .1,
-              ),
-              borderRadius: BorderRadius.circular(AppRadius.xl),
+          CutSurface(
+            cut: index.isEven ? 10 : 6,
+            color: FlowColor.plane(context).withValues(alpha: 1 - index * .12),
+            border: false,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  color: FlowColor.raised(context),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 130,
+                        height: 8,
+                        color: FlowColor.rule(context),
+                      ),
+                      const SizedBox(height: 9),
+                      Container(
+                        width: 84,
+                        height: 5,
+                        color: FlowColor.rule(context).withValues(alpha: .6),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
