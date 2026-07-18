@@ -233,7 +233,7 @@ void main() {
     );
     await tester.pump();
 
-    final save = find.text('Add transaction').last;
+    final save = find.text('COMMIT MANUAL EVIDENCE').last;
     await tester.tap(save);
     await tester.pump();
 

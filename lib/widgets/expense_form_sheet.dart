@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
+import '../flow_os/primitives/loom_mark.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
-import '../theme/app_tokens.dart';
 import '../theme/app_theme.dart';
 import '../utils/category_utils.dart';
 
@@ -24,35 +27,27 @@ class ExpenseFormSheet extends ConsumerStatefulWidget {
 }
 
 class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
-  late final TextEditingController _amount;
-  late final TextEditingController _merchant;
-  late final TextEditingController _tags;
-  late final FocusNode _amountFocus;
-  late final FocusNode _merchantFocus;
-  late String _type;
-  late String _category;
-  late String _currency;
-  late DateTime _date;
+  late final TextEditingController _amount = TextEditingController(
+    text: widget.initialExpense == null
+        ? ''
+        : widget.initialExpense!.amount.toStringAsFixed(2),
+  );
+  late final TextEditingController _merchant = TextEditingController(
+    text: widget.initialExpense?.merchant ?? '',
+  );
+  late final TextEditingController _tags = TextEditingController(
+    text: widget.initialExpense?.tags ?? '',
+  );
+  final _amountFocus = FocusNode();
+  final _merchantFocus = FocusNode();
+  late String _type = widget.initialExpense?.type ?? 'expense';
+  late String _category = widget.initialExpense?.category ?? 'Others';
+  late String _currency =
+      widget.initialExpense?.currency ?? ref.read(preferredCurrencyProvider);
+  late DateTime _date = widget.initialExpense?.date ?? DateTime.now();
   bool _saving = false;
   String? _amountError;
   String? _merchantError;
-
-  @override
-  void initState() {
-    super.initState();
-    final item = widget.initialExpense;
-    _amount = TextEditingController(
-      text: item == null ? '' : item.amount.toStringAsFixed(2),
-    );
-    _merchant = TextEditingController(text: item?.merchant ?? '');
-    _tags = TextEditingController(text: item?.tags ?? '');
-    _amountFocus = FocusNode();
-    _merchantFocus = FocusNode();
-    _type = item?.type ?? 'expense';
-    _category = item?.category ?? 'Others';
-    _currency = item?.currency ?? ref.read(preferredCurrencyProvider);
-    _date = item?.date ?? DateTime.now();
-  }
 
   @override
   void dispose() {
@@ -70,215 +65,203 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     if (!categories.contains(_category) && categories.isNotEmpty) {
       _category = categories.first;
     }
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
-      ),
-      child: Theme(
-        data: Theme.of(context),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: .94,
-          minChildSize: .72,
-          maxChildSize: .99,
-          builder: (context, controller) => CustomScrollView(
-            controller: controller,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.initialExpense == null) ...[
-                              Text(
-                                'MANUAL FALLBACK',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: scheme.primary,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.1,
-                                    ),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-                            Text(
-                              widget.initialExpense == null
-                                  ? 'Add transaction'
-                                  : 'Edit transaction',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              widget.initialExpense == null
-                                  ? 'Enter the amount and where it came from or went to'
-                                  : 'Update the transaction details',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (widget.onDelete != null)
-                        IconButton(
-                          onPressed: _confirmDelete,
-                          icon: Icon(
-                            Icons.delete_outline_rounded,
-                            color: scheme.error,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  24,
-                  20,
-                  MediaQuery.viewInsetsOf(context).bottom + 28,
-                ),
-                sliver: SliverList.list(
+    final editing = widget.initialExpense != null;
+    return ColoredBox(
+      color: FlowColor.canvas(context),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .94,
+        minChildSize: .72,
+        maxChildSize: .99,
+        builder: (context, controller) => CustomScrollView(
+          controller: controller,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SegmentedButton<String>(
-                      expandedInsets: EdgeInsets.zero,
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: 'expense',
-                          icon: Icon(Icons.north_east_rounded),
-                          label: Text('Money out'),
-                        ),
-                        ButtonSegment(
-                          value: 'income',
-                          icon: Icon(Icons.south_west_rounded),
-                          label: Text('Money in'),
-                        ),
-                      ],
-                      selected: {_type},
-                      onSelectionChanged: (value) =>
-                          setState(() => _type = value.first),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHigh,
-                        borderRadius: AppRadius.all(AppRadius.xxl),
-                      ),
+                    const LoomMark(size: 42),
+                    const SizedBox(width: 14),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          CoordinateLabel(
+                            editing
+                                ? 'Proof / amend record'
+                                : 'Fallback / evidence correction',
+                            line: true,
+                          ),
+                          const SizedBox(height: 10),
                           Text(
-                            'Amount',
-                            style: Theme.of(context).textTheme.labelSmall
+                            editing
+                                ? 'Correct the evidence.'
+                                : 'Record what AI could not see.',
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
+                                  color: FlowColor.content(context),
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.05,
                                 ),
                           ),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              _AmountPrefix(
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _currency,
-                                    dropdownColor: scheme.surfaceContainer,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: scheme.onSurface,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                    items:
-                                        const [
-                                              'INR',
-                                              'USD',
-                                              'EUR',
-                                              'GBP',
-                                              'SGD',
-                                              'AED',
-                                            ]
-                                            .map(
-                                              (value) => DropdownMenuItem(
-                                                value: value,
-                                                child: Text(value),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged: (value) =>
-                                        setState(() => _currency = value!),
-                                  ),
+                          const SizedBox(height: 7),
+                          Text(
+                            editing
+                                ? 'Your correction becomes the trusted ledger value. Original evidence remains visible below.'
+                                : 'Optional manual input. Flow normally builds this record from connected evidence.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: FlowColor.quiet(context),
+                                  height: 1.4,
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: TextField(
-                                  controller: _amount,
-                                  focusNode: _amountFocus,
-                                  autofocus: widget.initialExpense == null,
-                                  textInputAction: TextInputAction.next,
-                                  onSubmitted: (_) =>
-                                      _merchantFocus.requestFocus(),
-                                  onChanged: (_) {
-                                    if (_amountError != null) {
-                                      setState(() => _amountError = null);
-                                    }
-                                  },
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.allow(
-                                      RegExp(r'^\d*\.?\d{0,2}'),
-                                    ),
-                                  ],
-                                  style: AppTheme.money(
-                                    Theme.of(
-                                      context,
-                                    ).textTheme.displayMedium?.copyWith(
-                                      color: scheme.onSurface,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  decoration: InputDecoration.collapsed(
-                                    hintText: '0.00',
-                                    hintStyle: TextStyle(
-                                      color: scheme.onSurface.withValues(
-                                        alpha: .24,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
-                    if (_amountError != null) ...[
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 16),
-                        child: Text(
-                          _amountError!,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: scheme.error),
+                    if (widget.onDelete != null)
+                      IconButton(
+                        onPressed: _confirmDelete,
+                        tooltip: 'Delete record',
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: FlowColor.coral,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                24,
+                20,
+                MediaQuery.viewInsetsOf(context).bottom + 28,
+              ),
+              sliver: SliverList.list(
+                children: [
+                  const CoordinateLabel('01 / direction', line: true),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FormPort(
+                          label: 'MONEY OUT',
+                          detail: 'DEBIT',
+                          selected: _type == 'expense',
+                          color: FlowColor.coral,
+                          onTap: () => setState(() => _type = 'expense'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _FormPort(
+                          label: 'MONEY IN',
+                          detail: 'CREDIT',
+                          selected: _type == 'income',
+                          color: FlowColor.mint,
+                          onTap: () => setState(() => _type = 'income'),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 20),
-                    TextField(
+                  ),
+                  const SizedBox(height: 22),
+                  const CoordinateLabel('02 / value', line: true),
+                  const SizedBox(height: 10),
+                  CutSurface(
+                    accent: _amountError == null
+                        ? FlowColor.loom
+                        : FlowColor.coral,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'DECLARED AMOUNT',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: FlowColor.quiet(context),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              ),
+                        ),
+                        Row(
+                          children: [
+                            DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _currency,
+                                dropdownColor: FlowColor.raised(context),
+                                items:
+                                    const [
+                                          'INR',
+                                          'USD',
+                                          'EUR',
+                                          'GBP',
+                                          'SGD',
+                                          'AED',
+                                        ]
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (v) =>
+                                    setState(() => _currency = v!),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: TextField(
+                                controller: _amount,
+                                focusNode: _amountFocus,
+                                autofocus: !editing,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) =>
+                                    _merchantFocus.requestFocus(),
+                                onChanged: (_) {
+                                  if (_amountError != null) {
+                                    setState(() => _amountError = null);
+                                  }
+                                },
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d{0,2}'),
+                                  ),
+                                ],
+                                style: AppTheme.money(
+                                  Theme.of(
+                                    context,
+                                  ).textTheme.displayMedium?.copyWith(
+                                    color: FlowColor.content(context),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                decoration: const InputDecoration.collapsed(
+                                  hintText: '0.00',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_amountError != null) _ErrorLine(_amountError!),
+                  const SizedBox(height: 22),
+                  const CoordinateLabel('03 / identity', line: true),
+                  const SizedBox(height: 10),
+                  _EvidenceField(
+                    label: 'SOURCE OR DESTINATION',
+                    error: _merchantError,
+                    child: TextField(
                       controller: _merchant,
                       focusNode: _merchantFocus,
                       textCapitalization: TextCapitalization.words,
@@ -288,114 +271,105 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                           setState(() => _merchantError = null);
                         }
                       },
-                      decoration: InputDecoration(
-                        labelText: 'Source or destination',
+                      decoration: const InputDecoration.collapsed(
                         hintText: 'Person, business, account, or bank',
-                        prefixIcon: const Icon(Icons.swap_horiz_rounded),
-                        errorText: _merchantError,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: categories.contains(_category)
-                          ? _category
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        prefixIcon: Icon(Icons.category_outlined),
-                      ),
-                      items: categories
-                          .map(
-                            (name) => DropdownMenuItem(
-                              value: name,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    categoryIcon(name),
-                                    size: 18,
-                                    color: categoryColor(name),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(name),
-                                ],
+                  ),
+                  const SizedBox(height: 10),
+                  _EvidenceField(
+                    label: 'CLASSIFICATION',
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: categories.contains(_category)
+                            ? _category
+                            : null,
+                        isExpanded: true,
+                        dropdownColor: FlowColor.raised(context),
+                        items: categories
+                            .map(
+                              (name) => DropdownMenuItem(
+                                value: name,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      categoryIcon(name),
+                                      size: 18,
+                                      color: categoryColor(name),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(name),
+                                  ],
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) => setState(() => _category = value!),
-                    ),
-                    const SizedBox(height: 14),
-                    Material(
-                      color: scheme.surfaceContainerLow,
-                      borderRadius: AppRadius.all(AppRadius.xl),
-                      child: ListTile(
-                        leading: const Icon(Icons.calendar_today_outlined),
-                        title: Text(
-                          DateFormat('EEEE, d MMMM yyyy').format(_date),
-                        ),
-                        subtitle: Text(DateFormat('h:mm a').format(_date)),
-                        trailing: const Icon(Icons.edit_calendar_outlined),
-                        onTap: _pickDate,
+                            )
+                            .toList(),
+                        onChanged: (v) => setState(() => _category = v!),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    TextField(
+                  ),
+                  const SizedBox(height: 10),
+                  _FormPort(
+                    label: DateFormat(
+                      'EEEE, d MMMM yyyy',
+                    ).format(_date).toUpperCase(),
+                    detail:
+                        '${DateFormat('h:mm a').format(_date)} · CHANGE TIME',
+                    selected: false,
+                    color: FlowColor.proof,
+                    onTap: _pickDate,
+                  ),
+                  const SizedBox(height: 10),
+                  _EvidenceField(
+                    label: 'OPTIONAL CONTEXT',
+                    child: TextField(
                       controller: _tags,
-                      decoration: const InputDecoration(
-                        labelText: 'Tags (optional)',
+                      decoration: const InputDecoration.collapsed(
                         hintText: 'travel, work, shared',
-                        prefixIcon: Icon(Icons.tag_rounded),
                       ),
                     ),
-                    if (widget.initialExpense != null) ...[
-                      const SizedBox(height: 20),
-                      _SourcePanel(expense: widget.initialExpense!),
-                    ],
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      height: 54,
-                      child: FilledButton.icon(
-                        onPressed: _saving ? null : _save,
-                        icon: _saving
-                            ? const Icon(Icons.hourglass_top_rounded)
-                            : const Icon(Icons.check_rounded),
-                        label: Text(
-                          widget.initialExpense == null
-                              ? 'Add transaction'
-                              : 'Save changes',
-                        ),
-                      ),
-                    ),
+                  ),
+                  if (editing) ...[
+                    const SizedBox(height: 20),
+                    _SourcePanel(expense: widget.initialExpense!),
                   ],
-                ),
+                  const SizedBox(height: 28),
+                  _FormCommit(
+                    label: editing
+                        ? 'COMMIT CORRECTION'
+                        : 'COMMIT MANUAL EVIDENCE',
+                    saving: _saving,
+                    onTap: _saving ? null : _save,
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Future<void> _pickDate() async {
-    final pickedDate = await showDatePicker(
+    final day = await showDatePicker(
       context: context,
       initialDate: _date,
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (pickedDate == null || !mounted) return;
-    final pickedTime = await showTimePicker(
+    if (day == null || !mounted) return;
+    final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_date),
       helpText: 'Choose transaction time',
     );
     if (!mounted) return;
-    final time = pickedTime ?? TimeOfDay.fromDateTime(_date);
+    final time = picked ?? TimeOfDay.fromDateTime(_date);
     setState(
       () => _date = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
+        day.year,
+        day.month,
+        day.day,
         time.hour,
         time.minute,
       ),
@@ -415,11 +389,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
         _amountError = amountError;
         _merchantError = merchantError;
       });
-      if (amountError != null) {
-        _amountFocus.requestFocus();
-      } else {
-        _merchantFocus.requestFocus();
-      }
+      (amountError != null ? _amountFocus : _merchantFocus).requestFocus();
       await HapticFeedback.heavyImpact();
       return;
     }
@@ -454,25 +424,58 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     final yes =
         await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete transaction?'),
-            content: const Text(
-              'This permanently removes it from your activity.',
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: CutSurface(
+              accent: FlowColor.coral,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CoordinateLabel(
+                    'Destructive / ledger record',
+                    color: FlowColor.coral,
+                    line: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Remove this evidence?',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This permanently removes it from Activity.',
+                    style: TextStyle(color: FlowColor.quiet(context)),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FormPort(
+                          label: 'KEEP',
+                          detail: 'RETURN',
+                          selected: false,
+                          color: FlowColor.proof,
+                          onTap: () => Navigator.pop(context, false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _FormPort(
+                          label: 'REMOVE',
+                          detail: 'PERMANENT',
+                          selected: true,
+                          color: FlowColor.coral,
+                          onTap: () => Navigator.pop(context, true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
           ),
         ) ??
         false;
@@ -480,146 +483,206 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
   }
 }
 
-class _SourcePanel extends StatelessWidget {
-  const _SourcePanel({required this.expense});
-
-  final Expense expense;
-
+class _EvidenceField extends StatelessWidget {
+  const _EvidenceField({required this.label, required this.child, this.error});
+  final String label;
+  final Widget child;
+  final String? error;
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final message = expense.originalSms.trim();
-    final hasMessage = message.isNotEmpty;
-
-    final identity = Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: scheme.primary.withValues(alpha: .1),
-            borderRadius: AppRadius.all(12),
-          ),
-          child: Icon(
-            hasMessage ? Icons.sms_outlined : Icons.edit_note_rounded,
-            size: 19,
-            color: scheme.primary,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Source',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      CutSurface(
+        accent: error == null ? FlowColor.rule(context) : FlowColor.coral,
+        padding: const EdgeInsets.fromLTRB(16, 11, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: FlowColor.quiet(context),
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
               ),
-              const SizedBox(height: 2),
-              Text(
-                hasMessage ? 'Imported from bank SMS' : 'Added manually',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: AppRadius.all(99),
-          ),
-          child: Text(
-            hasMessage ? 'SMS' : 'MANUAL',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: .7,
             ),
-          ),
+            const SizedBox(height: 8),
+            child,
+          ],
         ),
-      ],
-    );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: AppRadius.all(AppRadius.xl),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .45)),
       ),
-      child: hasMessage
-          ? Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 3,
-                ),
-                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: const Border(),
-                collapsedShape: const Border(),
-                title: identity,
+      if (error != null) _ErrorLine(error!),
+    ],
+  );
+}
+
+class _ErrorLine extends StatelessWidget {
+  const _ErrorLine(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 7, 0, 0),
+    child: Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.bodySmall?.copyWith(color: FlowColor.coral),
+    ),
+  );
+}
+
+class _FormPort extends StatelessWidget {
+  const _FormPort({
+    required this.label,
+    required this.detail,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+  final String label, detail;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        color: selected
+            ? color.withValues(alpha: .14)
+            : FlowColor.raised(context),
+        accent: selected ? color : FlowColor.rule(context),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 7,
+              height: 30,
+              color: selected ? color : FlowColor.rule(context),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest.withValues(
-                        alpha: .55,
-                      ),
-                      borderRadius: AppRadius.all(AppRadius.md),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .5,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SelectionArea(
-                          child: Text(
-                            message,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              height: 1.5,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () async {
-                              await Clipboard.setData(
-                                ClipboardData(text: message),
-                              );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Original SMS copied.'),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.copy_rounded, size: 16),
-                            label: const Text('Copy message'),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    detail,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: selected ? color : FlowColor.quiet(context),
+                      fontSize: 9,
+                      letterSpacing: 1,
                     ),
                   ),
                 ],
               ),
-            )
-          : Padding(padding: const EdgeInsets.all(16), child: identity),
-    );
-  }
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
-class _AmountPrefix extends StatelessWidget {
-  const _AmountPrefix({required this.child});
-  final Widget child;
-
+class _FormCommit extends StatelessWidget {
+  const _FormCommit({
+    required this.label,
+    required this.saving,
+    required this.onTap,
+  });
+  final String label;
+  final bool saving;
+  final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => child;
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      child: CutSurface(
+        color: FlowColor.loom,
+        accent: FlowColor.proof,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+        child: Row(
+          children: [
+            LoomMark(
+              size: 28,
+              state: saving ? LoomState.checking : LoomState.ready,
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Text(
+                saving ? 'WRITING TO LEDGER…' : label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .7,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward, color: FlowColor.proof),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SourcePanel extends StatelessWidget {
+  const _SourcePanel({required this.expense});
+  final Expense expense;
+  @override
+  Widget build(BuildContext context) {
+    final message = expense.originalSms.trim();
+    return CutSurface(
+      accent: message.isEmpty ? FlowColor.amber : FlowColor.proof,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CoordinateLabel(
+            message.isEmpty ? 'Origin / manual' : 'Origin / bank SMS',
+            color: message.isEmpty ? FlowColor.amber : FlowColor.proof,
+            line: true,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message.isEmpty
+                ? 'No external evidence is attached to this record.'
+                : message,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: FlowColor.quiet(context),
+              height: 1.5,
+            ),
+          ),
+          if (message.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: InkWell(
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: message));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Original SMS copied.')),
+                    );
+                  }
+                },
+                child: const CoordinateLabel('Copy raw evidence'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
