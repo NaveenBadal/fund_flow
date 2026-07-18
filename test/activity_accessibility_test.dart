@@ -142,12 +142,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Transaction messages become answers.'), findsOneWidget);
-    await tester.tap(find.text('Set up Flow'));
+    expect(find.text('YOUR MONEY\nLEARNS TO ANSWER.'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Set up Flow'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Connect Flow intelligence'), findsOneWidget);
-    expect(find.text('Connect intelligence'), findsOneWidget);
+    expect(find.text('ATTACH THE\nREASONING ENGINE.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Connect intelligence'), findsOneWidget);
   });
 
   testWidgets('Flow input stays visible when the keyboard opens', (

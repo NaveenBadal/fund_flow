@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
+import '../flow_os/primitives/loom_mark.dart';
 import '../models/ai_provider.dart';
 import '../providers/expense_provider.dart';
 import '../services/ollama_cloud_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
-import '../widgets/ui/flow_ui.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -50,10 +53,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final sync = ref.watch(syncProvider);
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: FlowAtmosphere(
-        alignment: const Alignment(.65, -.9),
+      body: ColoredBox(
+        color: FlowColor.canvas(context),
         child: SafeArea(
           child: Column(
             children: [
@@ -66,28 +68,45 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 child: Row(
                   children: [
-                    FlowOrb(
+                    LoomMark(
                       size: 42,
                       state: _working || sync.isAnalyzing
-                          ? FlowOrbState.thinking
-                          : FlowOrbState.ready,
+                          ? LoomState.checking
+                          : LoomState.ready,
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text(
-                        'FLOW',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          letterSpacing: 1.6,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
+                    const SizedBox(width: 13),
+                    const Expanded(
+                      child: CoordinateLabel('COMMISSION / FLOW AGENT'),
                     ),
                     Text(
-                      '${_page + 1} / $_pageCount',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      '0${_page + 1}:0$_pageCount',
+                      style: TextStyle(
+                        color: FlowColor.proof,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .7,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.page,
+                ),
+                child: Row(
+                  children: [
+                    for (var index = 0; index < _pageCount; index++) ...[
+                      Expanded(
+                        child: Container(
+                          height: index == _page ? 3 : 1,
+                          color: index <= _page
+                              ? FlowColor.proof
+                              : FlowColor.rule(context),
+                        ),
+                      ),
+                      if (index != _pageCount - 1) const SizedBox(width: 5),
+                    ],
                   ],
                 ),
               ),
@@ -305,7 +324,7 @@ class _OnboardingSignal extends StatelessWidget {
         Text(
           'MESSAGE',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white60,
+            color: FlowColor.quiet(context),
             fontWeight: FontWeight.w900,
             letterSpacing: 1,
           ),
@@ -328,7 +347,7 @@ class _OnboardingSignal extends StatelessWidget {
           '₹ 1,240  ·  FOOD',
           style: AppTheme.money(
             Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
+              color: FlowColor.content(context),
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -337,7 +356,7 @@ class _OnboardingSignal extends StatelessWidget {
         Text(
           'PROOF ATTACHED',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white70,
+            color: FlowColor.mint,
             fontSize: 9,
             fontWeight: FontWeight.w800,
             letterSpacing: .8,
@@ -345,39 +364,31 @@ class _OnboardingSignal extends StatelessWidget {
         ),
       ],
     );
-    return Container(
+    return SizedBox(
       height: largeText ? 520 : 224,
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [FlowPalette.intelligence, Color(0xFF302491)],
-        ),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(22),
-          topRight: Radius.circular(58),
-          bottomLeft: Radius.circular(58),
-          bottomRight: Radius.circular(22),
-        ),
+      child: CutSurface(
+        cut: 20,
+        color: FlowColor.plane(context),
+        accent: FlowColor.proof,
+        padding: const EdgeInsets.all(22),
+        child: largeText
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const LoomMark(size: 64, state: LoomState.proven),
+                  const SizedBox(height: 18),
+                  Expanded(child: details),
+                ],
+              )
+            : Row(
+                children: [
+                  const LoomMark(size: 86, state: LoomState.proven),
+                  const SizedBox(width: 20),
+                  Expanded(child: details),
+                ],
+              ),
       ),
-      child: largeText
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const FlowOrb(size: 64),
-                const SizedBox(height: 18),
-                Expanded(child: details),
-              ],
-            )
-          : Row(
-              children: [
-                const FlowOrb(size: 86),
-                const SizedBox(width: 20),
-                Expanded(child: details),
-              ],
-            ),
     );
   }
 }
@@ -390,13 +401,7 @@ class _SignalLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FractionallySizedBox(
     widthFactor: widthFactor,
-    child: Container(
-      height: 7,
-      decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(4),
-      ),
-    ),
+    child: Container(height: 7, color: FlowColor.rule(context)),
   );
 }
 
@@ -405,7 +410,6 @@ class _PromiseStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.page,
@@ -418,24 +422,24 @@ class _PromiseStage extends StatelessWidget {
         children: [
           const _OnboardingSignal(),
           const SizedBox(height: AppSpacing.region),
+          const CoordinateLabel('PROMISE / EVIDENCE-BACKED AI'),
+          const SizedBox(height: 10),
           Text(
-            'YOUR MONEY, UNDERSTOOD',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: scheme.primary,
-              letterSpacing: 1.2,
+            'YOUR MONEY\nLEARNS TO ANSWER.',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              color: FlowColor.content(context),
+              fontWeight: FontWeight.w900,
+              height: .98,
+              letterSpacing: -.8,
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Transaction messages become answers.',
-            style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Flow uses AI to understand bank SMS, show what changed, and answer real questions about your money with evidence.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+            'Flow turns bank messages into a private evidence network, reasons across it, and shows the proof behind every financial answer.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: FlowColor.quiet(context),
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -468,23 +472,29 @@ class _ConnectionStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.page),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xxl),
+          const CoordinateLabel('INTELLIGENCE / ATTACH'),
+          const SizedBox(height: 9),
           Text(
-            'Connect Flow intelligence',
-            style: Theme.of(context).textTheme.headlineLarge,
+            'ATTACH THE\nREASONING ENGINE.',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+              color: FlowColor.content(context),
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Flow needs an Ollama connection to understand messages and answer questions. Your credential is stored securely on this device.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: FlowColor.quiet(context),
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: AppSpacing.section),
           TextField(
@@ -556,27 +566,36 @@ class _SmsStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.page),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xxl),
-          Icon(Icons.sms_rounded, size: 54, color: scheme.primary),
+          LoomMark(
+            size: 58,
+            state: aiReady ? LoomState.review : LoomState.offline,
+          ),
           const SizedBox(height: AppSpacing.section),
+          const CoordinateLabel('CHANNEL / TRANSACTION SMS'),
+          const SizedBox(height: 8),
           Text(
-            'Connect transaction SMS',
-            style: Theme.of(context).textTheme.headlineLarge,
+            'OPEN AN EVIDENCE\nCHANNEL.',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+              color: FlowColor.content(context),
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             aiReady
                 ? 'Flow will scan recent messages on this device for supported bank and payment transactions, then analyze those candidates with your connected AI.'
                 : 'AI is not connected, so Flow cannot analyze transaction messages yet. You can connect it from Flow after setup.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: FlowColor.quiet(context),
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: AppSpacing.region),
           const _TrustRow(
@@ -616,7 +635,6 @@ class _AnalysisStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final progress = sync.total == 0 ? null : sync.current / sync.total;
     final complete = sync.phase == SyncPhase.complete;
     final error = sync.phase == SyncPhase.error;
@@ -626,18 +644,27 @@ class _AnalysisStage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppSpacing.xxl),
-          FlowOrb(
+          LoomMark(
             size: 64,
             state: complete
-                ? FlowOrbState.success
+                ? LoomState.proven
                 : error
-                ? FlowOrbState.attention
+                ? LoomState.review
                 : aiReady
-                ? FlowOrbState.syncing
-                : FlowOrbState.offline,
+                ? LoomState.checking
+                : LoomState.offline,
             progress: progress,
           ),
           const SizedBox(height: AppSpacing.section),
+          CoordinateLabel(
+            complete
+                ? 'COMMISSION / COMPLETE'
+                : error
+                ? 'COMMISSION / INTERRUPTED'
+                : 'COMMISSION / BUILDING PROOF',
+            color: error ? FlowColor.amber : FlowColor.proof,
+          ),
+          const SizedBox(height: 8),
           Text(
             complete
                 ? 'Your first brief is ready'
@@ -646,7 +673,11 @@ class _AnalysisStage extends StatelessWidget {
                 : aiReady
                 ? 'Understanding your messages'
                 : 'Connect AI to start analysis',
-            style: Theme.of(context).textTheme.headlineLarge,
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+              color: FlowColor.content(context),
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -659,13 +690,24 @@ class _AnalysisStage extends StatelessWidget {
                       'Preparing a private financial picture from your transaction messages.'
                 : 'The core SMS analysis and Flow agent require an AI connection.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: error ? scheme.error : scheme.onSurfaceVariant,
+              color: error ? FlowColor.amber : FlowColor.quiet(context),
             ),
           ),
           const SizedBox(height: AppSpacing.region),
           if (!complete && !error && aiReady) ...[
             if (progress != null) ...[
-              LinearProgressIndicator(value: progress, minHeight: 8),
+              LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Container(height: 6, color: FlowColor.plane(context)),
+                    Container(
+                      width: constraints.maxWidth * progress.clamp(0, 1),
+                      height: 6,
+                      color: FlowColor.proof,
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
             ],
             Text(
@@ -711,28 +753,45 @@ class _TrustRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: AppSpacing.section),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: AppSpacing.lg),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                body,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: CutSurface(
+      cut: 8,
+      color: FlowColor.plane(context),
+      padding: const EdgeInsets.all(13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            color: FlowColor.raised(context),
+            child: Icon(icon, size: 17, color: FlowColor.proof),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: FlowColor.content(context),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: FlowColor.quiet(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -749,20 +808,23 @@ class _InlineMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: error ? scheme.errorContainer : scheme.secondaryContainer,
-        borderRadius: AppRadius.all(AppRadius.lg),
-      ),
+    final signal = error ? FlowColor.amber : FlowColor.proof;
+    return CutSurface(
+      cut: 8,
+      color: FlowColor.plane(context),
+      accent: signal,
+      padding: const EdgeInsets.all(14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: error ? scheme.error : scheme.primary),
+          Icon(icon, color: signal),
           const SizedBox(width: AppSpacing.md),
-          Expanded(child: Text(text)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: FlowColor.quiet(context)),
+            ),
+          ),
         ],
       ),
     );
@@ -818,56 +880,122 @@ class _BottomAction extends StatelessWidget {
           Row(
             children: [
               if (page > 0 && !running)
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: working ? null : onBack,
-                  icon: const Icon(Icons.arrow_back_rounded),
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: working ? null : onBack,
+                    child: Container(
+                      width: 48,
+                      height: 56,
+                      alignment: Alignment.center,
+                      color: FlowColor.plane(context),
+                      child: Text(
+                        '←',
+                        style: TextStyle(
+                          color: FlowColor.content(context),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
                 )
               else
                 const SizedBox(width: 48),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: FilledButton(
-                  onPressed: primaryEnabled ? onPrimary : null,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: working
-                      ? const Icon(Icons.hourglass_top_rounded)
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (page == 0) ...[
-                              const FlowOrb(size: 22),
-                              const SizedBox(width: 10),
-                            ],
-                            Flexible(
-                              child: Text(
-                                label,
-                                maxLines: 2,
-                                textAlign: TextAlign.center,
+                child: Semantics(
+                  button: true,
+                  enabled: primaryEnabled,
+                  label: label,
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: primaryEnabled ? onPrimary : null,
+                    child: CutSurface(
+                      cut: 10,
+                      color: primaryEnabled
+                          ? FlowColor.loom
+                          : FlowColor.plane(context),
+                      accent: primaryEnabled
+                          ? FlowColor.proof
+                          : FlowColor.rule(context),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          LoomMark(
+                            size: 24,
+                            state: working
+                                ? LoomState.checking
+                                : primaryEnabled
+                                ? LoomState.ready
+                                : LoomState.offline,
+                          ),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              '${label.toUpperCase()} →',
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: primaryEnabled
+                                    ? Colors.white
+                                    : FlowColor.quiet(context),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .7,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
           if (onStop != null)
-            TextButton(onPressed: onStop, child: const Text('Stop safely'))
+            _QuietAction(label: 'STOP SAFELY', onTap: onStop!)
           else if (onSkipAi != null)
-            TextButton(
-              onPressed: onSkipAi,
-              child: const Text('Continue with limited capabilities'),
+            _QuietAction(
+              label: 'CONTINUE WITH LIMITED CAPABILITIES',
+              onTap: onSkipAi!,
             )
           else if (onSkipSms != null)
-            TextButton(onPressed: onSkipSms, child: const Text('Not now')),
+            _QuietAction(label: 'KEEP SMS CLOSED', onTap: onSkipSms!),
         ],
       ),
     );
   }
+}
+
+class _QuietAction extends StatelessWidget {
+  const _QuietAction({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: FlowColor.quiet(context),
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .65,
+        ),
+      ),
+    ),
+  );
 }
