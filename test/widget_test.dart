@@ -291,4 +291,73 @@ void main() {
     expect(find.text('SHOW'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('high contrast preserves Flow signal roles at 200% text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final theme = AppTheme.highContrastDark(null);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: const MediaQuery(
+          data: MediaQueryData(
+            size: Size(320, 720),
+            textScaler: TextScaler.linear(2),
+            highContrast: true,
+          ),
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: SystemNode(
+                code: 'AI-01',
+                title: 'Flow intelligence',
+                detail: 'Evidence-bound analysis and answers',
+                signal: NodeSignal.attention,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(theme.colorScheme.primary, const Color(0xFF5B4BFF));
+    expect(theme.colorScheme.secondary, const Color(0xFF22D3EE));
+    expect(theme.colorScheme.outline, theme.colorScheme.onSurface);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion navigation settles without idle frames', (
+    tester,
+  ) async {
+    var selected = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(null),
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              bottomNavigationBar: CommandRail(
+                selectedIndex: selected,
+                onSelected: (value) => setState(() => selected = value),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Proof and evidence'));
+    await tester.pump();
+
+    expect(selected, 1);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.takeException(), isNull);
+  });
 }
