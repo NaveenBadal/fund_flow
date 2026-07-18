@@ -112,9 +112,7 @@ class YouScreen extends ConsumerWidget {
                       trailing: CurrentSwitch(
                         value: app.preferences.lockApp,
                         label: 'App lock',
-                        onChanged: (v) => controller.updatePreferences(
-                          app.preferences.copyWith(lockApp: v),
-                        ),
+                        onChanged: controller.setAppLock,
                       ),
                     ),
                     CurrentRow(

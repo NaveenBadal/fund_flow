@@ -45,6 +45,7 @@ class AppState {
     this.asking = false,
     this.askStage,
     this.error,
+    this.locked = false,
   });
   final AppPreferences preferences;
   final List<MoneyTransaction> transactions;
@@ -54,6 +55,7 @@ class AppState {
   final bool asking;
   final String? askStage;
   final String? error;
+  final bool locked;
 
   AppState copyWith({
     AppPreferences? preferences,
@@ -65,6 +67,7 @@ class AppState {
     String? askStage,
     String? error,
     bool clearError = false,
+    bool? locked,
   }) => AppState(
     preferences: preferences ?? this.preferences,
     transactions: transactions ?? this.transactions,
@@ -74,5 +77,6 @@ class AppState {
     asking: asking ?? this.asking,
     askStage: askStage ?? this.askStage,
     error: clearError ? null : error ?? this.error,
+    locked: locked ?? this.locked,
   );
 }

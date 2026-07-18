@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../data/fund_flow_store.dart';
 import '../data/secure_preferences.dart';
@@ -27,6 +28,7 @@ final aiClientProvider = Provider((ref) {
   ref.onDispose(client.close);
   return client;
 });
+final localAuthenticationProvider = Provider((ref) => LocalAuthentication());
 final appControllerProvider = AsyncNotifierProvider<AppController, AppState>(
   AppController.new,
 );
@@ -49,6 +51,7 @@ class AppController extends AsyncNotifier<AppState> {
       aiConnection: key.isEmpty
           ? AiConnection.disconnected
           : AiConnection.connected,
+      locked: prefs.lockApp,
     );
   }
 
@@ -56,6 +59,51 @@ class AppController extends AsyncNotifier<AppState> {
   Future<void> updatePreferences(AppPreferences value) async {
     await ref.read(securePreferencesProvider).write(value);
     state = AsyncData(_value.copyWith(preferences: value));
+  }
+
+  Future<bool> setAppLock(bool enabled) async {
+    if (enabled && !await _authenticate('Turn on app lock')) return false;
+    final prefs = _value.preferences.copyWith(lockApp: enabled);
+    await ref.read(securePreferencesProvider).write(prefs);
+    state = AsyncData(
+      _value.copyWith(preferences: prefs, locked: false, clearError: true),
+    );
+    return true;
+  }
+
+  void lock() {
+    if (_value.preferences.lockApp && !_value.locked) {
+      state = AsyncData(_value.copyWith(locked: true));
+    }
+  }
+
+  Future<bool> unlock() async {
+    if (!_value.locked) return true;
+    final ok = await _authenticate('Unlock Fund Flow');
+    if (ok) state = AsyncData(_value.copyWith(locked: false, clearError: true));
+    return ok;
+  }
+
+  Future<bool> _authenticate(String reason) async {
+    try {
+      final auth = ref.read(localAuthenticationProvider);
+      if (!await auth.isDeviceSupported()) {
+        state = AsyncData(
+          _value.copyWith(error: 'Set up a device screen lock first.'),
+        );
+        return false;
+      }
+      return auth.authenticate(
+        localizedReason: reason,
+        biometricOnly: false,
+        persistAcrossBackgrounding: true,
+      );
+    } catch (_) {
+      state = AsyncData(
+        _value.copyWith(error: 'Device authentication is unavailable.'),
+      );
+      return false;
+    }
   }
 
   Future<bool> connectAi({
