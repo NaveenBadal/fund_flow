@@ -50,7 +50,7 @@ useful conclusions, clear boundaries, visible sources, and reversible actions.
 
 - Welcome: product value, no feature list.
 - Intelligence: what the provider receives and how the key is stored.
-- Messages: exact permission and candidate-only transfer boundary.
+- Messages: exact permission and AI-analysis transfer boundary.
 - Ready: imported, skipped, and review counts with one next action.
 
 ## State inventory
@@ -145,7 +145,7 @@ lib/
   domain/       immutable entities, value objects, finance rules
   data/         schema, repositories, secure preferences
   intelligence/provider client, prompts, validated tool loop
-  ingestion/    SMS candidate gate, parsing queue, duplicate policy
+  ingestion/    AI message analysis, import queue, duplicate policy
   features/     onboarding, ask, activity, you
   ui/           tokens, theme, primitives, components, responsive layout
 ```
@@ -158,7 +158,8 @@ domain types. Domain code imports no Flutter, database, network, or plugin API.
 - SQLite stores normalized transactions, sources, conversations, approvals,
   categories, preferences, import attempts, and undo records.
 - Secure storage contains only credentials and privacy/security preferences.
-- Candidate filtering happens locally before provider transfer.
+- Exact fingerprints are deduplicated locally; unseen selected-period message
+  text is classified and extracted by the configured AI provider.
 - The provider never receives arbitrary SQL access.
 - Financial arithmetic and mutation validation are deterministic local code.
 - Currency totals are never implicitly combined.

@@ -1,6 +1,9 @@
 import 'dart:convert';
 import '../agent/agent_runner.dart';
 import '../agent/mcp_protocol.dart';
+import '../domain/transaction.dart';
+import '../ingestion/ai_message_ingestion.dart';
+import '../ingestion/message_candidate.dart';
 import 'package:http/http.dart' as http;
 
 class AiClient {
@@ -91,6 +94,50 @@ class AiClient {
     apiKey: apiKey,
     model: model,
   );
+
+  Future<AiIngestionBatch> analyzeMessages({
+    required String endpoint,
+    required String apiKey,
+    required String model,
+    required List<MessageCandidate> candidates,
+    required TransactionSource source,
+    required DateTime now,
+  }) async {
+    final response = await _client
+        .post(
+          _uri(endpoint),
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': model,
+            'stream': false,
+            'format': IngestionPrompt.responseSchema,
+            'messages': [
+              {'role': 'system', 'content': IngestionPrompt.system(now)},
+              {'role': 'user', 'content': IngestionPrompt.user(candidates)},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 60));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AiRequestFailure(response.statusCode);
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final content = (decoded['message'] as Map?)?['content']?.toString();
+    if (content == null || content.trim().isEmpty) {
+      throw const IngestionSchemaException(
+        'The provider returned no classifications.',
+      );
+    }
+    return AiIngestionBatch.parse(
+      content: content,
+      candidates: candidates,
+      source: source,
+      now: now,
+    );
+  }
 
   void close() => _client.close();
 }

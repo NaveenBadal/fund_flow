@@ -116,7 +116,7 @@ class YouScreen extends ConsumerWidget {
                     CurrentRow(
                       title: 'Data boundary',
                       detail:
-                          'Activity stays local; candidates and questions go to your provider',
+                          'Activity stays local; questions and opted-in unseen message text go to your provider',
                       leading: Icons.shield_outlined,
                       onTap: () => _privacy(context),
                     ),
@@ -208,7 +208,7 @@ class YouScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Transactions, normalized fields, categories, corrections, and conversation history stay in the app database on this device. Candidate transaction message text and questions are sent to the AI endpoint you configure.',
+              'Transactions, normalized fields, categories, corrections, and conversation history stay in the app database on this device. Questions and unseen SMS or opted-in notification text selected for analysis are sent to the AI endpoint you configure.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: context.current.muted),

@@ -10,7 +10,6 @@ import '../domain/change_proposal.dart';
 import '../domain/finance_summary.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
-import '../ingestion/local_message_parser.dart';
 import '../ingestion/notification_source.dart';
 import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
@@ -51,7 +50,7 @@ class AppController extends AsyncNotifier<AppState> {
     ]);
     var transactions = values[0] as List<MoneyTransaction>;
     if (prefs.captureNotifications) {
-      transactions = await _drainNotifications(transactions);
+      transactions = await _drainNotifications(transactions, key);
     }
     return AppState(
       preferences: prefs,
@@ -96,7 +95,10 @@ class AppController extends AsyncNotifier<AppState> {
     final prefs = _value.preferences.copyWith(captureNotifications: enabled);
     await ref.read(securePreferencesProvider).write(prefs);
     var transactions = _value.transactions;
-    if (enabled) transactions = await _drainNotifications(transactions);
+    if (enabled) {
+      final key = await ref.read(securePreferencesProvider).apiKey();
+      transactions = await _drainNotifications(transactions, key);
+    }
     state = AsyncData(
       _value.copyWith(
         preferences: prefs,
@@ -109,27 +111,47 @@ class AppController extends AsyncNotifier<AppState> {
 
   Future<List<MoneyTransaction>> _drainNotifications(
     List<MoneyTransaction> existing,
+    String apiKey,
   ) async {
+    if (apiKey.isEmpty) return existing;
     try {
       final source = ref.read(notificationSourceProvider);
       final pending = await source.pending();
-      final known = existing
-          .map((value) => value.sourceText)
-          .whereType<String>()
-          .toSet();
+      final seen = await ref
+          .read(storeProvider)
+          .seenImportFingerprints(
+            pending.map((item) => item.candidate.fingerprint),
+          );
+      final unseen = pending
+          .where((item) => !seen.contains(item.candidate.fingerprint))
+          .toList();
       final acknowledged = <String>[];
-      final parser = LocalMessageParser();
-      for (final item in pending) {
-        final parsed = parser.parse(item.candidate);
-        if (parsed != null && !known.contains(parsed.sourceText)) {
-          await ref
-              .read(storeProvider)
-              .saveTransaction(
-                parsed.copyWith(source: TransactionSource.notification),
-              );
-          known.add(parsed.sourceText!);
+      for (var start = 0; start < unseen.length; start += 12) {
+        final items = unseen.skip(start).take(12).toList();
+        final analysis = await ref
+            .read(aiClientProvider)
+            .analyzeMessages(
+              endpoint: _value.preferences.aiEndpoint,
+              apiKey: apiKey,
+              model: _value.preferences.aiModel,
+              candidates: items.map((item) => item.candidate).toList(),
+              source: TransactionSource.notification,
+              now: DateTime.now(),
+            );
+        await ref.read(storeProvider).commitIngestionBatch(analysis);
+        final committed = analysis.results
+            .map((item) => item.fingerprint)
+            .toSet();
+        for (final item in items) {
+          if (committed.contains(item.candidate.fingerprint)) {
+            acknowledged.add(item.id);
+          }
         }
-        acknowledged.add(item.id);
+      }
+      for (final item in pending) {
+        if (seen.contains(item.candidate.fingerprint)) {
+          acknowledged.add(item.id);
+        }
       }
       await source.acknowledge(acknowledged);
       return ref.read(storeProvider).transactions();
@@ -243,6 +265,18 @@ class AppController extends AsyncNotifier<AppState> {
 
   Future<void> importMessages() async {
     var current = _value;
+    final apiKey = await ref.read(securePreferencesProvider).apiKey();
+    if (apiKey.isEmpty) {
+      state = AsyncData(
+        current.copyWith(
+          importStatus: const ImportStatus(
+            phase: ImportPhase.error,
+            message: 'Connect intelligence before analyzing messages.',
+          ),
+        ),
+      );
+      return;
+    }
     state = AsyncData(
       current.copyWith(
         importStatus: const ImportStatus(
@@ -279,32 +313,45 @@ class AppController extends AsyncNotifier<AppState> {
       final candidates = await source.recent(
         _value.preferences.messageLookbackDays,
       );
-      final existing = _value.transactions
-          .map((e) => e.sourceText)
-          .whereType<String>()
-          .toSet();
-      final parser = LocalMessageParser();
+      final seen = await ref
+          .read(storeProvider)
+          .seenImportFingerprints(candidates.map((item) => item.fingerprint));
+      final unseen = candidates
+          .where((item) => !seen.contains(item.fingerprint))
+          .toList();
       var imported = 0;
-      var skipped = 0;
-      for (var i = 0; i < candidates.length; i++) {
+      var checked = 0;
+      var skipped = seen.length;
+      for (var start = 0; start < unseen.length; start += 12) {
         state = AsyncData(
           _value.copyWith(
             importStatus: ImportStatus(
               phase: ImportPhase.understanding,
               permission: permission,
-              checked: i,
+              checked: checked,
               imported: imported,
               skipped: skipped,
             ),
           ),
         );
-        final parsed = parser.parse(candidates[i]);
-        if (parsed == null || existing.contains(parsed.sourceText)) {
-          skipped++;
-          continue;
-        }
-        await ref.read(storeProvider).saveTransaction(parsed);
-        imported++;
+        final batch = unseen.skip(start).take(12).toList();
+        final analysis = await ref
+            .read(aiClientProvider)
+            .analyzeMessages(
+              endpoint: _value.preferences.aiEndpoint,
+              apiKey: apiKey,
+              model: _value.preferences.aiModel,
+              candidates: batch,
+              source: TransactionSource.message,
+              now: DateTime.now(),
+            );
+        imported += await ref
+            .read(storeProvider)
+            .commitIngestionBatch(analysis);
+        checked += batch.length;
+        skipped += analysis.results
+            .where((item) => item.transaction == null)
+            .length;
       }
       current = _value.copyWith(
         transactions: await ref.read(storeProvider).transactions(),
@@ -317,13 +364,31 @@ class AppController extends AsyncNotifier<AppState> {
         ),
       );
       state = AsyncData(current);
+    } on AiRequestFailure catch (error) {
+      final message = switch (error.statusCode) {
+        401 || 403 => 'Reconnect intelligence before analyzing messages.',
+        429 =>
+          'The provider is rate limited. Imported batches are safe; try again later.',
+        _ =>
+          'The provider could not analyze messages. Imported batches are safe.',
+      };
+      state = AsyncData(
+        _value.copyWith(
+          importStatus: ImportStatus(
+            phase: ImportPhase.error,
+            permission: permission,
+            message: message,
+          ),
+        ),
+      );
     } catch (error) {
       state = AsyncData(
         _value.copyWith(
           importStatus: ImportStatus(
             phase: ImportPhase.error,
             permission: permission,
-            message: 'Messages could not be checked. Nothing was changed.',
+            message:
+                'A provider response could not be validated. Completed batches are safe.',
           ),
         ),
       );

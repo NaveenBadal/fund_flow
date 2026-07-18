@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../domain/conversation.dart';
 import '../domain/transaction.dart';
+import '../ingestion/ai_message_ingestion.dart';
 
 class FundFlowStore {
   FundFlowStore({Database? database}) : _database = database;
@@ -75,6 +76,40 @@ class FundFlowStore {
 
   Future<void> clearConversation() async =>
       (await database).delete('conversation');
+
+  Future<Set<String>> seenImportFingerprints(Iterable<String> values) async {
+    final fingerprints = values.toList();
+    if (fingerprints.isEmpty) return {};
+    final placeholders = List.filled(fingerprints.length, '?').join(',');
+    final rows = await (await database).query(
+      'import_attempts',
+      columns: ['fingerprint'],
+      where: 'fingerprint IN ($placeholders)',
+      whereArgs: fingerprints,
+    );
+    return rows.map((row) => row['fingerprint'] as String).toSet();
+  }
+
+  Future<int> commitIngestionBatch(AiIngestionBatch batch) async {
+    final db = await database;
+    return db.transaction((transaction) async {
+      var imported = 0;
+      for (final result in batch.results) {
+        final accepted = await transaction.insert('import_attempts', {
+          'fingerprint': result.fingerprint,
+          'received_at': DateTime.now().toUtc().toIso8601String(),
+          'outcome': result.decision.name,
+          'detail': result.reason,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        if (accepted == 0 || result.transaction == null) continue;
+        final value = result.transaction!.toMap()..remove('id');
+        await transaction.insert('transactions', value);
+        imported++;
+      }
+      return imported;
+    });
+  }
+
   Future<String?> preference(String key) async {
     final rows = await (await database).query(
       'preferences',

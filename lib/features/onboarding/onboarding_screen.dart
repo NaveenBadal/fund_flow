@@ -129,7 +129,7 @@ class _State extends ConsumerState<OnboardingScreen> {
           eyebrow: 'Intelligence',
           title: 'Connect the AI you trust.',
           body:
-              'Only candidate transaction text and your questions go to your configured provider. Your normalized activity stays on this device.',
+              'Your questions and unseen message text you choose to analyze go to your configured provider. Normalized activity stays on this device.',
         ),
         const SizedBox(height: 22),
         CurrentButton(
@@ -152,7 +152,7 @@ class _State extends ConsumerState<OnboardingScreen> {
           eyebrow: 'Transaction messages',
           title: 'Build activity without manual entry.',
           body:
-              'Android asks before Fund Flow reads messages. Unrelated conversations are ignored locally. Candidate transaction text is sent only to your configured provider.',
+              'Android asks before Fund Flow reads messages. Unseen text from the selected period is sent in protected batches to your configured AI, which decides what represents a transaction.',
         ),
         const SizedBox(height: 22),
         CurrentButton(

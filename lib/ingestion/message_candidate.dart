@@ -18,23 +18,3 @@ class MessageCandidate {
       )
       .toString();
 }
-
-abstract final class CandidateGate {
-  static final _money = RegExp(
-    r'(?:₹|rs\.?|inr|usd|eur|aed|gbp|\$|€|£)\s*[\d,]+(?:\.\d{1,2})?',
-    caseSensitive: false,
-  );
-  static final _transaction = RegExp(
-    r'\b(?:debited|credited|spent|paid|received|purchase|txn|transaction|withdrawn|deposited|sent)\b',
-    caseSensitive: false,
-  );
-  static final _reject = RegExp(
-    r'\b(?:otp|one time password|verification code|offer|sale|discount|cashback offer)\b',
-    caseSensitive: false,
-  );
-
-  static bool accepts(String body) =>
-      !_reject.hasMatch(body) &&
-      _money.hasMatch(body) &&
-      _transaction.hasMatch(body);
-}

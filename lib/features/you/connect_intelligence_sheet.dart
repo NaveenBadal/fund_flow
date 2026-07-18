@@ -40,7 +40,7 @@ class _State extends ConsumerState<ConnectIntelligenceSheet> {
     return CurrentSheet(
       title: 'Connect intelligence',
       explanation:
-          'Candidate transaction text and questions are sent to this provider. '
+          'Questions and unseen message text you choose to analyze are sent to this provider. '
           'Your normalized activity stays on this device.',
       actions: CurrentButton(
         label: checking ? 'Checking connection…' : 'Connect',

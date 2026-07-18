@@ -30,7 +30,7 @@ class FinancialNotificationListenerService : NotificationListenerService() {
             extras.getCharSequence(Notification.EXTRA_TITLE_BIG),
         )
         val body = notificationBody(extras)
-        if (body.isBlank() || !looksLikeCompletedTransaction(body)) return
+        if (body.isBlank()) return
         enqueue(
             this,
             JSONObject()
@@ -68,15 +68,6 @@ class FinancialNotificationListenerService : NotificationListenerService() {
         private const val enabledKey = "capture_enabled"
         private const val maxQueueSize = 200
         private val queueLock = Any()
-        private val amountPattern = Regex(
-            "(?i)(?:₹|rs\\.?|inr|usd|eur|gbp|aed)\\s*[0-9][0-9,]*(?:\\.[0-9]{1,2})?",
-        )
-        private val movementPattern = Regex(
-            "(?i)\\b(spent|debited|credited|paid|payment|withdrawn|deducted|transferred|received|refunded|reversed|purchase|transaction|txn)\\b",
-        )
-        private val otpPattern = Regex(
-            "(?i)\\b(otp|one[ -]?time password|verification code|security code)\\b",
-        )
 
         fun isAccessEnabled(context: Context): Boolean {
             val enabled = Settings.Secure.getString(
@@ -132,11 +123,6 @@ class FinancialNotificationListenerService : NotificationListenerService() {
             }
             writeQueue(context, remaining)
         }
-
-        private fun looksLikeCompletedTransaction(body: String): Boolean =
-            !otpPattern.containsMatchIn(body) &&
-                amountPattern.containsMatchIn(body) &&
-                movementPattern.containsMatchIn(body)
 
         private fun enqueue(context: Context, event: JSONObject) = synchronized(queueLock) {
             val current = readQueue(context)
