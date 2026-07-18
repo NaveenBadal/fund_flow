@@ -70,9 +70,12 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Evidence'), findsOneWidget);
-    expect(find.byTooltip('More evidence actions'), findsOneWidget);
-    expect(find.byTooltip('Hide amounts'), findsOneWidget);
+    expect(find.text('EVIDENCE'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Add cash transaction manually'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Hide amounts'), findsOneWidget);
     semantics.dispose();
   });
 
@@ -255,7 +258,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
 
-    await tester.tap(find.byTooltip('Filter activity'));
+    await tester.tap(find.bySemanticsLabel('Filter activity'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -307,7 +310,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Evidence'), findsOneWidget);
+    expect(find.text('EVIDENCE'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -326,7 +329,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Evidence'), findsOneWidget);
+    expect(find.text('EVIDENCE'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

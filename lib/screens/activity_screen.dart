@@ -5,6 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/expense.dart';
+import '../flow_os/proof/proof_masthead.dart';
+import '../flow_os/foundation/flow_color.dart';
+import '../flow_os/primitives/coordinate_label.dart';
+import '../flow_os/primitives/cut_surface.dart';
+import '../flow_os/primitives/loom_mark.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
@@ -45,65 +50,27 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final hidden = ref.watch(privateModeProvider);
     final sync = ref.watch(syncProvider);
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 76,
-        titleSpacing: 20,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Evidence', style: Theme.of(context).textTheme.headlineMedium),
-            Text(
-              'AI-understood money events',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+      body: Column(
+        children: [
+          ProofMasthead(
+            hidden: hidden,
+            onPrivacy: () => ref.read(privateModeProvider.notifier).toggle(),
+            onManualEntry: _add,
+          ),
+          Expanded(
+            child: async.when(
+              loading: () => const _ActivityLoading(),
+              error: (error, _) => _EmptyState(
+                icon: Icons.cloud_off_outlined,
+                title: 'Transactions unavailable',
+                message: '$error',
+                action: 'Try again',
+                onAction: () => ref.invalidate(expenseListProvider),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: hidden ? 'Show amounts' : 'Hide amounts',
-            onPressed: () => ref.read(privateModeProvider.notifier).toggle(),
-            icon: Icon(
-              hidden
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
+              data: (all) => _content(all, hidden, sync),
             ),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'More evidence actions',
-            onSelected: (value) {
-              if (value == 'add_cash') _add();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'add_cash',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.add_rounded),
-                  title: Text('Add cash transaction'),
-                  subtitle: Text('Manual fallback'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
         ],
-      ),
-      body: async.when(
-        loading: () => const _ActivityLoading(),
-        error: (error, _) => _EmptyState(
-          icon: Icons.cloud_off_outlined,
-          title: 'Transactions unavailable',
-          message: '$error',
-          action: 'Try again',
-          onAction: () => ref.invalidate(expenseListProvider),
-        ),
-        data: (all) => _content(all, hidden, sync),
       ),
     );
   }
@@ -562,33 +529,67 @@ class _SearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) => SearchBar(
-    controller: controller,
-    hintText: 'Search evidence',
-    leading: const Icon(Icons.search_rounded),
-    trailing: [
-      if (query.isNotEmpty)
-        IconButton(
-          tooltip: 'Clear search',
-          onPressed: () {
-            controller.clear();
-            onChanged('');
-          },
-          icon: const Icon(Icons.close_rounded),
+  Widget build(BuildContext context) => CutSurface(
+    cut: 10,
+    color: FlowColor.plane(context),
+    accent: filtersActive ? FlowColor.proof : FlowColor.rule(context),
+    padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+    child: Row(
+      children: [
+        Container(width: 7, height: 7, color: FlowColor.proof),
+        const SizedBox(width: 11),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              hintText: 'Query the evidence field',
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 11),
+              hintStyle: TextStyle(color: FlowColor.quiet(context)),
+            ),
+          ),
         ),
-      IconButton(
-        tooltip: filtersActive ? 'Change active filters' : 'Filter activity',
-        onPressed: onFilter,
-        icon: Icon(
-          filtersActive ? Icons.filter_alt_rounded : Icons.tune_rounded,
+        if (query.isNotEmpty)
+          IconButton(
+            tooltip: 'Clear search',
+            onPressed: () {
+              controller.clear();
+              onChanged('');
+            },
+            icon: const Icon(Icons.close_rounded, size: 18),
+          ),
+        Semantics(
+          button: true,
+          label: filtersActive ? 'Change active filters' : 'Filter activity',
+          excludeSemantics: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onFilter,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              alignment: Alignment.center,
+              color: filtersActive ? FlowColor.loom : FlowColor.raised(context),
+              child: Text(
+                filtersActive ? 'FILTER\nON' : 'FILTER',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: filtersActive
+                      ? Colors.white
+                      : FlowColor.quiet(context),
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .6,
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
-    ],
-    elevation: const WidgetStatePropertyAll(0),
-    backgroundColor: WidgetStatePropertyAll(
-      Theme.of(context).colorScheme.surfaceContainerHigh,
+      ],
     ),
-    onChanged: onChanged,
   );
 }
 
@@ -967,25 +968,11 @@ class _EvidencePulse extends StatelessWidget {
     final fromMessages = events
         .where((item) => item.originalSms.isNotEmpty)
         .length;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-          colors: [
-            FlowPalette.intelligence,
-            Color.lerp(FlowPalette.intelligence, FlowPalette.night, .36)!,
-          ],
-        ),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(42),
-          bottomLeft: Radius.circular(42),
-          bottomRight: Radius.circular(20),
-        ),
-      ),
+    return CutSurface(
+      cut: 18,
+      color: FlowColor.plane(context),
+      accent: needsReview > 0 ? FlowColor.amber : FlowColor.proof,
+      padding: const EdgeInsets.all(18),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact =
@@ -994,26 +981,24 @@ class _EvidencePulse extends StatelessWidget {
           final intro = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FlowOrb(size: 38),
+              LoomMark(
+                size: 42,
+                state: needsReview > 0 ? LoomState.review : LoomState.proven,
+              ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'EVIDENCE FIELD',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: FlowPalette.signalCyan,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
+                  const CoordinateLabel('MATRIX / CURRENT STATE'),
+                  const SizedBox(height: 4),
                   Text(
                     needsReview == 0
-                        ? 'Everything is resolved'
-                        : '$needsReview need review',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                        ? 'Evidence resolved'
+                        : '$needsReview signals unresolved',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: FlowColor.content(context),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -1053,7 +1038,7 @@ class _EvidenceMetric extends StatelessWidget {
         value,
         style: AppTheme.money(
           Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+            color: FlowColor.content(context),
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1061,7 +1046,7 @@ class _EvidenceMetric extends StatelessWidget {
       Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Colors.white70,
+          color: FlowColor.quiet(context),
           fontSize: 9,
           fontWeight: FontWeight.w800,
           letterSpacing: .8,
@@ -1177,134 +1162,110 @@ class _TransactionRow extends StatelessWidget {
     final amount = hidden
         ? maskAmount(item.currency)
         : '${item.isIncome ? '+' : '−'}${formatAmount(item.amount, item.currency)}';
-    final glyphSurface = needsReview
-        ? context.finance.warningSurface
-        : item.isIncome
-        ? context.finance.incomeSurface
-        : Theme.of(context).colorScheme.surfaceContainerHigh;
     final signalColor = needsReview
-        ? context.finance.warning
+        ? FlowColor.amber
         : item.isIncome
-        ? context.finance.income
+        ? FlowColor.mint
         : categoryColor(item.category);
-    final scheme = Theme.of(context).colorScheme;
     final source = item.originalSms.isEmpty ? 'MANUAL' : 'SMS EVIDENCE';
     return Semantics(
       button: true,
       label:
           '${needsReview ? 'Needs review' : item.displayMerchant}, $amount, ${item.category}, ${DateFormat('d MMMM, h:mm a').format(item.date)}',
-      child: CalmPress(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
         onLongPress: onEdit,
-        borderRadius: ExpressiveShape.playful(index),
-        child: ClipRRect(
-          borderRadius: ExpressiveShape.playful(index),
-          child: Container(
-            decoration: BoxDecoration(
-              color: needsReview
-                  ? context.finance.warningSurface
-                  : Color.alphaBlend(
-                      signalColor.withValues(alpha: .055),
-                      scheme.surfaceContainer,
-                    ),
-              border: Border.all(
-                color: signalColor.withValues(alpha: needsReview ? .34 : .2),
-              ),
-            ),
-            child: Stack(
+        child: CutSurface(
+          cut: index.isEven ? 11 : 7,
+          color: FlowColor.plane(context),
+          accent: signalColor.withValues(alpha: needsReview ? .8 : .35),
+          padding: EdgeInsets.zero,
+          child: IntrinsicHeight(
+            child: Row(
               children: [
-                PositionedDirectional(
-                  start: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 5,
-                  child: ColoredBox(color: signalColor),
+                SizedBox(width: 9, child: ColoredBox(color: signalColor)),
+                Container(
+                  width: 46,
+                  alignment: Alignment.center,
+                  color: FlowColor.raised(context),
+                  child: Text(
+                    needsReview
+                        ? '!'
+                        : item.isIncome
+                        ? '↙'
+                        : '↗',
+                    style: TextStyle(
+                      color: signalColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(19, 14, 16, 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: glyphSurface,
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: signalColor.withValues(alpha: .22),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(13, 13, 14, 13),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                needsReview
+                                    ? 'Needs review'
+                                    : item.displayMerchant,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: FlowColor.content(context),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                needsReview
+                                    ? 'CHECK SIGNAL / MISSING DETAIL'
+                                    : '$source / ${item.category.toUpperCase()} / ${DateFormat('HH:mm').format(item.date)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: signalColor.withValues(alpha: .86),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: .55,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Icon(
-                          needsReview
-                              ? Icons.priority_high_rounded
-                              : item.isIncome
-                              ? Icons.south_west_rounded
-                              : categoryIcon(item.category),
-                          color: signalColor,
-                          size: 21,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              needsReview
-                                  ? 'Needs review'
-                                  : item.displayMerchant,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 5),
-                            Wrap(
-                              spacing: 7,
-                              runSpacing: 3,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                _EvidenceTag(
-                                  label: needsReview ? 'CHECK SIGNAL' : source,
-                                  color: signalColor,
+                        const SizedBox(width: 10),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width * .34,
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              amount,
+                              style: AppTheme.money(
+                                Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(
+                                  color: item.isIncome
+                                      ? FlowColor.mint
+                                      : FlowColor.content(context),
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                Text(
-                                  needsReview
-                                      ? 'Missing details'
-                                      : '${item.category} · ${DateFormat('h:mm a').format(item.date)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width * .34,
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            amount,
-                            style: AppTheme.money(
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: item.isIncome
-                                    ? context.finance.income
-                                    : scheme.onSurface,
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
