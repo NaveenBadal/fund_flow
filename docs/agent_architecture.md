@@ -79,6 +79,8 @@ database changes.
   never returned.
 - `conversation.search`: prior locally stored answers when needed for a
   follow-up.
+- `app_update_status`: live read-only status from the verified GitHub
+  development channel. Download and installation remain explicit UI actions.
 
 ### Proposed mutations
 
@@ -198,9 +200,11 @@ stopped, provider offline, rejected credentials, rate limited, malformed model
 output, tool validation error, partial evidence, approval pending, stale
 approval, applied, rejected, and undone.
 
-Ingestion supports permission undecided/denied/permanently denied, provider
-disconnected, reading, queued, analyzing batch, paused, stopped, rate limited,
-partial completion, schema rejection, retrying, complete, empty, and all-seen.
+Ingestion exposes permission denied/permanently denied, provider disconnected,
+reading, analyzing a bounded batch, stopped, rate limited, partial completion,
+schema rejection, retry, complete, empty, and all-seen outcomes. Stop takes
+effect at the next safe batch boundary so an in-flight provider request cannot
+leave a half-committed batch.
 
 ## Acceptance gates
 

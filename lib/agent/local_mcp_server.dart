@@ -1,4 +1,5 @@
 import '../domain/finance_summary.dart';
+import '../domain/conversation.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
 import 'agent_presentation.dart';
@@ -8,6 +9,7 @@ import 'mcp_protocol.dart';
 typedef PreferencesReader = AppPreferences Function();
 typedef TransactionsReader = List<MoneyTransaction> Function();
 typedef UpdateStatusReader = Future<Map<String, Object?>> Function();
+typedef ConversationReader = List<ConversationMessage> Function();
 
 class McpExecution {
   const McpExecution({required this.result, this.proposal, this.presentation});
@@ -21,13 +23,16 @@ class LocalMcpServer {
     required TransactionsReader transactions,
     required PreferencesReader preferences,
     UpdateStatusReader? updateStatus,
+    ConversationReader? conversation,
   }) : _transactions = transactions,
        _preferences = preferences,
-       _updateStatus = updateStatus;
+       _updateStatus = updateStatus,
+       _conversation = conversation;
 
   final TransactionsReader _transactions;
   final PreferencesReader _preferences;
   final UpdateStatusReader? _updateStatus;
+  final ConversationReader? _conversation;
 
   static const _directions = ['incoming', 'outgoing'];
   static const _sources = ['message', 'notification', 'manual'];
@@ -45,6 +50,7 @@ class LocalMcpServer {
           'currency': McpSchema.string(),
           'merchant': McpSchema.string(),
           'category': McpSchema.string(),
+          'account': McpSchema.string(),
           'source': McpSchema.string(values: _sources),
           'reviewState': McpSchema.string(values: _reviewStates),
           'minimumMinor': McpSchema.integer(minimum: 0),
@@ -76,7 +82,15 @@ class LocalMcpServer {
           'from': McpSchema.string(),
           'to': McpSchema.string(),
           'groupBy': McpSchema.string(
-            values: ['category', 'merchant', 'source', 'day', 'month'],
+            values: [
+              'category',
+              'merchant',
+              'account',
+              'source',
+              'day',
+              'week',
+              'month',
+            ],
           ),
           'direction': McpSchema.string(values: _directions),
           'currency': McpSchema.string(),
@@ -134,6 +148,17 @@ class LocalMcpServer {
       'Check Fund Flow\'s verified GitHub development release channel.',
       McpSchema.object(),
       McpRisk.platform,
+    ),
+    _tool(
+      'conversation_search',
+      'Search recent local conversation turns for follow-up context.',
+      McpSchema.object(
+        properties: {
+          'query': McpSchema.string(),
+          'limit': McpSchema.integer(minimum: 1, maximum: 30),
+        },
+      ),
+      McpRisk.read,
     ),
     _proposalTool(
       'transactions_create',
@@ -226,6 +251,7 @@ class LocalMcpServer {
         'settings_get' => _settings(call),
         'privacy_boundary' => _privacy(call),
         'app_update_status' => await _update(call),
+        'conversation_search' => _conversationSearch(call),
         'answer_compose' => _compose(call),
         _ => _proposal(call),
       };
@@ -236,6 +262,35 @@ class LocalMcpServer {
     } catch (_) {
       return _error(call, 'Capability arguments were not valid.');
     }
+  }
+
+  McpExecution _conversationSearch(McpToolCall call) {
+    final query = call.arguments['query']?.toString().trim().toLowerCase();
+    final limit = _integer(call.arguments, 'limit', fallback: 12, maximum: 30);
+    final values = (_conversation?.call() ?? const <ConversationMessage>[])
+        .where(
+          (message) =>
+              query == null ||
+              query.isEmpty ||
+              message.text.toLowerCase().contains(query),
+        )
+        .toList()
+        .reversed
+        .take(limit)
+        .map(
+          (message) => {
+            'id': message.id,
+            'author': message.author.name,
+            'text': message.text,
+            'createdAt': message.createdAt.toIso8601String(),
+            'verified': message.verified,
+            'supportingTransactionIds': message.supportingTransactionIds,
+          },
+        )
+        .toList();
+    return _ok(call, {
+      'messages': values,
+    }, summary: 'Found ${values.length} conversation turns');
   }
 
   Future<McpExecution> _update(McpToolCall call) async {
@@ -299,8 +354,13 @@ class LocalMcpServer {
       final label = switch (groupBy) {
         'category' => item.category,
         'merchant' => item.merchant,
+        'account' =>
+          item.account?.trim().isNotEmpty == true
+              ? item.account!
+              : 'Unknown account',
         'source' => item.source.name,
         'day' => _date(item.occurredAt),
+        'week' => _week(item.occurredAt),
         'month' =>
           '${item.occurredAt.year}-${item.occurredAt.month.toString().padLeft(2, '0')}',
         _ => throw const McpProtocolException('Unsupported breakdown.'),
@@ -546,6 +606,7 @@ class LocalMcpServer {
     }
     final merchant = arguments['merchant']?.toString().toLowerCase();
     final category = arguments['category']?.toString().toLowerCase();
+    final account = arguments['account']?.toString().toLowerCase();
     final direction = arguments['direction']?.toString();
     final source = arguments['source']?.toString();
     final review = arguments['reviewState']?.toString();
@@ -559,6 +620,10 @@ class LocalMcpServer {
         return false;
       }
       if (category != null && item.category.toLowerCase() != category) {
+        return false;
+      }
+      if (account != null &&
+          !(item.account?.toLowerCase().contains(account) ?? false)) {
         return false;
       }
       if (direction != null && item.direction.name != direction) return false;
@@ -662,6 +727,15 @@ class LocalMcpServer {
   );
   String _date(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _week(DateTime value) {
+    final monday = DateTime(
+      value.year,
+      value.month,
+      value.day,
+    ).subtract(Duration(days: value.weekday - DateTime.monday));
+    return _date(monday);
+  }
 
   McpExecution _ok(
     McpToolCall call,

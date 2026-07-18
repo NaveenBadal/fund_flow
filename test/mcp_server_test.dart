@@ -2,6 +2,7 @@ import 'package:fund_flow/agent/local_mcp_server.dart';
 import 'package:fund_flow/agent/mcp_protocol.dart';
 import 'package:fund_flow/domain/preferences.dart';
 import 'package:fund_flow/domain/transaction.dart';
+import 'package:fund_flow/domain/conversation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -27,7 +28,39 @@ void main() {
     expect(names, contains('settings_update'));
     expect(names, contains('security_set_app_lock'));
     expect(names, contains('app_update_status'));
+    expect(names, contains('conversation_search'));
     expect(names, contains('answer_compose'));
+  });
+
+  test('conversation search returns bounded local follow-up context', () async {
+    server = LocalMcpServer(
+      transactions: () => transactions,
+      preferences: () => const AppPreferences(),
+      conversation: () => [
+        ConversationMessage(
+          author: MessageAuthor.person,
+          text: 'How much did I spend on coffee?',
+          createdAt: DateTime(2026, 7, 1),
+        ),
+        ConversationMessage(
+          author: MessageAuthor.assistant,
+          text: 'Coffee spending was INR 250.',
+          createdAt: DateTime(2026, 7, 1, 0, 1),
+          verified: true,
+          supportingTransactionIds: const [1],
+        ),
+      ],
+    );
+    final execution = await server.execute(
+      const McpToolCall(
+        id: 'history',
+        name: 'conversation_search',
+        arguments: {'query': 'coffee', 'limit': 1},
+      ),
+    );
+    final messages = execution.result.content['messages'] as List;
+    expect(messages, hasLength(1));
+    expect((messages.single as Map)['supportingTransactionIds'], [1]);
   });
 
   test(

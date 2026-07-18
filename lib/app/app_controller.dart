@@ -488,6 +488,7 @@ class AppController extends AsyncNotifier<AppState> {
       final server = LocalMcpServer(
         transactions: () => _value.transactions,
         preferences: () => _value.preferences,
+        conversation: () => _value.conversation,
         updateStatus: () async {
           final updater = AppUpdater();
           try {
