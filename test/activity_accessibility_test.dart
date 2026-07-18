@@ -104,18 +104,18 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Control'), findsOneWidget);
-    expect(find.text('SYSTEM SIGNAL'), findsOneWidget);
+    expect(find.text('CONTROL MAP'), findsOneWidget);
+    expect(find.text('NODE GROUP / INTELLIGENCE'), findsOneWidget);
 
-    final scrollable = tester.state<ScrollableState>(
-      find.byType(Scrollable).first,
+    await tester.scrollUntilVisible(
+      find.text('NODE GROUP / PERSONAL FIELD'),
+      280,
+      scrollable: find.byType(Scrollable).first,
     );
-    scrollable.position.jumpTo(scrollable.position.maxScrollExtent * .72);
-    await tester.pump();
-    expect(find.text('PERSONALIZATION'), findsOneWidget);
+    expect(find.text('NODE GROUP / PERSONAL FIELD'), findsOneWidget);
     await tester.pump();
     expect(tester.takeException(), isNull);
-    expect(find.byType(ChoiceChip), findsNWidgets(3));
+    expect(find.byType(ChoiceChip), findsNothing);
   });
 
   testWidgets('AI-first onboarding supports 200% text', (tester) async {

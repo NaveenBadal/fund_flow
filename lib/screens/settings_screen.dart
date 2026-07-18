@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/ai_provider.dart';
+import '../flow_os/system/system_components.dart';
 import '../providers/expense_provider.dart';
 import '../providers/notification_ingestion_provider.dart';
 import '../services/development_update_service.dart';
@@ -59,206 +60,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final contentInset = screenWidth > AppBreakpoint.contentMax + 40
         ? (screenWidth - AppBreakpoint.contentMax) / 2
         : AppSpacing.lg;
+    final effectiveAi = _connected || aiConfigured;
+    final themeLabel = switch (themeMode) {
+      ThemeMode.light => 'Light field',
+      ThemeMode.dark => 'Dark field',
+      ThemeMode.system => 'Follow device',
+    };
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 76,
-        title: Text(
-          'Control',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(contentInset, 0, contentInset, 40),
+      body: Column(
         children: [
-          _ControlStatus(
-            aiConfigured: _connected || aiConfigured,
-            locked: locked,
-            private: private,
-          ),
-          const _SectionTitle('Flow intelligence'),
-          _SettingsCard(
-            children: [
-              ListTile(
-                leading: FlowOrb(
-                  size: 42,
-                  state: _testing
-                      ? FlowOrbState.thinking
-                      : _connected || aiConfigured
-                      ? FlowOrbState.ready
-                      : FlowOrbState.offline,
+          SystemMasthead(aiOnline: effectiveAi),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(contentInset, 0, contentInset, 40),
+              children: [
+                const SystemSectionLabel('NODE GROUP / INTELLIGENCE'),
+                SystemNode(
+                  code: 'AI-01',
+                  title: 'Flow intelligence',
+                  detail: _testing
+                      ? 'Testing encrypted connection…'
+                      : effectiveAi
+                      ? 'Online · $_model'
+                      : 'Offline · required for analysis and answers',
+                  signal: _testing
+                      ? NodeSignal.attention
+                      : effectiveAi
+                      ? NodeSignal.live
+                      : NodeSignal.attention,
+                  onTap: _showAiConnection,
                 ),
-                title: const Text('Ollama Cloud'),
-                subtitle: Text(
-                  _connected
-                      ? 'Connection verified · $_model'
-                      : aiConfigured
-                      ? 'Configured · $_model'
-                      : 'Required for SMS understanding and agent answers',
+                const SystemSectionLabel('NODE GROUP / EVIDENCE CHANNELS'),
+                const SystemNode(
+                  code: 'EV-01',
+                  title: 'Transaction messages',
+                  detail: 'Primary evidence · analyzed only after consent',
+                  signal: NodeSignal.private,
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _showAiConnection,
-              ),
-            ],
-          ),
-          const _SectionTitle('Transaction sources'),
-          _SettingsCard(
-            children: [
-              const ListTile(
-                leading: Icon(Icons.sms_outlined),
-                title: Text('Transaction SMS'),
-                subtitle: Text(
-                  'Primary source · Start or refresh analysis from Flow',
-                ),
-              ),
-              const Divider(height: 1, indent: 56),
-              SwitchListTile(
-                secondary: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Notification continuity'),
-                subtitle: Text(
-                  capture
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'EV-02',
+                  title: 'Notification continuity',
+                  detail: capture
                       ? ingestion.accessEnabled
-                            ? 'Automatically detect supported transaction notifications'
-                            : 'Finish granting notification access in Android settings'
-                      : 'Optional enhancement for future supported activity',
-                ),
-                value: capture,
-                onChanged: _toggleCapture,
-              ),
-              const Divider(height: 1, indent: 56),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.history_rounded),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('SMS history range'),
-                          Text(
-                            'Scan the last $_lookback days',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Slider(
-                value: _lookback.toDouble(),
-                min: 7,
-                max: 180,
-                divisions: 25,
-                label: '$_lookback days',
-                onChanged: (value) => setState(() => _lookback = value.round()),
-                onChangeEnd: (_) => _saveMemory(),
-              ),
-            ],
-          ),
-          const _SectionTitle('Privacy and security'),
-          _SettingsCard(
-            children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.lock_outline_rounded),
-                title: const Text('App lock'),
-                subtitle: const Text(
-                  'Require device authentication when Flow opens',
-                ),
-                value: locked,
-                onChanged: (value) =>
-                    ref.read(appLockEnabledProvider.notifier).setEnabled(value),
-              ),
-              const Divider(height: 1, indent: 56),
-              ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('Data and AI privacy'),
-                subtitle: const Text('See exactly what leaves this device'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _showPrivacy,
-              ),
-            ],
-          ),
-          const _SectionTitle('Personalization'),
-          _SettingsCard(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: _ThemeModeSelector(
-                  value: themeMode,
-                  onChanged: _setTheme,
-                ),
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.visibility_outlined),
-                title: const Text('Show amounts'),
-                subtitle: const Text(
-                  'Display monetary values throughout the app',
-                ),
-                value: !private,
-                onChanged: (value) =>
-                    ref.read(privateModeProvider.notifier).set(!value),
-              ),
-            ],
-          ),
-          const _SectionTitle('Money and organization'),
-          _SettingsCard(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.payments_outlined),
-                title: const Text('Primary currency'),
-                subtitle: Text('$_currency · Used when SMS has no currency'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _showMoneyPreferences,
-              ),
-            ],
-          ),
-          const _SectionTitle('Advanced'),
-          _SettingsCard(
-            children: [
-              ExpansionTile(
-                leading: const Icon(Icons.tune_rounded),
-                title: const Text('Diagnostics and organization'),
-                subtitle: const Text('Import audit, categories, and AI logs'),
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.fact_check_outlined),
-                    title: const Text('Import history'),
-                    onTap: () => _push(const AuditScreen()),
+                            ? 'Listening for supported transaction signals'
+                            : 'Android access still required'
+                      : 'Optional real-time evidence channel',
+                  signal: capture ? NodeSignal.live : NodeSignal.neutral,
+                  control: BinaryRail(
+                    value: capture,
+                    onChanged: _toggleCapture,
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.category_outlined),
-                    title: const Text('Category library'),
-                    onTap: () => _push(const CustomCategoriesScreen()),
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'EV-03',
+                  title: 'Evidence horizon',
+                  detail: 'How far Flow looks back when rebuilding proof',
+                  signal: NodeSignal.private,
+                  control: StepRail(
+                    value: '${_lookback}D',
+                    onDecrease: () {
+                      setState(() => _lookback = (_lookback - 7).clamp(7, 180));
+                      _saveMemory();
+                    },
+                    onIncrease: () {
+                      setState(() => _lookback = (_lookback + 7).clamp(7, 180));
+                      _saveMemory();
+                    },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.terminal_outlined),
-                    title: const Text('AI activity log'),
-                    onTap: () => _push(const LogsScreen()),
+                ),
+                const SystemSectionLabel('NODE GROUP / PRIVACY'),
+                SystemNode(
+                  code: 'PR-01',
+                  title: 'Device authentication',
+                  detail: 'Guard Flow whenever the application opens',
+                  signal: locked ? NodeSignal.live : NodeSignal.neutral,
+                  control: BinaryRail(
+                    value: locked,
+                    onChanged: (value) => ref
+                        .read(appLockEnabledProvider.notifier)
+                        .setEnabled(value),
                   ),
-                  if (githubDevelopmentUpdatesEnabled)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: DevelopmentUpdateSettingsCard(),
-                    ),
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'PR-02',
+                  title: 'Data boundary',
+                  detail: 'Inspect exactly what remains local and what leaves',
+                  signal: NodeSignal.private,
+                  onTap: _showPrivacy,
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'PR-03',
+                  title: 'Amount visibility',
+                  detail: private
+                      ? 'Values veiled throughout the interface'
+                      : 'Values visible throughout the interface',
+                  signal: private ? NodeSignal.private : NodeSignal.neutral,
+                  control: BinaryRail(
+                    value: !private,
+                    onLabel: 'SHOW',
+                    offLabel: 'VEIL',
+                    onChanged: (value) =>
+                        ref.read(privateModeProvider.notifier).set(!value),
+                  ),
+                ),
+                const SystemSectionLabel('NODE GROUP / PERSONAL FIELD'),
+                SystemNode(
+                  code: 'UI-01',
+                  title: 'Appearance',
+                  detail: '$themeLabel · tap to change field state',
+                  onTap: () => _setTheme(switch (themeMode) {
+                    ThemeMode.system => ThemeMode.dark,
+                    ThemeMode.dark => ThemeMode.light,
+                    ThemeMode.light => ThemeMode.system,
+                  }),
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'MO-01',
+                  title: 'Primary currency',
+                  detail: '$_currency · fallback when evidence has no currency',
+                  onTap: _showMoneyPreferences,
+                ),
+                const SystemSectionLabel('NODE GROUP / DIAGNOSTICS'),
+                SystemNode(
+                  code: 'DX-01',
+                  title: 'Import history',
+                  detail: 'Trace each ingestion and extraction decision',
+                  onTap: () => _push(const AuditScreen()),
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'DX-02',
+                  title: 'Category library',
+                  detail: 'Control the language used to organize evidence',
+                  onTap: () => _push(const CustomCategoriesScreen()),
+                ),
+                const SizedBox(height: 8),
+                SystemNode(
+                  code: 'DX-03',
+                  title: 'AI activity log',
+                  detail: 'Inspect local agent operations and failures',
+                  onTap: () => _push(const LogsScreen()),
+                ),
+                if (githubDevelopmentUpdatesEnabled) ...[
+                  const SizedBox(height: 12),
+                  const DevelopmentUpdateSettingsCard(),
                 ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Center(
-            child: Text(
-              'Flow keeps your financial records on this device.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+                const SizedBox(height: 28),
+                Text(
+                  'LOCAL RECORDS / USER CONTROLLED / PROOF BOUND',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ],
             ),
           ),
         ],
@@ -578,6 +536,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       Navigator.push(context, MaterialPageRoute(builder: (_) => page));
 }
 
+// TODO(flow-loom-demolition): delete with the remaining legacy sheet helpers.
+// ignore: unused_element
 class _ControlStatus extends StatelessWidget {
   const _ControlStatus({
     required this.aiConfigured,
@@ -706,6 +666,7 @@ class _ControlSignal extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   final String text;
@@ -750,6 +711,7 @@ class _SectionTitle extends StatelessWidget {
   );
 }
 
+// ignore: unused_element
 class _ThemeModeSelector extends StatelessWidget {
   const _ThemeModeSelector({required this.value, required this.onChanged});
 
@@ -798,6 +760,7 @@ class _ThemeModeSelector extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.children});
   final List<Widget> children;
