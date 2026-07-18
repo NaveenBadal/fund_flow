@@ -5,6 +5,7 @@ import 'package:fund_flow/agent/agent_runner.dart';
 import 'package:fund_flow/agent/mcp_protocol.dart';
 import 'package:fund_flow/intelligence/ai_client.dart';
 import 'package:fund_flow/domain/transaction.dart';
+import 'package:fund_flow/ingestion/ai_message_ingestion.dart';
 import 'package:fund_flow/ingestion/message_candidate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -165,21 +166,17 @@ void main() {
         receivedAt: DateTime(2026, 7, 18),
       );
       final responseBody = jsonEncode({
-        'choices': [
-          {
-            'message': {
-              'content': jsonEncode({
-                'results': [
-                  {
-                    'id': candidate.fingerprint,
-                    'decision': 'not_transaction',
-                    'reason': 'No completed movement of money.',
-                  },
-                ],
-              }),
-            },
-          },
-        ],
+        'message': {
+          'content': jsonEncode({
+            'results': [
+              {
+                'id': 0,
+                'decision': 'not_transaction',
+                'reason': 'No completed movement of money.',
+              },
+            ],
+          }),
+        },
       });
       final client = AiClient(
         client: MockClient((request) async {
@@ -202,12 +199,17 @@ void main() {
 
       expect(sent, contains('Payment body'));
       expect(sent, isNot(contains('secret-not-logged')));
-      expect(requestUri?.path, '/v1/chat/completions');
+      expect(requestUri?.path, '/api/chat');
       final request = jsonDecode(sent!) as Map<String, Object?>;
-      expect(request['reasoning_effort'], 'low');
-      expect(request['temperature'], 0);
-      expect(request['max_tokens'], 2400);
-      expect(request['response_format'], isA<Map>());
+      expect(request['think'], 'low');
+      expect(request['keep_alive'], '10m');
+      expect(request['format'], isA<Map>());
+      expect(request['options'], {'temperature': 0, 'num_predict': 1600});
+      final messages = request['messages'] as List;
+      final userPayload =
+          jsonDecode((messages.last as Map)['content'].toString()) as Map;
+      expect(((userPayload['messages'] as List).single as Map)['id'], 0);
+      expect(sent, isNot(contains(candidate.fingerprint)));
       expect(returned, responseBody);
     },
   );
@@ -241,7 +243,7 @@ void main() {
               'content': jsonEncode({
                 'results': [
                   {
-                    'id': candidate.fingerprint,
+                    'id': 0,
                     'decision': 'transaction',
                     'reason': 'Completed outgoing transfer.',
                     'amountMinor': 27900,
@@ -278,5 +280,49 @@ void main() {
     expect(responses, hasLength(2));
     expect(requests.last, contains('previous output was rejected'));
     expect(result.results.single.transaction?.amountMinor, 27900);
+  });
+
+  test('native ingestion retries a transient cloud failure', () async {
+    var calls = 0;
+    final candidate = MessageCandidate(
+      sender: 'Bank',
+      body: 'Statement is ready.',
+      receivedAt: DateTime(2026, 7, 18),
+    );
+    final client = AiClient(
+      client: MockClient((_) async {
+        calls++;
+        if (calls == 1) return http.Response('temporarily unavailable', 503);
+        return http.Response(
+          jsonEncode({
+            'message': {
+              'content': jsonEncode({
+                'results': [
+                  {
+                    'id': 0,
+                    'decision': 'not_transaction',
+                    'reason': 'Statement notice only.',
+                  },
+                ],
+              }),
+            },
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(client.close);
+
+    final result = await client.analyzeMessages(
+      endpoint: 'https://ollama.com',
+      apiKey: 'secret',
+      model: 'gpt-oss:20b',
+      candidates: [candidate],
+      source: TransactionSource.message,
+      now: DateTime(2026, 7, 18),
+    );
+
+    expect(calls, 2);
+    expect(result.results.single.decision, IngestionDecision.notTransaction);
   });
 }

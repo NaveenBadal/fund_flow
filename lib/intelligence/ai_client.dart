@@ -18,13 +18,6 @@ class AiClient {
     return Uri.parse('$base/api/chat');
   }
 
-  Uri _openAiUri(String endpoint) {
-    final base = endpoint.endsWith('/')
-        ? endpoint.substring(0, endpoint.length - 1)
-        : endpoint;
-    return Uri.parse('$base/v1/chat/completions');
-  }
-
   Future<bool> validate({
     required String endpoint,
     required String apiKey,
@@ -82,37 +75,46 @@ class AiClient {
       final requestBody = jsonEncode({
         'model': model,
         'stream': false,
-        // Ollama Cloud does not enforce `format` on its native API. Its
-        // OpenAI-compatible endpoint supports response_format and exposes the
-        // GPT-OSS reasoning control, giving extraction both a strict contract
-        // and a small reasoning budget.
-        'reasoning_effort': 'low',
-        'temperature': 0,
-        'max_tokens': 2400,
-        'response_format': {
-          'type': 'json_schema',
-          'json_schema': {
-            'name': 'fund_flow_message_results',
-            'strict': true,
-            'schema': IngestionPrompt.responseSchema,
-          },
-        },
+        'think': 'low',
+        'keep_alive': '10m',
+        'format': IngestionPrompt.responseSchema,
+        'options': {'temperature': 0, 'num_predict': 1600},
         'messages': messages,
       });
-      onRequest?.call(requestBody);
-      final response = await _client
-          .post(
-            _openAiUri(endpoint),
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            },
-            body: requestBody,
-          )
-          .timeout(const Duration(seconds: 60));
-      onResponse?.call(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw AiRequestFailure(response.statusCode);
+      http.Response? response;
+      Object? lastError;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        onRequest?.call(requestBody);
+        try {
+          response = await _client
+              .post(
+                _uri(endpoint),
+                headers: {
+                  'Authorization': 'Bearer $apiKey',
+                  'Content-Type': 'application/json',
+                },
+                body: requestBody,
+              )
+              .timeout(const Duration(seconds: 60));
+          onResponse?.call(response.body);
+          final retryable =
+              response.statusCode == 429 ||
+              response.statusCode == 502 ||
+              response.statusCode == 503 ||
+              response.statusCode >= 500;
+          if (!retryable) break;
+          lastError = AiRequestFailure(response.statusCode);
+        } catch (error) {
+          lastError = error;
+        }
+        if (attempt < 2) {
+          await Future<void>.delayed(Duration(milliseconds: 300 << attempt));
+        }
+      }
+      if (response == null ||
+          response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        throw lastError ?? AiRequestFailure(response?.statusCode ?? 0);
       }
       try {
         final decoded = jsonDecode(response.body);

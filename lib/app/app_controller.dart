@@ -21,8 +21,8 @@ import '../intelligence/ai_client.dart';
 import '../update/app_updater.dart';
 import 'app_state.dart';
 
-const _maximumIngestionMessages = 8;
-const _maximumIngestionCharacters = 6000;
+const _maximumIngestionMessages = 12;
+const _maximumIngestionCharacters = 9000;
 
 int _ingestionBatchLength(List<MessageCandidate> values, int start) {
   var characters = 0;
@@ -36,6 +36,20 @@ int _ingestionBatchLength(List<MessageCandidate> values, int start) {
     count++;
   }
   return count;
+}
+
+List<List<T>> _ingestionBatches<T>(
+  List<T> values,
+  MessageCandidate Function(T value) candidateOf,
+) {
+  final candidates = values.map(candidateOf).toList(growable: false);
+  final batches = <List<T>>[];
+  for (var start = 0; start < values.length;) {
+    final count = _ingestionBatchLength(candidates, start);
+    batches.add(values.sublist(start, start + count));
+    start += count;
+  }
+  return batches;
 }
 
 final storeProvider = Provider((ref) {
@@ -167,79 +181,95 @@ class AppController extends AsyncNotifier<AppState> {
             candidates: pending.map((item) => item.candidate).toList(),
             alreadySeen: seen,
           );
+      final activeRunId = auditRunId;
       final acknowledged = <String>[];
-      var batchPosition = 0;
-      for (var start = 0; start < unseen.length;) {
-        final candidateValues = unseen
-            .map((item) => item.candidate)
-            .toList(growable: false);
-        final count = _ingestionBatchLength(candidateValues, start);
-        final items = unseen.skip(start).take(count).toList();
-        final batchId = await ref
-            .read(storeProvider)
-            .beginImportBatch(runId: auditRunId, position: batchPosition);
-        await ref
-            .read(storeProvider)
-            .assignImportBatch(
-              auditRunId,
-              batchId,
-              items.map((item) => item.candidate.fingerprint),
-            );
-        final requests = <String>[];
-        final responses = <String>[];
-        late AiIngestionBatch analysis;
-        try {
-          analysis = await ref
-              .read(aiClientProvider)
-              .analyzeMessages(
-                endpoint: preferences.aiEndpoint,
-                apiKey: apiKey,
-                model: preferences.aiModel,
-                candidates: items.map((item) => item.candidate).toList(),
-                source: TransactionSource.notification,
-                now: DateTime.now(),
-                onRequest: requests.add,
-                onResponse: responses.add,
-              );
-          await ref
-              .read(storeProvider)
-              .recordImportBatchRequest(batchId, _auditExchanges(requests));
-          await ref
-              .read(storeProvider)
-              .recordImportBatchResponse(batchId, _auditExchanges(responses));
-          await ref
-              .read(storeProvider)
-              .commitIngestionBatch(
-                analysis,
-                runId: auditRunId,
-                batchId: batchId,
-              );
-        } catch (error) {
-          if (requests.isNotEmpty) {
-            await ref
-                .read(storeProvider)
-                .recordImportBatchRequest(batchId, _auditExchanges(requests));
-          }
-          if (responses.isNotEmpty) {
-            await ref
-                .read(storeProvider)
-                .recordImportBatchResponse(batchId, _auditExchanges(responses));
-          }
-          await ref
-              .read(storeProvider)
-              .failImportBatch(batchId, _importFailureDetail(error));
-          rethrow;
-        }
-        final committed = analysis.results
-            .map((item) => item.fingerprint)
-            .toSet();
-        for (final item in items) {
-          if (committed.contains(item.candidate.fingerprint)) {
-            acknowledged.add(item.id);
-          }
-        }
-        start += items.length;
-        batchPosition++;
+      final batches = _ingestionBatches(unseen, (item) => item.candidate);
+      for (var wave = 0; wave < batches.length; wave += 2) {
+        final end = (wave + 2).clamp(0, batches.length);
+        await Future.wait([
+          for (var batchPosition = wave; batchPosition < end; batchPosition++)
+            () async {
+              final items = batches[batchPosition];
+              final batchId = await ref
+                  .read(storeProvider)
+                  .beginImportBatch(
+                    runId: activeRunId,
+                    position: batchPosition,
+                  );
+              await ref
+                  .read(storeProvider)
+                  .assignImportBatch(
+                    activeRunId,
+                    batchId,
+                    items.map((item) => item.candidate.fingerprint),
+                  );
+              final requests = <String>[];
+              final responses = <String>[];
+              late AiIngestionBatch analysis;
+              try {
+                analysis = await ref
+                    .read(aiClientProvider)
+                    .analyzeMessages(
+                      endpoint: preferences.aiEndpoint,
+                      apiKey: apiKey,
+                      model: preferences.aiModel,
+                      candidates: items.map((item) => item.candidate).toList(),
+                      source: TransactionSource.notification,
+                      now: DateTime.now(),
+                      onRequest: requests.add,
+                      onResponse: responses.add,
+                    );
+                await ref
+                    .read(storeProvider)
+                    .recordImportBatchRequest(
+                      batchId,
+                      _auditExchanges(requests),
+                    );
+                await ref
+                    .read(storeProvider)
+                    .recordImportBatchResponse(
+                      batchId,
+                      _auditExchanges(responses),
+                    );
+                await ref
+                    .read(storeProvider)
+                    .commitIngestionBatch(
+                      analysis,
+                      runId: activeRunId,
+                      batchId: batchId,
+                    );
+              } catch (error) {
+                if (requests.isNotEmpty) {
+                  await ref
+                      .read(storeProvider)
+                      .recordImportBatchRequest(
+                        batchId,
+                        _auditExchanges(requests),
+                      );
+                }
+                if (responses.isNotEmpty) {
+                  await ref
+                      .read(storeProvider)
+                      .recordImportBatchResponse(
+                        batchId,
+                        _auditExchanges(responses),
+                      );
+                }
+                await ref
+                    .read(storeProvider)
+                    .failImportBatch(batchId, _importFailureDetail(error));
+                rethrow;
+              }
+              final committed = analysis.results
+                  .map((item) => item.fingerprint)
+                  .toSet();
+              for (final item in items) {
+                if (committed.contains(item.candidate.fingerprint)) {
+                  acknowledged.add(item.id);
+                }
+              }
+            }(),
+        ]);
       }
       for (final item in pending) {
         if (seen.contains(item.candidate.fingerprint)) {
@@ -443,11 +473,12 @@ class AppController extends AsyncNotifier<AppState> {
             candidates: candidates,
             alreadySeen: seen,
           );
+      final activeRunId = auditRunId;
       var imported = 0;
       var checked = 0;
       var skipped = seen.length;
-      var batchPosition = 0;
-      for (var start = 0; start < unseen.length;) {
+      final batches = _ingestionBatches(unseen, (item) => item);
+      for (var wave = 0; wave < batches.length; wave += 2) {
         if (_stopImportRequested) {
           await ref
               .read(storeProvider)
@@ -478,84 +509,100 @@ class AppController extends AsyncNotifier<AppState> {
             ),
           ),
         );
-        final batch = unseen
-            .skip(start)
-            .take(_ingestionBatchLength(unseen, start))
-            .toList();
-        final batchId = await ref
-            .read(storeProvider)
-            .beginImportBatch(runId: auditRunId, position: batchPosition);
-        await ref
-            .read(storeProvider)
-            .assignImportBatch(
-              auditRunId,
-              batchId,
-              batch.map((item) => item.fingerprint),
-            );
-        final requests = <String>[];
-        final responses = <String>[];
-        late AiIngestionBatch analysis;
-        try {
-          analysis = await ref
-              .read(aiClientProvider)
-              .analyzeMessages(
-                endpoint: _value.preferences.aiEndpoint,
-                apiKey: apiKey,
-                model: _value.preferences.aiModel,
-                candidates: batch,
-                source: TransactionSource.message,
-                now: DateTime.now(),
-                onRequest: requests.add,
-                onResponse: responses.add,
+        final end = (wave + 2).clamp(0, batches.length);
+        await Future.wait([
+          for (var batchPosition = wave; batchPosition < end; batchPosition++)
+            () async {
+              final batch = batches[batchPosition];
+              final batchId = await ref
+                  .read(storeProvider)
+                  .beginImportBatch(
+                    runId: activeRunId,
+                    position: batchPosition,
+                  );
+              await ref
+                  .read(storeProvider)
+                  .assignImportBatch(
+                    activeRunId,
+                    batchId,
+                    batch.map((item) => item.fingerprint),
+                  );
+              final requests = <String>[];
+              final responses = <String>[];
+              late AiIngestionBatch analysis;
+              try {
+                analysis = await ref
+                    .read(aiClientProvider)
+                    .analyzeMessages(
+                      endpoint: _value.preferences.aiEndpoint,
+                      apiKey: apiKey,
+                      model: _value.preferences.aiModel,
+                      candidates: batch,
+                      source: TransactionSource.message,
+                      now: DateTime.now(),
+                      onRequest: requests.add,
+                      onResponse: responses.add,
+                    );
+                await ref
+                    .read(storeProvider)
+                    .recordImportBatchRequest(
+                      batchId,
+                      _auditExchanges(requests),
+                    );
+                await ref
+                    .read(storeProvider)
+                    .recordImportBatchResponse(
+                      batchId,
+                      _auditExchanges(responses),
+                    );
+                imported += await ref
+                    .read(storeProvider)
+                    .commitIngestionBatch(
+                      analysis,
+                      runId: activeRunId,
+                      batchId: batchId,
+                    );
+              } catch (error) {
+                if (requests.isNotEmpty) {
+                  await ref
+                      .read(storeProvider)
+                      .recordImportBatchRequest(
+                        batchId,
+                        _auditExchanges(requests),
+                      );
+                }
+                if (responses.isNotEmpty) {
+                  await ref
+                      .read(storeProvider)
+                      .recordImportBatchResponse(
+                        batchId,
+                        _auditExchanges(responses),
+                      );
+                }
+                await ref
+                    .read(storeProvider)
+                    .failImportBatch(batchId, _importFailureDetail(error));
+                rethrow;
+              }
+              checked += batch.length;
+              skipped += analysis.results
+                  .where((item) => item.transaction == null)
+                  .length;
+              state = AsyncData(
+                _value.copyWith(
+                  transactions: await ref.read(storeProvider).transactions(),
+                  importStatus: ImportStatus(
+                    phase: ImportPhase.understanding,
+                    permission: permission,
+                    checked: checked,
+                    imported: imported,
+                    skipped: skipped,
+                    message: 'Saved batch ${batchPosition + 1}',
+                  ),
+                ),
               );
-          await ref
-              .read(storeProvider)
-              .recordImportBatchRequest(batchId, _auditExchanges(requests));
-          await ref
-              .read(storeProvider)
-              .recordImportBatchResponse(batchId, _auditExchanges(responses));
-          imported += await ref
-              .read(storeProvider)
-              .commitIngestionBatch(
-                analysis,
-                runId: auditRunId,
-                batchId: batchId,
-              );
-        } catch (error) {
-          if (requests.isNotEmpty) {
-            await ref
-                .read(storeProvider)
-                .recordImportBatchRequest(batchId, _auditExchanges(requests));
-          }
-          if (responses.isNotEmpty) {
-            await ref
-                .read(storeProvider)
-                .recordImportBatchResponse(batchId, _auditExchanges(responses));
-          }
-          await ref
-              .read(storeProvider)
-              .failImportBatch(batchId, _importFailureDetail(error));
-          rethrow;
-        }
-        checked += batch.length;
-        skipped += analysis.results
-            .where((item) => item.transaction == null)
-            .length;
-        state = AsyncData(
-          _value.copyWith(
-            transactions: await ref.read(storeProvider).transactions(),
-            importStatus: ImportStatus(
-              phase: ImportPhase.understanding,
-              permission: permission,
-              checked: checked,
-              imported: imported,
-              skipped: skipped,
-              message: 'Saved batch ${batchPosition + 1}',
-            ),
-          ),
-        );
-        start += batch.length;
-        batchPosition++;
+            }(),
+        ]);
       }
       await ref
           .read(storeProvider)
