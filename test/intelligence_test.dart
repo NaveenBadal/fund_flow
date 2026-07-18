@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:fund_flow/agent/mcp_protocol.dart';
 import 'package:fund_flow/intelligence/ai_client.dart';
+import 'package:fund_flow/domain/transaction.dart';
+import 'package:fund_flow/ingestion/message_candidate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -60,4 +62,49 @@ void main() {
     expect(turn.toolCalls.single.name, 'settings_get');
     expect(turn.toolCalls.single.arguments, isEmpty);
   });
+
+  test(
+    'ingestion exposes the exact safe request and raw provider response',
+    () async {
+      String? sent;
+      String? returned;
+      final candidate = MessageCandidate(
+        sender: 'Bank',
+        body: 'Payment body',
+        receivedAt: DateTime(2026, 7, 18),
+      );
+      final responseBody = jsonEncode({
+        'message': {
+          'content': jsonEncode({
+            'results': [
+              {
+                'id': candidate.fingerprint,
+                'decision': 'not_transaction',
+                'reason': 'No completed movement of money.',
+              },
+            ],
+          }),
+        },
+      });
+      final client = AiClient(
+        client: MockClient((_) async => http.Response(responseBody, 200)),
+      );
+      addTearDown(client.close);
+
+      await client.analyzeMessages(
+        endpoint: 'http://localhost:11434',
+        apiKey: 'secret-not-logged',
+        model: 'model',
+        candidates: [candidate],
+        source: TransactionSource.message,
+        now: DateTime(2026, 7, 18),
+        onRequest: (value) => sent = value,
+        onResponse: (value) => returned = value,
+      );
+
+      expect(sent, contains('Payment body'));
+      expect(sent, isNot(contains('secret-not-logged')));
+      expect(returned, responseBody);
+    },
+  );
 }

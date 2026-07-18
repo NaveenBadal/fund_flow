@@ -63,7 +63,19 @@ class AiClient {
     required List<MessageCandidate> candidates,
     required TransactionSource source,
     required DateTime now,
+    void Function(String requestJson)? onRequest,
+    void Function(String responseJson)? onResponse,
   }) async {
+    final requestBody = jsonEncode({
+      'model': model,
+      'stream': false,
+      'format': IngestionPrompt.responseSchema,
+      'messages': [
+        {'role': 'system', 'content': IngestionPrompt.system(now)},
+        {'role': 'user', 'content': IngestionPrompt.user(candidates)},
+      ],
+    });
+    onRequest?.call(requestBody);
     final response = await _client
         .post(
           _uri(endpoint),
@@ -71,17 +83,10 @@ class AiClient {
             'Authorization': 'Bearer $apiKey',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({
-            'model': model,
-            'stream': false,
-            'format': IngestionPrompt.responseSchema,
-            'messages': [
-              {'role': 'system', 'content': IngestionPrompt.system(now)},
-              {'role': 'user', 'content': IngestionPrompt.user(candidates)},
-            ],
-          }),
+          body: requestBody,
         )
         .timeout(const Duration(seconds: 60));
+    onResponse?.call(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiRequestFailure(response.statusCode);
     }

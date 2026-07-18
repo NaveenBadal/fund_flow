@@ -6,13 +6,15 @@ import 'package:sqflite/sqflite.dart';
 import '../agent/agent_proposal.dart';
 import '../agent/agent_runner.dart';
 import '../domain/conversation.dart';
+import '../domain/import_audit.dart';
 import '../domain/transaction.dart';
 import '../ingestion/ai_message_ingestion.dart';
+import '../ingestion/message_candidate.dart';
 
 class FundFlowStore {
   FundFlowStore({Database? database}) : _database = database;
   Database? _database;
-  static const schemaVersion = 2;
+  static const schemaVersion = 3;
 
   Future<Database> get database async => _database ??= await openDatabase(
     path.join(await getDatabasesPath(), 'fund_flow_greenfield.db'),
@@ -41,6 +43,7 @@ class FundFlowStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
         payload TEXT NOT NULL, created_at TEXT NOT NULL)''');
       await _createAgentTables(db);
+      await _createImportAuditTables(db);
     },
     onUpgrade: (db, oldVersion, _) async {
       if (oldVersion < 2) {
@@ -52,6 +55,7 @@ class FundFlowStore {
         );
         await _createAgentTables(db);
       }
+      if (oldVersion < 3) await _createImportAuditTables(db);
     },
   );
 
@@ -67,6 +71,28 @@ class FundFlowStore {
       id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER,
       tool TEXT NOT NULL, summary TEXT NOT NULL, is_error INTEGER NOT NULL,
       created_at TEXT NOT NULL)''');
+  }
+
+  static Future<void> _createImportAuditTables(Database db) async {
+    await db.execute('''CREATE TABLE IF NOT EXISTS import_runs(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL,
+      state TEXT NOT NULL, started_at TEXT NOT NULL, completed_at TEXT,
+      model TEXT NOT NULL, endpoint TEXT NOT NULL, total INTEGER NOT NULL,
+      processed INTEGER NOT NULL DEFAULT 0, imported INTEGER NOT NULL DEFAULT 0,
+      error TEXT)''');
+    await db.execute('''CREATE TABLE IF NOT EXISTS import_batches(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL,
+      position INTEGER NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL,
+      completed_at TEXT, request_json TEXT NOT NULL DEFAULT '',
+      response_json TEXT, error TEXT)''');
+    await db.execute('''CREATE TABLE IF NOT EXISTS import_items(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL,
+      batch_id INTEGER, fingerprint TEXT NOT NULL, sender TEXT, body TEXT NOT NULL,
+      received_at TEXT NOT NULL, state TEXT NOT NULL, reason TEXT,
+      transaction_id INTEGER, UNIQUE(run_id, fingerprint))''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS import_items_run ON import_items(run_id)',
+    );
   }
 
   Future<List<MoneyTransaction>> transactions() async {
@@ -281,7 +307,163 @@ class FundFlowStore {
     return rows.map((row) => row['fingerprint'] as String).toSet();
   }
 
-  Future<int> commitIngestionBatch(AiIngestionBatch batch) async {
+  Future<int> beginImportRun({
+    required String source,
+    required String model,
+    required String endpoint,
+    required List<MessageCandidate> candidates,
+    required Set<String> alreadySeen,
+  }) async {
+    final db = await database;
+    return db.transaction((transaction) async {
+      final runId = await transaction.insert('import_runs', {
+        'source': source,
+        'state': ImportRunState.running.name,
+        'started_at': DateTime.now().toUtc().toIso8601String(),
+        'model': model,
+        'endpoint': endpoint,
+        'total': candidates.length,
+        'processed': alreadySeen.length,
+        'imported': 0,
+      });
+      for (final candidate in candidates) {
+        final seen = alreadySeen.contains(candidate.fingerprint);
+        await transaction.insert('import_items', {
+          'run_id': runId,
+          'fingerprint': candidate.fingerprint,
+          'sender': candidate.sender,
+          'body': candidate.body,
+          'received_at': candidate.receivedAt.toUtc().toIso8601String(),
+          'state': seen
+              ? ImportItemState.alreadySeen.name
+              : ImportItemState.queued.name,
+          'reason': seen ? 'Previously analyzed; not sent again.' : null,
+        });
+      }
+      return runId;
+    });
+  }
+
+  Future<int> beginImportBatch({required int runId, required int position}) =>
+      database.then(
+        (db) => db.insert('import_batches', {
+          'run_id': runId,
+          'position': position,
+          'state': 'sending',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'request_json': '',
+        }),
+      );
+
+  Future<void> recordImportBatchRequest(int id, String requestJson) async {
+    await (await database).update(
+      'import_batches',
+      {'request_json': requestJson},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> recordImportBatchResponse(int id, String responseJson) async {
+    await (await database).update(
+      'import_batches',
+      {'response_json': responseJson},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> failImportBatch(int id, String error) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      await transaction.update(
+        'import_batches',
+        {
+          'state': 'failed',
+          'error': error,
+          'completed_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await transaction.update(
+        'import_items',
+        {'state': ImportItemState.failed.name, 'reason': error},
+        where: 'batch_id = ?',
+        whereArgs: [id],
+      );
+    });
+  }
+
+  Future<void> assignImportBatch(
+    int runId,
+    int batchId,
+    Iterable<String> fingerprints,
+  ) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final fingerprint in fingerprints) {
+      batch.update(
+        'import_items',
+        {'batch_id': batchId},
+        where: 'run_id = ? AND fingerprint = ?',
+        whereArgs: [runId, fingerprint],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> finishImportRun(
+    int runId, {
+    required ImportRunState state,
+    String? error,
+  }) async {
+    await (await database).update(
+      'import_runs',
+      {
+        'state': state.name,
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
+        'error': error,
+      },
+      where: 'id = ?',
+      whereArgs: [runId],
+    );
+  }
+
+  Future<List<ImportRunRecord>> importRuns({int limit = 30}) async {
+    final rows = await (await database).query(
+      'import_runs',
+      orderBy: 'id DESC',
+      limit: limit,
+    );
+    return rows.map(ImportRunRecord.fromMap).toList();
+  }
+
+  Future<List<ImportBatchRecord>> importBatches(int runId) async {
+    final rows = await (await database).query(
+      'import_batches',
+      where: 'run_id = ?',
+      whereArgs: [runId],
+      orderBy: 'position ASC',
+    );
+    return rows.map(ImportBatchRecord.fromMap).toList();
+  }
+
+  Future<List<ImportItemRecord>> importItems(int runId) async {
+    final rows = await (await database).query(
+      'import_items',
+      where: 'run_id = ?',
+      whereArgs: [runId],
+      orderBy: 'received_at DESC',
+    );
+    return rows.map(ImportItemRecord.fromMap).toList();
+  }
+
+  Future<int> commitIngestionBatch(
+    AiIngestionBatch batch, {
+    int? runId,
+    int? batchId,
+  }) async {
     final db = await database;
     return db.transaction((transaction) async {
       var imported = 0;
@@ -292,10 +474,57 @@ class FundFlowStore {
           'outcome': result.decision.name,
           'detail': result.reason,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        if (accepted == 0 || result.transaction == null) continue;
-        final value = result.transaction!.toMap()..remove('id');
-        await transaction.insert('transactions', value);
-        imported++;
+        int? transactionId;
+        if (accepted != 0 && result.transaction != null) {
+          final value = result.transaction!.toMap()..remove('id');
+          transactionId = await transaction.insert('transactions', value);
+          imported++;
+        }
+        if (runId != null) {
+          await transaction.update(
+            'import_items',
+            {
+              'batch_id': batchId,
+              'state': switch (result.decision) {
+                IngestionDecision.transaction =>
+                  ImportItemState.transaction.name,
+                IngestionDecision.notTransaction =>
+                  ImportItemState.notTransaction.name,
+                IngestionDecision.uncertain => ImportItemState.uncertain.name,
+              },
+              'reason': result.reason,
+              'transaction_id': transactionId,
+            },
+            where: 'run_id = ? AND fingerprint = ?',
+            whereArgs: [runId, result.fingerprint],
+          );
+        }
+      }
+      if (batchId != null) {
+        await transaction.update(
+          'import_batches',
+          {
+            'state': 'completed',
+            'completed_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [batchId],
+        );
+      }
+      if (runId != null) {
+        await transaction.rawUpdate(
+          '''UPDATE import_runs SET
+          processed = (SELECT COUNT(*) FROM import_items WHERE run_id = ? AND state != ?),
+          imported = (SELECT COUNT(*) FROM import_items WHERE run_id = ? AND state = ?)
+          WHERE id = ?''',
+          [
+            runId,
+            ImportItemState.queued.name,
+            runId,
+            ImportItemState.transaction.name,
+            runId,
+          ],
+        );
       }
       return imported;
     });

@@ -11,6 +11,7 @@ import '../../ui/components/current_switch.dart';
 import '../../ui/components/current_button.dart';
 import '../../ui/foundation/current_colors.dart';
 import 'connect_intelligence_sheet.dart';
+import 'message_intelligence_sheet.dart';
 import 'update_sheet.dart';
 
 class YouScreen extends ConsumerWidget {
@@ -69,10 +70,13 @@ class YouScreen extends ConsumerWidget {
                               style: CurrentButtonStyle.tonal,
                               onPressed: controller.stopMessageImport,
                             )
-                          : null,
-                      onTap: app.importStatus.working
-                          ? null
-                          : controller.importMessages,
+                          : CurrentButton(
+                              label: 'Check',
+                              compact: true,
+                              style: CurrentButtonStyle.tonal,
+                              onPressed: controller.importMessages,
+                            ),
+                      onTap: () => _messageIntelligence(context),
                     ),
                     CurrentRow(
                       title: 'Message history',
@@ -221,6 +225,12 @@ class YouScreen extends ConsumerWidget {
     isScrollControlled: true,
     builder: (_) => const UpdateSheet(),
   );
+  Future<void> _messageIntelligence(BuildContext context) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => const MessageIntelligenceSheet(),
+      );
   Future<void> _privacy(BuildContext context) => showModalBottomSheet<void>(
     context: context,
     builder: (_) => SafeArea(

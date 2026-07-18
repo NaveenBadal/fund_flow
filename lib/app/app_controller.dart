@@ -9,8 +9,10 @@ import '../agent/agent_runner.dart';
 import '../agent/local_mcp_server.dart';
 import '../data/secure_preferences.dart';
 import '../domain/conversation.dart';
+import '../domain/import_audit.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
+import '../ingestion/ai_message_ingestion.dart';
 import '../ingestion/notification_source.dart';
 import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
@@ -274,6 +276,7 @@ class AppController extends AsyncNotifier<AppState> {
 
   Future<void> importMessages() async {
     _stopImportRequested = false;
+    int? auditRunId;
     var current = _value;
     final apiKey = await ref.read(securePreferencesProvider).apiKey();
     if (apiKey.isEmpty) {
@@ -337,11 +340,23 @@ class AppController extends AsyncNotifier<AppState> {
       final unseen = candidates
           .where((item) => !seen.contains(item.fingerprint))
           .toList();
+      auditRunId = await ref
+          .read(storeProvider)
+          .beginImportRun(
+            source: TransactionSource.message.name,
+            model: _value.preferences.aiModel,
+            endpoint: _value.preferences.aiEndpoint,
+            candidates: candidates,
+            alreadySeen: seen,
+          );
       var imported = 0;
       var checked = 0;
       var skipped = seen.length;
       for (var start = 0; start < unseen.length; start += 12) {
         if (_stopImportRequested) {
+          await ref
+              .read(storeProvider)
+              .finishImportRun(auditRunId, state: ImportRunState.stopped);
           state = AsyncData(
             _value.copyWith(
               transactions: await ref.read(storeProvider).transactions(),
@@ -369,24 +384,82 @@ class AppController extends AsyncNotifier<AppState> {
           ),
         );
         final batch = unseen.skip(start).take(12).toList();
-        final analysis = await ref
-            .read(aiClientProvider)
-            .analyzeMessages(
-              endpoint: _value.preferences.aiEndpoint,
-              apiKey: apiKey,
-              model: _value.preferences.aiModel,
-              candidates: batch,
-              source: TransactionSource.message,
-              now: DateTime.now(),
-            );
-        imported += await ref
+        final batchId = await ref
             .read(storeProvider)
-            .commitIngestionBatch(analysis);
+            .beginImportBatch(runId: auditRunId, position: start ~/ 12);
+        await ref
+            .read(storeProvider)
+            .assignImportBatch(
+              auditRunId,
+              batchId,
+              batch.map((item) => item.fingerprint),
+            );
+        var requestJson = '';
+        var responseJson = '';
+        late AiIngestionBatch analysis;
+        try {
+          analysis = await ref
+              .read(aiClientProvider)
+              .analyzeMessages(
+                endpoint: _value.preferences.aiEndpoint,
+                apiKey: apiKey,
+                model: _value.preferences.aiModel,
+                candidates: batch,
+                source: TransactionSource.message,
+                now: DateTime.now(),
+                onRequest: (value) => requestJson = value,
+                onResponse: (value) => responseJson = value,
+              );
+          await ref
+              .read(storeProvider)
+              .recordImportBatchRequest(batchId, requestJson);
+          await ref
+              .read(storeProvider)
+              .recordImportBatchResponse(batchId, responseJson);
+          imported += await ref
+              .read(storeProvider)
+              .commitIngestionBatch(
+                analysis,
+                runId: auditRunId,
+                batchId: batchId,
+              );
+        } catch (error) {
+          if (requestJson.isNotEmpty) {
+            await ref
+                .read(storeProvider)
+                .recordImportBatchRequest(batchId, requestJson);
+          }
+          if (responseJson.isNotEmpty) {
+            await ref
+                .read(storeProvider)
+                .recordImportBatchResponse(batchId, responseJson);
+          }
+          await ref
+              .read(storeProvider)
+              .failImportBatch(batchId, _importFailureDetail(error));
+          rethrow;
+        }
         checked += batch.length;
         skipped += analysis.results
             .where((item) => item.transaction == null)
             .length;
+        state = AsyncData(
+          _value.copyWith(
+            transactions: await ref.read(storeProvider).transactions(),
+            importStatus: ImportStatus(
+              phase: ImportPhase.understanding,
+              permission: permission,
+              checked: checked,
+              imported: imported,
+              skipped: skipped,
+              message: 'Saved batch ${(start ~/ 12) + 1}',
+            ),
+          ),
+        );
       }
+      await ref
+          .read(storeProvider)
+          .finishImportRun(auditRunId, state: ImportRunState.completed);
       current = _value.copyWith(
         transactions: await ref.read(storeProvider).transactions(),
         importStatus: ImportStatus(
@@ -419,19 +492,44 @@ class AppController extends AsyncNotifier<AppState> {
           ),
         ),
       );
+      if (auditRunId != null) {
+        await ref
+            .read(storeProvider)
+            .finishImportRun(
+              auditRunId,
+              state: ImportRunState.failed,
+              error: message,
+            );
+      }
     } catch (error) {
+      final detail = _importFailureDetail(error);
       state = AsyncData(
         _value.copyWith(
           importStatus: ImportStatus(
             phase: ImportPhase.invalidResponse,
             permission: permission,
             message:
-                'A provider response could not be validated. Completed batches are safe.',
+                'The AI response could not be used. Completed batches are safe. $detail',
           ),
         ),
       );
+      if (auditRunId != null) {
+        await ref
+            .read(storeProvider)
+            .finishImportRun(
+              auditRunId,
+              state: ImportRunState.failed,
+              error: detail,
+            );
+      }
     }
   }
+
+  String _importFailureDetail(Object error) => switch (error) {
+    AiRequestFailure(:final statusCode) => 'Provider HTTP $statusCode.',
+    IngestionSchemaException(:final message) => message,
+    _ => error.toString(),
+  };
 
   void stopMessageImport() {
     if (!_value.importStatus.working) return;
@@ -494,7 +592,7 @@ class AppController extends AsyncNotifier<AppState> {
           try {
             final update = await updater.check();
             return {
-              'supported':
+              'supportedOnThisBuild':
                   update.availability != UpdateAvailability.unsupported,
               'status': update.availability.name,
               'installedBuildNumber': update.installedBuildNumber,
@@ -502,6 +600,7 @@ class AppController extends AsyncNotifier<AppState> {
               'latestVersion': update.versionName,
               'releaseNotes': update.releaseNotes,
               'mandatory': update.mandatory,
+              'channel': 'GitHub development releases',
               'userAction': update.availability == UpdateAvailability.available
                   ? 'Open You > App updates to download, verify, and install.'
                   : null,

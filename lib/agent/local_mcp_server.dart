@@ -145,9 +145,9 @@ class LocalMcpServer {
     ),
     _tool(
       'app_update_status',
-      'Check Fund Flow\'s verified GitHub development release channel.',
+      'Authoritative check for whether Fund Flow has an updater and whether a newer verified GitHub development release is available. Always use this for update questions.',
       McpSchema.object(),
-      McpRisk.platform,
+      McpRisk.read,
     ),
     _tool(
       'conversation_search',
@@ -298,11 +298,15 @@ class LocalMcpServer {
     if (reader == null) {
       return _ok(call, {
         'supported': false,
-        'reason': 'Update status is unavailable on this platform.',
+        'updaterAvailable': false,
+        'reason': 'Update checks are unavailable on this build or platform.',
       });
     }
     try {
-      return _ok(call, await reader(), summary: 'Checked app update status');
+      return _ok(call, {
+        'updaterAvailable': true,
+        ...await reader(),
+      }, summary: 'Checked the verified GitHub update channel');
     } catch (_) {
       return _error(
         call,

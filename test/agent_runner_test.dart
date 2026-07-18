@@ -100,6 +100,44 @@ void main() {
     );
     expect(provider.messages, isEmpty);
   });
+
+  test(
+    'update questions have authoritative updater routing and tool result',
+    () async {
+      server = LocalMcpServer(
+        transactions: () => const [],
+        preferences: () => const AppPreferences(),
+        updateStatus: () async => {
+          'supportedOnThisBuild': true,
+          'status': 'available',
+          'latestBuildNumber': 91,
+        },
+      );
+      final provider = _FakeProvider([
+        _toolTurn('app_update_status', {}),
+        _toolTurn('answer_compose', {
+          'parts': [
+            {'type': 'conclusion', 'text': 'A verified update is available.'},
+          ],
+        }),
+      ]);
+      final result = await AgentRunner(provider: provider, server: server).run(
+        question: 'Is an updater available?',
+        now: DateTime(2026, 7, 18),
+        locale: 'en_IN',
+        timeZone: 'Asia/Kolkata',
+      );
+      expect(result.events.first.tool, 'app_update_status');
+      expect(
+        provider.messages.first['content'],
+        contains('MUST call app_update_status'),
+      );
+      final toolMessage = provider.messages.where(
+        (message) => message['role'] == 'tool',
+      );
+      expect(toolMessage.single['content'], contains('updaterAvailable'));
+    },
+  );
 }
 
 ProviderTurn _toolTurn(String name, Map<String, Object?> arguments) =>

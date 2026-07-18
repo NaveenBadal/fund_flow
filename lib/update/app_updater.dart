@@ -65,7 +65,11 @@ class AppUpdater {
     final releasesResponse = await _client
         .get(
           _releases,
-          headers: const {'Accept': 'application/vnd.github+json'},
+          headers: const {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'Fund-Flow-Android-Updater',
+          },
         )
         .timeout(const Duration(seconds: 20));
     if (releasesResponse.statusCode != 200) {
