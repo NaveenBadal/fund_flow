@@ -246,7 +246,7 @@ class YouScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Transactions, normalized fields, categories, corrections, conversation history, and the Message Intelligence audit stay in the app database on this device. Questions and unseen SMS or opted-in notification text selected for analysis are sent to the AI endpoint you configure. You can clear raw message and Ollama exchange history without removing transactions or deduplication fingerprints.',
+              'Transactions, normalized fields, categories, corrections, conversation history, user-approved financial memory, agent performance telemetry, and the Message Intelligence audit stay in the app database on this device. Questions and unseen SMS or opted-in notification text selected for analysis are sent to the AI endpoint you configure. Performance telemetry never stores prompts or answers. You can clear raw message and Ollama exchange history without removing transactions or deduplication fingerprints.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: context.current.muted),

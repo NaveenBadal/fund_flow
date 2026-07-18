@@ -751,6 +751,8 @@ class AppController extends AsyncNotifier<AppState> {
         preferences: () => _value.preferences,
         conversation: () => _value.conversation,
         financialMemory: () => ref.read(storeProvider).financialMemory(),
+        agentTelemetry: (limit) =>
+            ref.read(storeProvider).recentAgentRuns(limit: limit),
         updateStatus: () async {
           final updater = AppUpdater();
           try {

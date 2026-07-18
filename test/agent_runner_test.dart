@@ -273,6 +273,69 @@ void main() {
     expect(proposed.proposal?.kind, AgentProposalKind.setMemory);
     expect(proposed.result.content['status'], 'approval_required');
   });
+
+  test('performance telemetry is private and locally summarized', () async {
+    final telemetryServer = LocalMcpServer(
+      transactions: () => const [],
+      preferences: () => const AppPreferences(),
+      agentTelemetry: (limit) async => [
+        {
+          'model': 'gpt-oss:20b-cloud',
+          'elapsedMs': 800,
+          'providerDurationMs': 700,
+          'turns': 2,
+          'calls': 2,
+          'promptTokens': 900,
+          'outputTokens': 120,
+        },
+        {
+          'model': 'gpt-oss:20b-cloud',
+          'elapsedMs': 1200,
+          'providerDurationMs': 1000,
+          'turns': 2,
+          'calls': 3,
+          'promptTokens': 1100,
+          'outputTokens': 180,
+        },
+      ],
+    );
+    final result = await telemetryServer.execute(
+      const McpToolCall(
+        id: 'performance',
+        name: 'agent_performance',
+        arguments: {'limit': 10},
+      ),
+    );
+
+    expect(result.result.content['averageElapsedMs'], 1000);
+    expect(result.result.content['averageTurns'], 2);
+    expect(result.result.content['privacy'], contains('No question'));
+  });
+
+  test('broad finance question stays within a two-turn agent budget', () async {
+    final provider = _FakeProvider([
+      _toolTurn('finance_briefing', {'from': '2026-07-01', 'to': '2026-07-31'}),
+      _toolTurn('answer_compose', {
+        'parts': [
+          {'type': 'conclusion', 'text': 'Your July briefing is ready.'},
+          {
+            'type': 'sourceNote',
+            'text': 'July 2026; all currencies; one checked record.',
+          },
+        ],
+      }),
+    ]);
+    final result = await AgentRunner(provider: provider, server: server).run(
+      question: 'Give me my financial briefing.',
+      now: DateTime(2026, 7, 18),
+      locale: 'en_IN',
+      timeZone: 'Asia/Kolkata',
+    );
+
+    expect(result.turns, 2);
+    expect(result.calls, 2);
+    expect(provider.messages.first['content'], contains('untrusted data'));
+  });
 }
 
 ProviderTurn _toolTurn(String name, Map<String, Object?> arguments) =>

@@ -11,6 +11,8 @@ typedef TransactionsReader = List<MoneyTransaction> Function();
 typedef UpdateStatusReader = Future<Map<String, Object?>> Function();
 typedef ConversationReader = List<ConversationMessage> Function();
 typedef FinancialMemoryReader = Future<List<Map<String, Object?>>> Function();
+typedef AgentTelemetryReader =
+    Future<List<Map<String, Object?>>> Function(int limit);
 
 class McpExecution {
   const McpExecution({required this.result, this.proposal, this.presentation});
@@ -26,17 +28,20 @@ class LocalMcpServer {
     UpdateStatusReader? updateStatus,
     ConversationReader? conversation,
     FinancialMemoryReader? financialMemory,
+    AgentTelemetryReader? agentTelemetry,
   }) : _transactions = transactions,
        _preferences = preferences,
        _updateStatus = updateStatus,
        _conversation = conversation,
-       _financialMemory = financialMemory;
+       _financialMemory = financialMemory,
+       _agentTelemetry = agentTelemetry;
 
   final TransactionsReader _transactions;
   final PreferencesReader _preferences;
   final UpdateStatusReader? _updateStatus;
   final ConversationReader? _conversation;
   final FinancialMemoryReader? _financialMemory;
+  final AgentTelemetryReader? _agentTelemetry;
 
   static const _directions = ['incoming', 'outgoing'];
   static const _sources = ['message', 'notification', 'manual'];
@@ -182,6 +187,14 @@ class LocalMcpServer {
       McpSchema.object(),
       McpRisk.read,
     ),
+    _tool(
+      'agent_performance',
+      'Read recent local AI run latency, model-turn, MCP-call and token telemetry. Contains no prompts, answers or credentials.',
+      McpSchema.object(
+        properties: {'limit': McpSchema.integer(minimum: 1, maximum: 50)},
+      ),
+      McpRisk.read,
+    ),
     _proposalTool(
       'memory_set',
       'Propose saving or replacing one durable financial fact. Never infer or save memory without explicit user intent and approval.',
@@ -299,6 +312,7 @@ class LocalMcpServer {
         'app_update_status' => await _update(call),
         'conversation_search' => _conversationSearch(call),
         'memory_list' => await _memoryList(call),
+        'agent_performance' => await _agentPerformance(call),
         'answer_compose' => _compose(call),
         _ => _proposal(call),
       };
@@ -350,6 +364,34 @@ class LocalMcpServer {
       'policy':
           'Only user-approved facts are stored. Chat text and provider output are never learned silently.',
     }, summary: 'Read user-approved financial memory');
+  }
+
+  Future<McpExecution> _agentPerformance(McpToolCall call) async {
+    final limit = _integer(call.arguments, 'limit', fallback: 10, maximum: 50);
+    final runs =
+        await (_agentTelemetry?.call(limit) ??
+            Future.value(const <Map<String, Object?>>[]));
+    int average(String key) {
+      if (runs.isEmpty) return 0;
+      return runs.fold<int>(
+            0,
+            (sum, run) => sum + ((run[key] as num?)?.toInt() ?? 0),
+          ) ~/
+          runs.length;
+    }
+
+    return _ok(call, {
+      'sampleSize': runs.length,
+      'averageElapsedMs': average('elapsedMs'),
+      'averageProviderDurationMs': average('providerDurationMs'),
+      'averageTurns': average('turns'),
+      'averageCalls': average('calls'),
+      'averagePromptTokens': average('promptTokens'),
+      'averageOutputTokens': average('outputTokens'),
+      'runs': runs,
+      'privacy':
+          'No question, answer, API key or transaction content is stored.',
+    }, summary: 'Read local agent performance telemetry');
   }
 
   Future<McpExecution> _update(McpToolCall call) async {
@@ -725,6 +767,7 @@ class LocalMcpServer {
       'settings',
       'tool audit',
       'message intelligence request and response audit',
+      'agent performance telemetry without prompt or answer content',
     ],
     'provider': [
       'questions',

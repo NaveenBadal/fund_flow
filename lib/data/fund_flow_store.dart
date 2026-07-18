@@ -201,6 +201,28 @@ class FundFlowStore {
     });
   }
 
+  Future<List<Map<String, Object?>>> recentAgentRuns({int limit = 20}) async {
+    final rows = await (await database).query(
+      'agent_runs',
+      orderBy: 'id DESC',
+      limit: limit.clamp(1, 100),
+    );
+    return rows
+        .map(
+          (row) => <String, Object?>{
+            'model': row['model'],
+            'startedAt': row['started_at'],
+            'elapsedMs': row['elapsed_ms'],
+            'turns': row['turns'],
+            'calls': row['calls'],
+            'promptTokens': row['prompt_tokens'],
+            'outputTokens': row['output_tokens'],
+            'providerDurationMs': row['provider_duration_ms'],
+          },
+        )
+        .toList();
+  }
+
   Future<List<Map<String, Object?>>> financialMemory() async {
     final rows = await (await database).query(
       'financial_memory',

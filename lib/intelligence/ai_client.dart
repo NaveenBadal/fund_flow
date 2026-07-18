@@ -216,7 +216,8 @@ class _ConfiguredAiProvider implements AgentProvider {
         // improves first-token latency while retaining enough planning for
         // choosing and sequencing local MCP tools.
         'think': 'low',
-        'options': {'temperature': 0},
+        'keep_alive': '10m',
+        'options': {'temperature': 0, 'num_predict': 1200},
         'messages': messages,
         'tools': tools.map((tool) => tool.toProviderJson()).toList(),
       });

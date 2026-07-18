@@ -319,9 +319,10 @@ class _EmptyAsk extends StatelessWidget {
             ),
         const SizedBox(height: 28),
         for (final prompt in [
-          'Where did most of my money go?',
+          'Give me my complete financial briefing',
           'What changed from last month?',
           'Are there any unusual transactions?',
+          'Could any transactions be duplicates?',
         ])
           InkWell(
             onTap: () => onAsk(prompt),

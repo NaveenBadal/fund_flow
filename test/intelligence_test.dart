@@ -63,7 +63,8 @@ void main() {
     );
     expect(requestBody['model'], 'agent-model');
     expect(requestBody['think'], 'low');
-    expect(requestBody['options'], {'temperature': 0});
+    expect(requestBody['keep_alive'], '10m');
+    expect(requestBody['options'], {'temperature': 0, 'num_predict': 1200});
     expect(requestBody['tools'], hasLength(1));
     expect(turn.toolCalls.single.name, 'settings_get');
     expect(turn.toolCalls.single.arguments, isEmpty);
