@@ -8,6 +8,7 @@ import '../../domain/preferences.dart';
 import '../../ui/components/current_group.dart';
 import '../../ui/components/current_header.dart';
 import '../../ui/components/current_switch.dart';
+import '../../ui/components/current_button.dart';
 import '../../ui/foundation/current_colors.dart';
 import 'connect_intelligence_sheet.dart';
 import 'update_sheet.dart';
@@ -61,9 +62,17 @@ class YouScreen extends ConsumerWidget {
                       detail: _importDetail(app),
                       leading: Icons.sms_outlined,
                       signal: context.current.intelligence,
+                      trailing: app.importStatus.working
+                          ? CurrentButton(
+                              label: 'Stop',
+                              compact: true,
+                              style: CurrentButtonStyle.tonal,
+                              onPressed: controller.stopMessageImport,
+                            )
+                          : null,
                       onTap: app.importStatus.working
                           ? null
-                          : () => controller.importMessages(),
+                          : controller.importMessages,
                     ),
                     CurrentRow(
                       title: 'Message history',
@@ -186,6 +195,13 @@ class YouScreen extends ConsumerWidget {
     ImportPhase.reading => 'Reading recent messages…',
     ImportPhase.understanding =>
       'Understanding ${app.importStatus.checked} messages…',
+    ImportPhase.stopped => app.importStatus.message ?? 'Import stopped',
+    ImportPhase.rateLimited =>
+      app.importStatus.message ?? 'Provider is rate limited · tap to retry',
+    ImportPhase.providerDisconnected =>
+      app.importStatus.message ?? 'Reconnect intelligence to continue',
+    ImportPhase.invalidResponse =>
+      app.importStatus.message ?? 'AI response was invalid · tap to retry',
     ImportPhase.complete =>
       '${app.importStatus.imported} added · ${app.importStatus.skipped} skipped',
     ImportPhase.error => app.importStatus.message ?? 'Could not check messages',

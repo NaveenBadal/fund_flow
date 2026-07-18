@@ -171,6 +171,7 @@ class AgentRunner {
     if (tool.startsWith('settings_') || tool.startsWith('security_')) {
       return 'Checking app preferences';
     }
+    if (tool == 'app_update_status') return 'Checking for updates';
     if (tool == 'answer_compose') return 'Organizing the answer';
     return 'Using ${tool.replaceAll('_', ' ')}';
   }

@@ -14,6 +14,7 @@ import '../domain/transaction.dart';
 import '../ingestion/notification_source.dart';
 import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
+import '../update/app_updater.dart';
 import 'app_state.dart';
 
 final storeProvider = Provider((ref) {
@@ -39,6 +40,7 @@ final appControllerProvider = AsyncNotifierProvider<AppController, AppState>(
 );
 
 class AppController extends AsyncNotifier<AppState> {
+  bool _stopImportRequested = false;
   AgentCancellationToken? _activeRun;
   @override
   Future<AppState> build() async {
@@ -271,6 +273,7 @@ class AppController extends AsyncNotifier<AppState> {
   }
 
   Future<void> importMessages() async {
+    _stopImportRequested = false;
     var current = _value;
     final apiKey = await ref.read(securePreferencesProvider).apiKey();
     if (apiKey.isEmpty) {
@@ -294,6 +297,10 @@ class AppController extends AsyncNotifier<AppState> {
     );
     final source = ref.read(smsSourceProvider);
     final permission = await source.permission(request: true);
+    if (_stopImportRequested) {
+      _setImportStopped(permission: permission);
+      return;
+    }
     if (permission != MessagePermission.granted) {
       state = AsyncData(
         _value.copyWith(
@@ -320,6 +327,10 @@ class AppController extends AsyncNotifier<AppState> {
       final candidates = await source.recent(
         _value.preferences.messageLookbackDays,
       );
+      if (_stopImportRequested) {
+        _setImportStopped(permission: permission);
+        return;
+      }
       final seen = await ref
           .read(storeProvider)
           .seenImportFingerprints(candidates.map((item) => item.fingerprint));
@@ -330,6 +341,22 @@ class AppController extends AsyncNotifier<AppState> {
       var checked = 0;
       var skipped = seen.length;
       for (var start = 0; start < unseen.length; start += 12) {
+        if (_stopImportRequested) {
+          state = AsyncData(
+            _value.copyWith(
+              transactions: await ref.read(storeProvider).transactions(),
+              importStatus: ImportStatus(
+                phase: ImportPhase.stopped,
+                permission: permission,
+                checked: checked,
+                imported: imported,
+                skipped: skipped,
+                message: 'Stopped. Completed batches are safely saved.',
+              ),
+            ),
+          );
+          return;
+        }
         state = AsyncData(
           _value.copyWith(
             importStatus: ImportStatus(
@@ -382,7 +409,11 @@ class AppController extends AsyncNotifier<AppState> {
       state = AsyncData(
         _value.copyWith(
           importStatus: ImportStatus(
-            phase: ImportPhase.error,
+            phase: switch (error.statusCode) {
+              401 || 403 => ImportPhase.providerDisconnected,
+              429 => ImportPhase.rateLimited,
+              _ => ImportPhase.error,
+            },
             permission: permission,
             message: message,
           ),
@@ -392,7 +423,7 @@ class AppController extends AsyncNotifier<AppState> {
       state = AsyncData(
         _value.copyWith(
           importStatus: ImportStatus(
-            phase: ImportPhase.error,
+            phase: ImportPhase.invalidResponse,
             permission: permission,
             message:
                 'A provider response could not be validated. Completed batches are safe.',
@@ -400,6 +431,38 @@ class AppController extends AsyncNotifier<AppState> {
         ),
       );
     }
+  }
+
+  void stopMessageImport() {
+    if (!_value.importStatus.working) return;
+    _stopImportRequested = true;
+    state = AsyncData(
+      _value.copyWith(
+        importStatus: ImportStatus(
+          phase: ImportPhase.stopped,
+          permission: _value.importStatus.permission,
+          checked: _value.importStatus.checked,
+          imported: _value.importStatus.imported,
+          skipped: _value.importStatus.skipped,
+          message: 'Stopping after the current AI batch…',
+        ),
+      ),
+    );
+  }
+
+  void _setImportStopped({MessagePermission? permission}) {
+    state = AsyncData(
+      _value.copyWith(
+        importStatus: ImportStatus(
+          phase: ImportPhase.stopped,
+          permission: permission ?? _value.importStatus.permission,
+          checked: _value.importStatus.checked,
+          imported: _value.importStatus.imported,
+          skipped: _value.importStatus.skipped,
+          message: 'Stopped. Completed batches are safely saved.',
+        ),
+      ),
+    );
   }
 
   Future<void> ask(String question) async {
@@ -425,6 +488,27 @@ class AppController extends AsyncNotifier<AppState> {
       final server = LocalMcpServer(
         transactions: () => _value.transactions,
         preferences: () => _value.preferences,
+        updateStatus: () async {
+          final updater = AppUpdater();
+          try {
+            final update = await updater.check();
+            return {
+              'supported':
+                  update.availability != UpdateAvailability.unsupported,
+              'status': update.availability.name,
+              'installedBuildNumber': update.installedBuildNumber,
+              'latestBuildNumber': update.buildNumber,
+              'latestVersion': update.versionName,
+              'releaseNotes': update.releaseNotes,
+              'mandatory': update.mandatory,
+              'userAction': update.availability == UpdateAvailability.available
+                  ? 'Open You > App updates to download, verify, and install.'
+                  : null,
+            };
+          } finally {
+            updater.close();
+          }
+        },
       );
       final client = ref.read(aiClientProvider);
       final runner = AgentRunner(

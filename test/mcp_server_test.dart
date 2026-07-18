@@ -26,8 +26,34 @@ void main() {
     expect(names, contains('finance_compare'));
     expect(names, contains('settings_update'));
     expect(names, contains('security_set_app_lock'));
+    expect(names, contains('app_update_status'));
     expect(names, contains('answer_compose'));
   });
+
+  test(
+    'update status is read through the scoped platform capability',
+    () async {
+      server = LocalMcpServer(
+        transactions: () => transactions,
+        preferences: () => const AppPreferences(),
+        updateStatus: () async => {
+          'supported': true,
+          'status': 'available',
+          'latestBuildNumber': 81,
+        },
+      );
+      final execution = await server.execute(
+        const McpToolCall(
+          id: 'update',
+          name: 'app_update_status',
+          arguments: {},
+        ),
+      );
+      expect(execution.result.isError, isFalse);
+      expect(execution.result.content['status'], 'available');
+      expect(execution.result.content['latestBuildNumber'], 81);
+    },
+  );
 
   test('summary never combines currencies', () async {
     final execution = await server.execute(

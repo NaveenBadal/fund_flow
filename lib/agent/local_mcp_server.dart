@@ -7,6 +7,7 @@ import 'mcp_protocol.dart';
 
 typedef PreferencesReader = AppPreferences Function();
 typedef TransactionsReader = List<MoneyTransaction> Function();
+typedef UpdateStatusReader = Future<Map<String, Object?>> Function();
 
 class McpExecution {
   const McpExecution({required this.result, this.proposal, this.presentation});
@@ -19,11 +20,14 @@ class LocalMcpServer {
   LocalMcpServer({
     required TransactionsReader transactions,
     required PreferencesReader preferences,
+    UpdateStatusReader? updateStatus,
   }) : _transactions = transactions,
-       _preferences = preferences;
+       _preferences = preferences,
+       _updateStatus = updateStatus;
 
   final TransactionsReader _transactions;
   final PreferencesReader _preferences;
+  final UpdateStatusReader? _updateStatus;
 
   static const _directions = ['incoming', 'outgoing'];
   static const _sources = ['message', 'notification', 'manual'];
@@ -125,6 +129,12 @@ class LocalMcpServer {
       McpSchema.object(),
       McpRisk.read,
     ),
+    _tool(
+      'app_update_status',
+      'Check Fund Flow\'s verified GitHub development release channel.',
+      McpSchema.object(),
+      McpRisk.platform,
+    ),
     _proposalTool(
       'transactions_create',
       'Prepare a new transaction for explicit approval.',
@@ -215,6 +225,7 @@ class LocalMcpServer {
         'sources_status' => _sourcesStatus(call),
         'settings_get' => _settings(call),
         'privacy_boundary' => _privacy(call),
+        'app_update_status' => await _update(call),
         'answer_compose' => _compose(call),
         _ => _proposal(call),
       };
@@ -224,6 +235,24 @@ class LocalMcpServer {
       return _error(call, error.message);
     } catch (_) {
       return _error(call, 'Capability arguments were not valid.');
+    }
+  }
+
+  Future<McpExecution> _update(McpToolCall call) async {
+    final reader = _updateStatus;
+    if (reader == null) {
+      return _ok(call, {
+        'supported': false,
+        'reason': 'Update status is unavailable on this platform.',
+      });
+    }
+    try {
+      return _ok(call, await reader(), summary: 'Checked app update status');
+    } catch (_) {
+      return _error(
+        call,
+        'GitHub update status could not be checked. No app data changed.',
+      );
     }
   }
 

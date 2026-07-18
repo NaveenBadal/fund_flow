@@ -11,6 +11,10 @@ enum ImportPhase {
   requestingPermission,
   reading,
   understanding,
+  stopped,
+  rateLimited,
+  providerDisconnected,
+  invalidResponse,
   complete,
   error,
 }
@@ -34,6 +38,12 @@ class ImportStatus {
       phase == ImportPhase.requestingPermission ||
       phase == ImportPhase.reading ||
       phase == ImportPhase.understanding;
+  bool get retryable =>
+      phase == ImportPhase.stopped ||
+      phase == ImportPhase.rateLimited ||
+      phase == ImportPhase.providerDisconnected ||
+      phase == ImportPhase.invalidResponse ||
+      phase == ImportPhase.error;
 }
 
 class AppState {
