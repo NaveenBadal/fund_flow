@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:ui';
 
-/// Design tokens — the single source of truth for spacing, shape, motion,
-/// and elevation across the app. Keeps every screen visually consistent.
+/// Flutter primitives for the Flow Quiet Intelligence design system.
 ///
-/// The system follows Material 3 Expressive: generous, characterful shapes
-/// applied with *intent* (emphasis, not decoration), springy motion, and a
-/// small, deliberate spacing rhythm. Three shape roles only — [ExpressiveShape.hero]
-/// for feature surfaces, [ExpressiveShape.card] for content, and pills for
-/// controls — so the whole app reads as one calm, confident system.
+/// The canonical product and usage specification is docs/design_system.md.
+/// Read it before adding a new visual role or user-facing component.
 class AppRadius {
   const AppRadius._();
   static const double xs = 10;
@@ -34,6 +29,20 @@ class AppSpacing {
   static const double xl = 24;
   static const double xxl = 32;
   static const double page = 20;
+  static const double section = 24;
+  static const double region = 32;
+  static const double narrative = 48;
+}
+
+/// Shared adaptive layout thresholds. Feature screens must use these rather
+/// than introducing one-off width checks.
+class AppBreakpoint {
+  const AppBreakpoint._();
+
+  static const double compact = 600;
+  static const double rail = 840;
+  static const double extendedRail = 1100;
+  static const double contentMax = 720;
 }
 
 /// Motion tokens tuned for Material 3 Expressive. Springy, confident easing on
@@ -192,13 +201,16 @@ extension FinanceColorsX on BuildContext {
       Theme.of(this).extension<FinanceColors>() ?? FinanceColors.light;
 }
 
-/// 🌟 PREMIUM UI & UX EXTENSIONS ───────────────────────────────────────────
-
-/// Soft, diffuse, aesthetic shadows that blend with the app's dynamic color schemes.
+/// Restrained elevation reserved for active context and modal surfaces.
 class PremiumShadows {
   const PremiumShadows._();
 
-  static List<BoxShadow> ambient(BuildContext context, {Color? color, double offset = 8, double blur = 24}) {
+  static List<BoxShadow> ambient(
+    BuildContext context, {
+    Color? color,
+    double offset = 8,
+    double blur = 24,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final baseColor = color ?? scheme.primary;
     return [
@@ -228,66 +240,9 @@ class PremiumShadows {
   }
 }
 
-/// Dynamic gradients for backgrounds, monthly summary details, and custom graphs.
-class PremiumGradients {
-  const PremiumGradients._();
-
-  static LinearGradient primary(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return LinearGradient(
-      colors: [
-        scheme.primary,
-        scheme.secondary,
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-  }
-
-  static LinearGradient glow(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return LinearGradient(
-      colors: [
-        scheme.primaryContainer.withValues(alpha: 0.4),
-        scheme.surface.withValues(alpha: 0.0),
-      ],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    );
-  }
-
-  static LinearGradient glass(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
-    return LinearGradient(
-      colors: [
-        (dark ? Colors.white : Colors.black).withValues(alpha: dark ? 0.06 : 0.02),
-        (dark ? Colors.white : Colors.black).withValues(alpha: dark ? 0.02 : 0.005),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-  }
-
-  static LinearGradient mesh(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return LinearGradient(
-      colors: [
-        scheme.primary.withValues(alpha: 0.12),
-        scheme.tertiary.withValues(alpha: 0.06),
-        scheme.surface.withValues(alpha: 0.0),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      stops: const [0.0, 0.5, 1.0],
-    );
-  }
-}
-
-/// Custom stateful click wrapper that adds spring-based scaling (Tactile bounce)
-/// and haptic feedback to any component.
-class BouncyInkWell extends StatefulWidget {
-  const BouncyInkWell({
+/// Restrained press feedback for non-standard tappable surfaces.
+class CalmPress extends StatefulWidget {
+  const CalmPress({
     super.key,
     required this.child,
     required this.onTap,
@@ -301,10 +256,11 @@ class BouncyInkWell extends StatefulWidget {
   final BorderRadius? borderRadius;
 
   @override
-  State<BouncyInkWell> createState() => _BouncyInkWellState();
+  State<CalmPress> createState() => _CalmPressState();
 }
 
-class _BouncyInkWellState extends State<BouncyInkWell> with SingleTickerProviderStateMixin {
+class _CalmPressState extends State<CalmPress>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
 
@@ -315,9 +271,10 @@ class _BouncyInkWellState extends State<BouncyInkWell> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.985,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -352,7 +309,6 @@ class _BouncyInkWellState extends State<BouncyInkWell> with SingleTickerProvider
       onTapCancel: _handleTapCancel,
       onTap: widget.onTap != null
           ? () {
-              HapticFeedback.lightImpact();
               widget.onTap!();
             }
           : null,
@@ -367,73 +323,6 @@ class _BouncyInkWellState extends State<BouncyInkWell> with SingleTickerProvider
         child: ClipRRect(
           borderRadius: widget.borderRadius ?? BorderRadius.zero,
           child: widget.child,
-        ),
-      ),
-    );
-  }
-}
-
-/// Frosted-glass container with soft border, backdrop blur, and internal layout.
-class GlassmorphicContainer extends StatelessWidget {
-  const GlassmorphicContainer({
-    super.key,
-    required this.child,
-    this.borderRadius,
-    this.borderWidth = 1.0,
-    this.blur = 15.0,
-    this.color,
-    this.padding,
-    this.margin,
-    this.width,
-    this.height,
-  });
-
-  final Widget child;
-  final BorderRadius? borderRadius;
-  final double borderWidth;
-  final double blur;
-  final Color? color;
-  final EdgeInsetsGeometry? padding;
-  final EdgeInsetsGeometry? margin;
-  final double? width;
-  final double? height;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = scheme.brightness == Brightness.dark;
-    final fallbackColor = color ?? (dark 
-        ? Colors.white.withValues(alpha: 0.05) 
-        : Colors.black.withValues(alpha: 0.02));
-    final fallbackBorderColor = dark 
-        ? Colors.white.withValues(alpha: 0.08) 
-        : Colors.black.withValues(alpha: 0.04);
-    final radius = borderRadius ?? BorderRadius.circular(30);
-
-    return Container(
-      width: width,
-      height: height,
-      margin: margin,
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        boxShadow: PremiumShadows.soft(context),
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: fallbackColor,
-              borderRadius: radius,
-              border: Border.all(
-                color: fallbackBorderColor,
-                width: borderWidth,
-              ),
-            ),
-            child: child,
-          ),
         ),
       ),
     );

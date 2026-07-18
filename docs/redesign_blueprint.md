@@ -1,5 +1,9 @@
 # Expense Manager — Product Redesign Blueprint
 
+> Archived direction. The canonical replacement is `docs/design_system.md`
+> v2.0, which defines Fund Flow as an AI-first SMS financial agent. Do not
+> implement product decisions from this file.
+
 ## Product idea — Flow environment
 
 The app is a private financial intelligence environment, not a generic expense tracker. It should

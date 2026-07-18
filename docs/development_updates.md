@@ -1,5 +1,8 @@
 # GitHub development updates
 
+> Operational history only. Current product and interface direction is locked
+> in `docs/design_system.md` v2.0.
+
 Fund Flow development builds use the version sequence
 `0.0.1-dev.<github-run-number>`. The installed Android application ID is
 `com.naveen.expense_manager.expense_manager.dev`, so it remains separate from a

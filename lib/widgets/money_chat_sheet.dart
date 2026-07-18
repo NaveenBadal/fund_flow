@@ -47,11 +47,19 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   late final LocalMoneyMcpClient _mcp;
   late Future<_FlowBrief> _briefFuture;
 
-  static const _prompts = <(IconData, String)>[
-    (Icons.compare_arrows_rounded, 'Compare this month with last month'),
-    (Icons.autorenew_rounded, 'Find my recurring payments'),
-    (Icons.warning_amber_rounded, 'Check for unusual spending'),
-    (Icons.trending_up_rounded, 'Forecast my next 30 days'),
+  List<(IconData, String)> _promptsFor(_FlowBrief brief) => [
+    (Icons.compare_arrows_rounded, 'What changed from last month?'),
+    if (brief.recurring > 0)
+      (Icons.autorenew_rounded, 'Explain my recurring payments')
+    else
+      (Icons.pie_chart_outline_rounded, 'Where did most of my money go?'),
+    if (brief.anomalies > 0)
+      (
+        Icons.warning_amber_rounded,
+        'Help me review ${brief.anomalies} unusual ${brief.anomalies == 1 ? 'transaction' : 'transactions'}',
+      ),
+    if (brief.transactions >= 10)
+      (Icons.trending_up_rounded, 'What might the next 30 days look like?'),
   ];
 
   @override
@@ -81,13 +89,77 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
     final anomalies = await database.detectAnomalies();
     final recurring = await database.detectRecurringTransactions();
     final budgets = await database.budgetStatus();
+    final lastSyncRaw = await database.getAppMetadata('last_sync_at');
     return _FlowBrief(
       totals: (month['totals_by_currency'] as Map).cast<String, dynamic>(),
       transactions: (month['matched_count'] as num?)?.toInt() ?? 0,
       anomalies: (anomalies['anomalies'] as List<dynamic>? ?? const []).length,
       recurring: (recurring['recurring'] as List<dynamic>? ?? const []).length,
       budgets: (budgets['budgets'] as List<dynamic>? ?? const []).length,
+      lastSyncAt: DateTime.tryParse(lastSyncRaw ?? ''),
     );
+  }
+
+  Future<void> _startSmsAnalysis() async {
+    final proceed =
+        await showModalBottomSheet<bool>(
+          context: context,
+          builder: (sheetContext) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.sms_outlined,
+                    size: 34,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Analyze transaction messages',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Flow scans recent SMS on this device for supported bank and payment messages. Candidate message text is sent to your configured Ollama endpoint for extraction; structured records and provenance stay on this device.',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Android will ask for SMS access if it has not already been granted.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(sheetContext, false),
+                          child: const Text('Not now'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(sheetContext, true),
+                          child: const Text('Analyze messages'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ) ??
+        false;
+    if (!proceed || !mounted) return;
+    await ref.read(syncProvider.notifier).sync();
+    if (!mounted) return;
+    setState(() => _briefFuture = _loadBrief());
   }
 
   @override
@@ -216,7 +288,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
         _failedQuestion = question;
         _failureDetail = switch (error) {
           OllamaRequestException(statusCode: 401 || 403) =>
-            'Your AI key was rejected. Check it in Settings.',
+            'Your AI key was rejected. Reconnect it in You.',
           OllamaRequestException(statusCode: 429) =>
             'The AI service is busy. Wait a moment and retry.',
           OllamaRequestException() =>
@@ -280,7 +352,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                   Icon(
                     name.contains('delete')
                         ? Icons.delete_outline_rounded
-                        : Icons.auto_awesome_rounded,
+                        : Icons.blur_on_rounded,
                     size: 32,
                   ),
                   const SizedBox(height: 16),
@@ -366,7 +438,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
             icon: const Icon(Icons.delete_sweep_outlined),
             title: const Text('Clear conversation?'),
             content: const Text(
-              'This removes your Ask Flow history from this device.',
+              'This removes your Flow conversation history from this device.',
             ),
             actions: [
               TextButton(
@@ -427,18 +499,34 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   Widget build(BuildContext context) {
     final messages = ref.watch(assistantConversationProvider).value ?? const [];
     final connected = ref.watch(ollamaApiKeyProvider).trim().isNotEmpty;
+    final sync = ref.watch(syncProvider);
     if (messages.isNotEmpty && !_didScrollToInitialHistory) {
       _didScrollToInitialHistory = true;
       _scrollToLatest(animate: false);
     }
     final scheme = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final contentInset = screenWidth > 760 ? (screenWidth - 720) / 2 : 20.0;
+    final contentInset = screenWidth > AppBreakpoint.contentMax + 40
+        ? (screenWidth - AppBreakpoint.contentMax) / 2
+        : AppSpacing.page;
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Ask Flow'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.blur_on_rounded, color: scheme.primary),
+            const SizedBox(width: 10),
+            const Text('Flow'),
+          ],
+        ),
         actions: [
+          _AgentStateButton(
+            connected: connected,
+            sync: sync,
+            compact: screenWidth < 380,
+            onPressed: connected ? _startSmsAnalysis : _openSettings,
+          ),
           if (messages.isNotEmpty)
             IconButton(
               tooltip: 'Clear conversation',
@@ -472,21 +560,25 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                     borderRadius: AppRadius.all(AppRadius.lg),
                                   ),
                                   child: Icon(
-                                    Icons.auto_awesome_outlined,
+                                    Icons.blur_on_rounded,
                                     size: 28,
                                     color: scheme.onPrimaryContainer,
                                   ),
                                 ),
                                 const SizedBox(height: 20),
                                 Text(
-                                  'How can I help with your money?',
+                                  connected
+                                      ? 'What should we understand?'
+                                      : 'Connect Flow intelligence',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.headlineSmall,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Ask about transactions, find patterns, correct details, or change app settings.',
+                                  connected
+                                      ? 'Flow analyzes transaction messages, verifies answers against local records, and safely acts with your approval.'
+                                      : 'AI analysis is the core of Fund Flow. Connect Ollama to understand transaction SMS and ask questions about your money.',
                                   style: Theme.of(context).textTheme.bodyLarge
                                       ?.copyWith(
                                         color: scheme.onSurfaceVariant,
@@ -499,7 +591,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                             Padding(
                               padding: const EdgeInsets.only(bottom: 14),
                               child: Material(
-                                color: scheme.tertiaryContainer,
+                                color: scheme.primaryContainer,
                                 shape: ExpressiveShape.card(
                                   radius: AppRadius.xl,
                                 ),
@@ -512,7 +604,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                       children: [
                                         Icon(
                                           Icons.cloud_outlined,
-                                          color: scheme.onTertiaryContainer,
+                                          color: scheme.onPrimaryContainer,
                                         ),
                                         const SizedBox(width: 14),
                                         Expanded(
@@ -521,23 +613,23 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Connect Flow AI',
+                                                'Connect intelligence',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .titleSmall
                                                     ?.copyWith(
                                                       color: scheme
-                                                          .onTertiaryContainer,
+                                                          .onPrimaryContainer,
                                                     ),
                                               ),
                                               Text(
-                                                'Add your private AI connection in Settings.',
+                                                'Required for SMS understanding and verified answers.',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall
                                                     ?.copyWith(
                                                       color: scheme
-                                                          .onTertiaryContainer,
+                                                          .onPrimaryContainer,
                                                     ),
                                               ),
                                             ],
@@ -545,7 +637,7 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                         ),
                                         Icon(
                                           Icons.arrow_forward_rounded,
-                                          color: scheme.onTertiaryContainer,
+                                          color: scheme.onPrimaryContainer,
                                         ),
                                       ],
                                     ),
@@ -560,60 +652,40 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                               if (brief == null || brief.transactions == 0) {
                                 return const SizedBox.shrink();
                               }
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 18),
-                                child: _FinancialBriefCard(
-                                  brief: brief,
-                                  onPrompt: connected
-                                      ? _ask
-                                      : (_) => _openSettings(),
-                                ),
+                              return Column(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 18),
+                                    child: _FinancialBriefCard(
+                                      brief: brief,
+                                      onPrompt: _ask,
+                                    ),
+                                  ),
+                                  for (final prompt in _promptsFor(brief))
+                                    _QuestionTile(
+                                      icon: prompt.$1,
+                                      label: prompt.$2,
+                                      onPressed: () => _ask(prompt.$2),
+                                    ),
+                                ],
                               );
                             },
                           ),
-                          for (final prompt in _prompts)
+                          if (connected && sync.phase != SyncPhase.idle)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Material(
-                                color: scheme.surfaceContainerHigh,
-                                shape: ExpressiveShape.card(
-                                  radius: AppRadius.xl,
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: connected
-                                      ? () => _ask(prompt.$2)
-                                      : _openSettings,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 16,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          prompt.$1,
-                                          size: 20,
-                                          color: scheme.primary,
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Text(
-                                            prompt.$2,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodyLarge,
-                                          ),
-                                        ),
-                                        Icon(
-                                          Icons.arrow_outward_rounded,
-                                          size: 18,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: _SyncStateCard(
+                                sync: sync,
+                                onRetry: _startSmsAnalysis,
+                                onStop: () =>
+                                    ref.read(syncProvider.notifier).cancel(),
+                              ),
+                            ),
+                          if (connected && sync.phase == SyncPhase.idle)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 18),
+                              child: _AnalyzeMessagesCard(
+                                onPressed: _startSmsAnalysis,
                               ),
                             ),
                         ],
@@ -680,7 +752,10 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                             message.artifactJson,
                           );
                           return _AnimatedMessage(
-                            key: ValueKey(message.id ?? message.timestamp.millisecondsSinceEpoch),
+                            key: ValueKey(
+                              message.id ??
+                                  message.timestamp.millisecondsSinceEpoch,
+                            ),
                             child: Align(
                               alignment: message.user
                                   ? Alignment.centerRight
@@ -688,7 +763,9 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 14),
                                 padding: const EdgeInsets.all(18),
-                                constraints: const BoxConstraints(maxWidth: 520),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 520,
+                                ),
                                 decoration: message.user
                                     ? BoxDecoration(
                                         color: scheme.primaryContainer,
@@ -708,7 +785,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                           bottomRight: Radius.circular(16),
                                         ),
                                         border: Border.all(
-                                          color: scheme.outlineVariant.withValues(alpha: 0.5),
+                                          color: scheme.outlineVariant
+                                              .withValues(alpha: 0.5),
                                           width: 1.0,
                                         ),
                                         boxShadow: PremiumShadows.soft(context),
@@ -716,149 +794,157 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                  if (message.user)
-                                    Text(
-                                      message.text,
-                                      style: TextStyle(
-                                        color: scheme.onPrimaryContainer,
-                                        height: 1.45,
+                                    if (message.user)
+                                      Text(
+                                        message.text,
+                                        style: TextStyle(
+                                          color: scheme.onPrimaryContainer,
+                                          height: 1.45,
+                                        ),
+                                      )
+                                    else
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (!artifact.isEmpty)
+                                            AgentArtifactCard(
+                                              artifact: artifact,
+                                              onPrompt: _ask,
+                                            ),
+                                          MarkdownBody(
+                                            data: mobileFriendlyMarkdown(
+                                              message.text,
+                                            ),
+                                            selectable: true,
+                                            styleSheet: MarkdownStyleSheet(
+                                              p: TextStyle(
+                                                color: scheme.onSurface,
+                                                height: 1.5,
+                                                fontSize: 14,
+                                              ),
+                                              strong: TextStyle(
+                                                color: scheme.primary,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                              em: TextStyle(
+                                                color: scheme.secondary,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                              listBullet: TextStyle(
+                                                color: scheme.primary,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                              code: TextStyle(
+                                                color: scheme.onSurface,
+                                                backgroundColor: scheme
+                                                    .surfaceContainerHighest,
+                                                fontFamily: 'monospace',
+                                              ),
+                                              blockquoteDecoration:
+                                                  BoxDecoration(
+                                                    border: Border(
+                                                      left: BorderSide(
+                                                        color: scheme.primary,
+                                                        width: 3,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              blockquotePadding:
+                                                  const EdgeInsets.only(
+                                                    left: 12,
+                                                  ),
+                                            ),
+                                          ),
+                                          if (widget.onOpenActivity != null)
+                                            TextButton(
+                                              onPressed: widget.onOpenActivity,
+                                              child: const Text('View'),
+                                            ),
+                                        ],
                                       ),
-                                    )
-                                  else
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (!artifact.isEmpty)
-                                          AgentArtifactCard(
-                                            artifact: artifact,
-                                            onPrompt: _ask,
+                                    if (message.sources > 0) ...[
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            message.verified
+                                                ? Icons.verified_outlined
+                                                : Icons.fact_check_outlined,
+                                            size: 16,
+                                            color: scheme.primary,
                                           ),
-                                        MarkdownBody(
-                                          data: mobileFriendlyMarkdown(
-                                            message.text,
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              '${message.verified ? 'Verified' : 'Checked'} with ${message.sources} local records',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color:
+                                                        scheme.onSurfaceVariant,
+                                                  ),
+                                            ),
                                           ),
-                                          selectable: true,
-                                          styleSheet: MarkdownStyleSheet(
-                                            p: TextStyle(
-                                              color: scheme.onSurface,
-                                              height: 1.5,
-                                              fontSize: 14,
-                                            ),
-                                            strong: TextStyle(
-                                              color: scheme.primary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                            em: TextStyle(
-                                              color: scheme.secondary,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                            listBullet: TextStyle(
-                                              color: scheme.primary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                            code: TextStyle(
-                                              color: scheme.onSurface,
-                                              backgroundColor: scheme
-                                                  .surfaceContainerHighest,
-                                              fontFamily: 'monospace',
-                                            ),
-                                            blockquoteDecoration: BoxDecoration(
-                                              border: Border(
-                                                left: BorderSide(
-                                                  color: scheme.primary,
-                                                  width: 3,
-                                                ),
+                                        ],
+                                      ),
+                                      if (message.filterDetails.isNotEmpty)
+                                        Theme(
+                                          data: Theme.of(context).copyWith(
+                                            dividerColor: Colors.transparent,
+                                          ),
+                                          child: ExpansionTile(
+                                            tilePadding: EdgeInsets.zero,
+                                            childrenPadding: EdgeInsets.zero,
+                                            dense: true,
+                                            title: Text(
+                                              'How this was answered',
+                                              style: TextStyle(
+                                                color: scheme.onSurfaceVariant,
+                                                fontSize: 11,
                                               ),
                                             ),
-                                            blockquotePadding:
-                                                const EdgeInsets.only(left: 12),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  if (message.sources > 0) ...[
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          message.verified
-                                              ? Icons.verified_outlined
-                                              : Icons.fact_check_outlined,
-                                          size: 16,
-                                          color: scheme.primary,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            '${message.verified ? 'Verified' : 'Checked'} with ${message.sources} local records',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color:
-                                                      scheme.onSurfaceVariant,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (message.filterDetails.isNotEmpty)
-                                      Theme(
-                                        data: Theme.of(context).copyWith(
-                                          dividerColor: Colors.transparent,
-                                        ),
-                                        child: ExpansionTile(
-                                          tilePadding: EdgeInsets.zero,
-                                          childrenPadding: EdgeInsets.zero,
-                                          dense: true,
-                                          title: Text(
-                                            'How this was answered',
-                                            style: TextStyle(
-                                              color: scheme.onSurfaceVariant,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                          children: [
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Text(
-                                                _formatFilterDetails(
-                                                  message.filterDetails,
-                                                ),
-                                                style: TextStyle(
-                                                  color:
-                                                      scheme.onSurfaceVariant,
-                                                  fontSize: 11,
-                                                  height: 1.45,
+                                            children: [
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  _formatFilterDetails(
+                                                    message.filterDetails,
+                                                  ),
+                                                  style: TextStyle(
+                                                    color:
+                                                        scheme.onSurfaceVariant,
+                                                    fontSize: 11,
+                                                    height: 1.45,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                    if (!message.user) ...[
+                                      const SizedBox(height: 6),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: IconButton(
+                                          tooltip: 'Copy answer',
+                                          visualDensity: VisualDensity.compact,
+                                          onPressed: () =>
+                                              _copyAnswer(message.text),
+                                          icon: const Icon(
+                                            Icons.content_copy_rounded,
+                                            size: 18,
+                                          ),
                                         ),
                                       ),
+                                    ],
                                   ],
-                                  if (!message.user) ...[
-                                    const SizedBox(height: 6),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: IconButton(
-                                        tooltip: 'Copy answer',
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: () =>
-                                            _copyAnswer(message.text),
-                                        icon: const Icon(
-                                          Icons.content_copy_rounded,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
+                          );
                         },
                       ),
               ),
@@ -873,8 +959,8 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
                       maxLines: 4,
                       decoration: InputDecoration(
                         hintText: connected
-                            ? 'Ask about your activity…'
-                            : 'Connect Flow AI in Settings',
+                            ? 'Ask about your money…'
+                            : 'Connect intelligence to ask Flow',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(28),
                           borderSide: BorderSide.none,
@@ -902,6 +988,260 @@ class _MoneyChatSheetState extends ConsumerState<MoneyChatSheet> {
   }
 }
 
+class _QuestionTile extends StatelessWidget {
+  const _QuestionTile({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        shape: ExpressiveShape.card(radius: AppRadius.xl),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.lg,
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: scheme.primary),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_outward_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentStateButton extends StatelessWidget {
+  const _AgentStateButton({
+    required this.connected,
+    required this.sync,
+    required this.compact,
+    required this.onPressed,
+  });
+  final bool connected;
+  final SyncState sync;
+  final bool compact;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (label, icon, color) = !connected
+        ? ('Connect AI', Icons.link_off_rounded, scheme.error)
+        : switch (sync.phase) {
+            SyncPhase.requestingPermissions ||
+            SyncPhase.fetchingSms ||
+            SyncPhase.analyzing => (
+              'Syncing',
+              Icons.sync_rounded,
+              scheme.primary,
+            ),
+            SyncPhase.error => (
+              'Needs help',
+              Icons.error_outline_rounded,
+              scheme.error,
+            ),
+            SyncPhase.complete => (
+              'Updated',
+              Icons.check_circle_outline_rounded,
+              context.finance.income,
+            ),
+            _ => ('Ready', Icons.circle, context.finance.income),
+          };
+    if (compact) {
+      return IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        icon: Icon(icon, color: color),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: ActionChip(
+        onPressed: onPressed,
+        avatar: Icon(icon, size: 16, color: color),
+        label: Text(label),
+        tooltip: connected
+            ? 'Analyze transaction messages'
+            : 'Connect Flow intelligence',
+      ),
+    );
+  }
+}
+
+class _AnalyzeMessagesCard extends StatelessWidget {
+  const _AnalyzeMessagesCard({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.secondaryContainer,
+      shape: ExpressiveShape.hero(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: ExpressiveShape.hero(),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: scheme.primary,
+                foregroundColor: scheme.onPrimary,
+                child: const Icon(Icons.sms_outlined),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Understand transaction SMS',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Analyze recent bank messages and build your private financial picture.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SyncStateCard extends StatelessWidget {
+  const _SyncStateCard({
+    required this.sync,
+    required this.onRetry,
+    required this.onStop,
+  });
+  final SyncState sync;
+  final VoidCallback onRetry;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final running = {
+      SyncPhase.requestingPermissions,
+      SyncPhase.fetchingSms,
+      SyncPhase.analyzing,
+    }.contains(sync.phase);
+    final error = sync.phase == SyncPhase.error;
+    final progress = sync.total > 0 ? sync.current / sync.total : null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: error ? scheme.errorContainer : scheme.surfaceContainerHigh,
+        borderRadius: AppRadius.all(AppRadius.xl),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                error
+                    ? Icons.error_outline_rounded
+                    : running
+                    ? Icons.blur_on_rounded
+                    : Icons.verified_rounded,
+                color: error ? scheme.error : scheme.primary,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  error
+                      ? 'Analysis needs your help'
+                      : running
+                      ? 'Flow is understanding messages'
+                      : 'Transaction messages updated',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            error
+                ? sync.errorMessage ?? 'Flow could not finish this analysis.'
+                : sync.detail ?? 'Preparing analysis…',
+          ),
+          if (running) ...[
+            const SizedBox(height: AppSpacing.md),
+            LinearProgressIndicator(value: progress),
+          ],
+          if (sync.total > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                _BriefPill(label: '${sync.imported} understood'),
+                _BriefPill(label: '${sync.skipped} skipped'),
+                _BriefPill(label: '${sync.current}/${sync.total} checked'),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: running ? onStop : onRetry,
+              child: Text(
+                running
+                    ? 'Stop safely'
+                    : error
+                    ? 'Try again'
+                    : 'Sync again',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FlowBrief {
   const _FlowBrief({
     required this.totals,
@@ -909,18 +1249,21 @@ class _FlowBrief {
     required this.anomalies,
     required this.recurring,
     required this.budgets,
+    required this.lastSyncAt,
   });
   const _FlowBrief.empty()
     : totals = const {},
       transactions = 0,
       anomalies = 0,
       recurring = 0,
-      budgets = 0;
+      budgets = 0,
+      lastSyncAt = null;
   final Map<String, dynamic> totals;
   final int transactions;
   final int anomalies;
   final int recurring;
   final int budgets;
+  final DateTime? lastSyncAt;
 }
 
 class _FinancialBriefCard extends StatelessWidget {
@@ -950,10 +1293,7 @@ class _FinancialBriefCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(
-                    Icons.auto_awesome_rounded,
-                    color: scheme.onPrimaryContainer,
-                  ),
+                  Icon(Icons.blur_on_rounded, color: scheme.onPrimaryContainer),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -992,12 +1332,29 @@ class _FinancialBriefCard extends StatelessWidget {
                     _BriefPill(label: '${brief.budgets} budgets'),
                 ],
               ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                brief.lastSyncAt == null
+                    ? 'Based on local transaction records'
+                    : 'SMS updated ${_relativeTime(brief.lastSyncAt!)} · records stay local',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onPrimaryContainer.withValues(alpha: .78),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+String _relativeTime(DateTime value) {
+  final difference = DateTime.now().difference(value.toLocal());
+  if (difference.inMinutes < 1) return 'just now';
+  if (difference.inMinutes < 60) return '${difference.inMinutes} min ago';
+  if (difference.inHours < 24) return '${difference.inHours} hr ago';
+  return '${difference.inDays} d ago';
 }
 
 class _BriefPill extends StatelessWidget {
@@ -1149,7 +1506,8 @@ class _AnimatedMessage extends StatefulWidget {
   State<_AnimatedMessage> createState() => _AnimatedMessageState();
 }
 
-class _AnimatedMessageState extends State<_AnimatedMessage> with SingleTickerProviderStateMixin {
+class _AnimatedMessageState extends State<_AnimatedMessage>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
@@ -1161,12 +1519,17 @@ class _AnimatedMessageState extends State<_AnimatedMessage> with SingleTickerPro
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _slide = Tween<Offset>(begin: const Offset(0.0, 0.12), end: Offset.zero).animate(
-      CurvedAnimation(parent: _controller, curve: AppMotion.emphasizedDecelerate),
-    );
+    _fade = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _slide = Tween<Offset>(begin: const Offset(0.0, 0.12), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: AppMotion.emphasizedDecelerate,
+          ),
+        );
     _controller.forward();
   }
 
@@ -1180,10 +1543,7 @@ class _AnimatedMessageState extends State<_AnimatedMessage> with SingleTickerPro
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

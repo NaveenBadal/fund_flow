@@ -953,7 +953,7 @@ class LocalMoneyMcpServer {
       'name': 'navigate_to',
       'title': 'Open an app destination',
       'description':
-          'Navigate to Activity, Ask Flow, or Settings when the user asks to open that part of the app.',
+          'Navigate to Flow, Activity, or You when the user asks to open that part of the app.',
       'inputSchema': {
         'type': 'object',
         'properties': {

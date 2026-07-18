@@ -14,7 +14,6 @@ import '../utils/currency_utils.dart';
 import '../widgets/development_update_ui.dart';
 import '../widgets/expense_form_sheet.dart';
 import '../widgets/money_chat_sheet.dart';
-import '../widgets/spending_wave_chart.dart';
 import 'settings_screen.dart';
 
 class ActivityScreen extends ConsumerStatefulWidget {
@@ -32,6 +31,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   String _direction = 'all';
   DateTimeRange? _dateRange;
   String? _category;
+  bool _reviewOnly = false;
 
   @override
   void dispose() {
@@ -53,7 +53,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           children: [
             const Text('Activity'),
             Text(
-              _greetingSubtitle(),
+              'All transactions',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 12.5,
@@ -74,15 +74,25 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   : Icons.visibility_outlined,
             ),
           ),
+          PopupMenuButton<String>(
+            tooltip: 'More activity actions',
+            onSelected: (value) {
+              if (value == 'add_cash') _add();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'add_cash',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.add_rounded),
+                  title: Text('Add cash transaction'),
+                  subtitle: Text('Manual fallback'),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(width: 8),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add-transaction',
-        tooltip: 'Add transaction',
-        onPressed: _add,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add transaction'),
       ),
       body: async.when(
         loading: () => const _ActivityLoading(),
@@ -98,31 +108,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     );
   }
 
-  String _greetingSubtitle() {
-    final hour = DateTime.now().hour;
-    final part = hour < 12
-        ? 'Good morning'
-        : hour < 17
-        ? 'Good afternoon'
-        : 'Good evening';
-    return '$part · ${DateFormat('EEEE, d MMM').format(DateTime.now())}';
-  }
-
   Widget _content(List<Expense> all, bool hidden, SyncState sync) {
-    final now = DateTime.now();
-    final month = all.where(
-      (item) => item.date.year == now.year && item.date.month == now.month,
-    );
-    final spent = month
-        .where((item) => !item.isIncome)
-        .fold<double>(0, (sum, item) => sum + item.amount);
-    final received = month
-        .where((item) => item.isIncome)
-        .fold<double>(0, (sum, item) => sum + item.amount);
-    final currency =
-        all.firstOrNull?.currency ??
-        ref.watch(preferredCurrencyProvider) ??
-        'INR';
     final visible = all.where(_matches).toList();
     final groups = <DateTime, List<Expense>>{};
     for (final item in visible) {
@@ -132,16 +118,26 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       ..sort();
     final importSetupRequired = ref.watch(ollamaApiKeyProvider).trim().isEmpty;
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final contentInset = screenWidth > 760 ? (screenWidth - 720) / 2 : 16.0;
+    final contentInset = screenWidth > AppBreakpoint.contentMax + 40
+        ? (screenWidth - AppBreakpoint.contentMax) / 2
+        : AppSpacing.lg;
     final filtersActive =
-        _direction != 'all' || _dateRange != null || _category != null;
+        _direction != 'all' ||
+        _dateRange != null ||
+        _category != null ||
+        _reviewOnly;
 
     if (all.isEmpty) {
       return CustomScrollView(
         slivers: [
           const SliverToBoxAdapter(child: DevelopmentUpdateBanner()),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(contentInset, 12, contentInset, 132),
+            padding: EdgeInsets.fromLTRB(
+              contentInset,
+              AppSpacing.md,
+              contentInset,
+              104,
+            ),
             sliver: SliverList.list(
               children: [
                 const _FirstRunOverview(),
@@ -187,17 +183,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     onClear: _clearFilters,
                   ),
                 ],
-                const SizedBox(height: 16),
-                 _MonthlySummary(
-                  expenses: visible,
-                  spent: spent,
-                  received: received,
-                  currency: currency,
-                  hidden: hidden,
-                  onSpent: () => setState(() => _direction = 'out'),
-                  onReceived: () => setState(() => _direction = 'in'),
-                ),
-                const SizedBox(height: 16),
+                if (all.any((item) => item.status == 'needs_review')) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  FilterChip(
+                    selected: _reviewOnly,
+                    avatar: const Icon(Icons.fact_check_outlined, size: 18),
+                    label: Text(
+                      '${all.where((item) => item.status == 'needs_review').length} to review',
+                    ),
+                    onSelected: (value) => setState(() => _reviewOnly = value),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
                 if (sync.phase != SyncPhase.idle) ...[
                   _SmsSyncCard(
                     state: sync,
@@ -226,7 +223,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           )
         else
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(contentInset, 0, contentInset, 136),
+            padding: EdgeInsets.fromLTRB(contentInset, 0, contentInset, 104),
             sliver: SliverList.builder(
               itemCount: groups.length,
               itemBuilder: (context, index) {
@@ -262,6 +259,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             item.date.isBefore(_dateRange!.end.add(const Duration(days: 1))));
     return direction &&
         inRange &&
+        (!_reviewOnly || item.status == 'needs_review') &&
         (_category == null || item.category == _category) &&
         words.contains(_query);
   }
@@ -272,6 +270,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     _direction = 'all';
     _dateRange = null;
     _category = null;
+    _reviewOnly = false;
   });
 
   Future<void> _showFilters(List<String> categories) async {
@@ -490,6 +489,47 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       ),
       builder: (sheetContext) => _TransactionDetails(
         item: item,
+        onConfirm: item.status == 'needs_review'
+            ? () async {
+                await ref
+                    .read(expenseListProvider.notifier)
+                    .updateExpense(
+                      item.copyWith(status: 'settled', confidence: 1),
+                    );
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+              }
+            : null,
+        onReject: item.status == 'needs_review' && item.id != null
+            ? () async {
+                final remove =
+                    await showDialog<bool>(
+                      context: sheetContext,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text('Not a transaction?'),
+                        content: const Text(
+                          'This removes the extracted record. The source message remains in import history so Flow will not add it again.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('Remove record'),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+                if (!remove) return;
+                await ref
+                    .read(expenseListProvider.notifier)
+                    .deleteExpense(item.id!);
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+              }
+            : null,
         onEdit: () {
           Navigator.pop(sheetContext);
           _edit(item);
@@ -557,229 +597,6 @@ class _SearchField extends StatelessWidget {
     ),
     onChanged: onChanged,
   );
-}
-
-class _MonthlySummary extends StatelessWidget {
-  const _MonthlySummary({
-    required this.expenses,
-    required this.spent,
-    required this.received,
-    required this.currency,
-    required this.hidden,
-    required this.onSpent,
-    required this.onReceived,
-  });
-  final List<Expense> expenses;
-  final double spent;
-  final double received;
-  final String currency;
-  final bool hidden;
-  final VoidCallback onSpent;
-  final VoidCallback onReceived;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final net = received - spent;
-    final positive = net >= 0;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(64),
-          bottomLeft: Radius.circular(64),
-          bottomRight: Radius.circular(36),
-        ),
-        boxShadow: PremiumShadows.ambient(context, color: scheme.primary),
-      ),
-      child: Material(
-        color: scheme.primaryContainer,
-        shape: ExpressiveShape.hero(),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Positioned(
-              right: -46,
-              top: -54,
-              child: _HeroOrb(
-                color: scheme.primary.withValues(alpha: .14),
-                size: 168,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'This month',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: scheme.onPrimaryContainer.withValues(alpha: .8),
-                      letterSpacing: .3,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  AnimatedSwitcher(
-                    duration: AppMotion.medium,
-                    switchInCurve: AppMotion.emphasizedDecelerate,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween(
-                          begin: const Offset(0, .25),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
-                      ),
-                    ),
-                    child: FittedBox(
-                      key: ValueKey(hidden ? 'hidden' : net.toStringAsFixed(2)),
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        hidden
-                            ? maskAmount(currency)
-                            : '${positive ? '+' : '−'}${formatAmount(net.abs(), currency)}',
-                        style: AppTheme.money(
-                          Theme.of(context).textTheme.displaySmall?.copyWith(
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'Net flow so far',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onPrimaryContainer.withValues(alpha: .7),
-                    ),
-                  ),
-                  if (expenses.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    SpendingWaveChart(
-                      expenses: expenses,
-                      currency: currency,
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Divider(
-                    color: scheme.onPrimaryContainer.withValues(alpha: .16),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SummaryValue(
-                          label: 'Money out',
-                          amount: spent,
-                          currency: currency,
-                          hidden: hidden,
-                          icon: Icons.north_east_rounded,
-                          color: context.finance.expense,
-                          onTap: onSpent,
-                        ),
-                      ),
-                      SizedBox(
-                        height: 52,
-                        child: VerticalDivider(
-                          color: scheme.onPrimaryContainer.withValues(alpha: .16),
-                        ),
-                      ),
-                      Expanded(
-                        child: _SummaryValue(
-                          label: 'Money in',
-                          amount: received,
-                          currency: currency,
-                          hidden: hidden,
-                          icon: Icons.south_west_rounded,
-                          color: context.finance.income,
-                          onTap: onReceived,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroOrb extends StatelessWidget {
-  const _HeroOrb({required this.color, required this.size});
-  final Color color;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
-}
-
-class _SummaryValue extends StatelessWidget {
-  const _SummaryValue({
-    required this.label,
-    required this.amount,
-    required this.currency,
-    required this.hidden,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-  final String label;
-  final double amount;
-  final String currency;
-  final bool hidden;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return BouncyInkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.all(AppRadius.md),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 14, color: color),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onPrimaryContainer.withValues(alpha: .72),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                hidden ? maskAmount(currency) : formatAmount(amount, currency),
-                style: AppTheme.money(
-                  Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _SmsSyncCard extends StatelessWidget {
@@ -877,7 +694,7 @@ class _FirstRunOverview extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Add your first transaction or import supported bank messages. Flow will organise the rest.',
+                'Connect transaction SMS in Flow. Imported records and anything needing review will appear here as evidence.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: scheme.onPrimaryContainer.withValues(alpha: .78),
                 ),
@@ -903,7 +720,7 @@ class _CompactSync extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return BouncyInkWell(
+    return CalmPress(
       onTap: onSync,
       borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Ink(
@@ -1119,32 +936,63 @@ class _TransactionGroup extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-        child: Text(
-          _label(),
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-      for (var index = 0; index < transactions.length; index++)
+  Widget build(BuildContext context) {
+    final totals = <String, double>{};
+    for (final item in transactions) {
+      final signed = item.isIncome ? item.amount : -item.amount;
+      totals.update(
+        item.currency,
+        (value) => value + signed,
+        ifAbsent: () => signed,
+      );
+    }
+    final summary = hidden
+        ? 'Amounts hidden'
+        : totals.entries
+              .map(
+                (entry) =>
+                    '${entry.value >= 0 ? '+' : '−'}${formatAmount(entry.value.abs(), entry.key)}',
+              )
+              .join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _TransactionRow(
-            index: index,
-            item: transactions[index],
-            hidden: hidden,
-            onTap: () => onTap(transactions[index]),
-            onEdit: () => onEdit(transactions[index]),
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _label(),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Text(
+                summary,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
-      const SizedBox(height: 24),
-    ],
-  );
+        for (var index = 0; index < transactions.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _TransactionRow(
+              index: index,
+              item: transactions[index],
+              hidden: hidden,
+              onTap: () => onTap(transactions[index]),
+              onEdit: () => onEdit(transactions[index]),
+            ),
+          ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
 }
 
 class _TransactionRow extends StatelessWidget {
@@ -1162,6 +1010,8 @@ class _TransactionRow extends StatelessWidget {
   final VoidCallback onEdit;
 
   bool get needsReview =>
+      item.status == 'needs_review' ||
+      item.confidence < 0.7 ||
       item.displayMerchant.trim().isEmpty ||
       item.displayMerchant.toLowerCase() == 'unknown';
 
@@ -1184,7 +1034,7 @@ class _TransactionRow extends StatelessWidget {
       button: true,
       label:
           '${needsReview ? 'Needs review' : item.displayMerchant}, $amount, ${item.category}, ${DateFormat('d MMMM, h:mm a').format(item.date)}',
-      child: BouncyInkWell(
+      child: CalmPress(
         onTap: onTap,
         onLongPress: onEdit,
         borderRadius: ExpressiveShape.playful(index),
@@ -1268,12 +1118,18 @@ class _TransactionDetails extends StatelessWidget {
     required this.item,
     required this.onEdit,
     required this.onReanalyze,
+    required this.onConfirm,
+    required this.onReject,
   });
   final Expense item;
   final VoidCallback onEdit;
   final VoidCallback? onReanalyze;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onReject;
 
   bool get needsReview =>
+      item.status == 'needs_review' ||
+      item.confidence < 0.7 ||
       item.displayMerchant.trim().isEmpty ||
       item.displayMerchant.toLowerCase() == 'unknown';
 
@@ -1341,27 +1197,60 @@ class _TransactionDetails extends StatelessWidget {
             label: 'Added from',
             value: item.originalSms.isEmpty ? 'Manual entry' : 'Bank SMS',
           ),
+          if (item.originalSms.isNotEmpty)
+            _DetailLine(
+              label: 'Flow confidence',
+              value:
+                  '${(item.confidence * 100).round()}%${needsReview ? ' · Check this' : ''}',
+              warning: needsReview,
+            ),
           if (item.tags.trim().isNotEmpty)
             _DetailLine(label: 'Tags', value: item.tags),
           const SizedBox(height: 20),
-          if (needsReview && onReanalyze != null)
+          if (needsReview && onConfirm != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onConfirm,
+                    child: const Text('Confirm'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onEdit,
+                    child: const Text('Correct'),
+                  ),
+                ),
+              ],
+            ),
+            if (onReject != null)
+              Center(
+                child: TextButton(
+                  onPressed: onReject,
+                  child: const Text('Not a transaction'),
+                ),
+              ),
+            if (onReanalyze != null)
+              Center(
+                child: TextButton.icon(
+                  onPressed: onReanalyze,
+                  icon: const Icon(Icons.blur_on_rounded),
+                  label: const Text('Re-analyze source with Flow'),
+                ),
+              ),
+          ],
+          const SizedBox(height: 8),
+          if (!needsReview)
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onReanalyze,
-                icon: const Icon(Icons.auto_awesome_outlined),
-                label: const Text('Analyze original SMS'),
+              child: OutlinedButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Correct details'),
               ),
             ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit transaction'),
-            ),
-          ),
         ],
       ),
     ),
@@ -1455,9 +1344,9 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             Text(
@@ -1500,11 +1389,7 @@ class _ActivityLoading extends StatelessWidget {
 }
 
 class _StaggeredReveal extends StatefulWidget {
-  const _StaggeredReveal({
-    super.key,
-    required this.index,
-    required this.child,
-  });
+  const _StaggeredReveal({required this.index, required this.child});
 
   final int index;
   final Widget child;
@@ -1526,19 +1411,18 @@ class _StaggeredRevealState extends State<_StaggeredReveal>
       vsync: this,
       duration: const Duration(milliseconds: 380),
     );
-    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _slide = Tween<Offset>(
-      begin: const Offset(0.0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: AppMotion.emphasizedDecelerate,
-      ),
-    );
-    
+    _fade = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _slide = Tween<Offset>(begin: const Offset(0.0, 0.08), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: AppMotion.emphasizedDecelerate,
+          ),
+        );
+
     Future.delayed(
       Duration(milliseconds: math.min(widget.index * 60, 300)),
       () {
@@ -1557,10 +1441,7 @@ class _StaggeredRevealState extends State<_StaggeredReveal>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

@@ -107,7 +107,7 @@ class AgentArtifactCard extends StatelessWidget {
     AgentArtifactKind.anomalies => Icons.notification_important_outlined,
     AgentArtifactKind.action => Icons.task_alt_rounded,
     AgentArtifactKind.insight => Icons.lightbulb_outline_rounded,
-    _ => Icons.auto_awesome_outlined,
+    _ => Icons.blur_on_outlined,
   };
 
   Widget _content(BuildContext context) => switch (artifact.kind) {

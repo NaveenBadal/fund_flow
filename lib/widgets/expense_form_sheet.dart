@@ -180,7 +180,9 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                                   child: DropdownButton<String>(
                                     value: _currency,
                                     dropdownColor: scheme.surfaceContainer,
-                                    style: Theme.of(context).textTheme.titleLarge
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
                                         ?.copyWith(
                                           color: scheme.onSurface,
                                           fontWeight: FontWeight.w700,
@@ -230,13 +232,12 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                                     ),
                                   ],
                                   style: AppTheme.money(
-                                    Theme.of(context)
-                                        .textTheme
-                                        .displayMedium
-                                        ?.copyWith(
-                                          color: scheme.onSurface,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                    Theme.of(
+                                      context,
+                                    ).textTheme.displayMedium?.copyWith(
+                                      color: scheme.onSurface,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   decoration: InputDecoration.collapsed(
                                     hintText: '0.00',
@@ -430,6 +431,13 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
         type: _type,
         tags: _tags.text.trim(),
         normalizedMerchant: old?.normalizedMerchant,
+        account: old?.account,
+        counterpartyAccount: old?.counterpartyAccount,
+        status: 'settled',
+        source: old?.source ?? 'manual',
+        confidence: 1,
+        transferGroup: old?.transferGroup,
+        notes: old?.notes ?? '',
       ),
     );
     await HapticFeedback.lightImpact();
@@ -611,7 +619,8 @@ class _BouncyPrefix extends StatefulWidget {
   State<_BouncyPrefix> createState() => _BouncyPrefixState();
 }
 
-class _BouncyPrefixState extends State<_BouncyPrefix> with SingleTickerProviderStateMixin {
+class _BouncyPrefixState extends State<_BouncyPrefix>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
 
@@ -626,7 +635,7 @@ class _BouncyPrefixState extends State<_BouncyPrefix> with SingleTickerProviderS
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 50),
       TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 50),
     ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    
+
     widget.controller.addListener(_triggerBounce);
   }
 
@@ -647,9 +656,6 @@ class _BouncyPrefixState extends State<_BouncyPrefix> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: widget.child,
-    );
+    return ScaleTransition(scale: _scale, child: widget.child);
   }
 }

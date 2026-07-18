@@ -105,29 +105,6 @@ final preferredCurrencyProvider =
       PreferredCurrencyNotifier.new,
     );
 
-class MonthlyPlanNotifier extends Notifier<({double income, double buffer})> {
-  @override
-  ({double income, double buffer}) build() => (income: 0, buffer: 0);
-
-  Future<void> setPlan({required double income, required double buffer}) async {
-    state = (income: income, buffer: buffer);
-    final storage = ref.read(secureStorageProvider);
-    await Future.wait([
-      storage.write(key: 'planned_monthly_income', value: '$income'),
-      storage.write(key: 'monthly_safety_buffer', value: '$buffer'),
-    ]);
-  }
-
-  void restore({required double income, required double buffer}) {
-    state = (income: income, buffer: buffer);
-  }
-}
-
-final monthlyPlanProvider =
-    NotifierProvider<MonthlyPlanNotifier, ({double income, double buffer})>(
-      MonthlyPlanNotifier.new,
-    );
-
 // ─── Privacy / App lock ────────────────────────────────────────────────────
 
 class PrivateModeNotifier extends Notifier<bool> {
@@ -250,16 +227,6 @@ final settingsInitializer = FutureProvider<void>((ref) async {
   if (currency != null && currency.isNotEmpty) {
     ref.read(preferredCurrencyProvider.notifier).restore(currency);
   }
-  final plannedIncome = double.tryParse(
-    await storage.read(key: 'planned_monthly_income') ?? '',
-  );
-  final buffer = double.tryParse(
-    await storage.read(key: 'monthly_safety_buffer') ?? '',
-  );
-  ref
-      .read(monthlyPlanProvider.notifier)
-      .restore(income: plannedIncome ?? 0, buffer: buffer ?? 0);
-
   final appLock = await storage.read(key: 'app_lock_enabled');
   ref.read(appLockEnabledProvider.notifier).set(appLock == 'true');
 
@@ -463,6 +430,8 @@ class SyncState {
     this.detail,
     this.current = 0,
     this.total = 0,
+    this.imported = 0,
+    this.skipped = 0,
   });
   final SyncPhase phase;
   final String? errorMessage;
@@ -473,6 +442,8 @@ class SyncState {
 
   /// Total SMS queued for parsing.
   final int total;
+  final int imported;
+  final int skipped;
 
   bool get isAnalyzing => phase == SyncPhase.analyzing && total > 0;
 
@@ -482,12 +453,16 @@ class SyncState {
     String? detail,
     int? current,
     int? total,
+    int? imported,
+    int? skipped,
   }) => SyncState(
     phase: phase ?? this.phase,
     errorMessage: errorMessage ?? this.errorMessage,
     detail: detail ?? this.detail,
     current: current ?? this.current,
     total: total ?? this.total,
+    imported: imported ?? this.imported,
+    skipped: skipped ?? this.skipped,
   );
 
   static const idle = SyncState();
@@ -531,7 +506,7 @@ class SyncNotifier extends Notifier<SyncState> {
   Future<void> sync() async {
     _cancelled = false;
     if (ref.read(ollamaApiKeyProvider).trim().isEmpty) {
-      _error('Add your Ollama Cloud API key in Settings before syncing.');
+      _error('Connect Flow intelligence in You before analyzing messages.');
       return;
     }
 
@@ -613,6 +588,7 @@ class SyncNotifier extends Notifier<SyncState> {
     );
 
     var importedCount = 0;
+    var skippedCount = 0;
     if (total > 0) {
       // Run two 12-message AI batches per wave. Each batch is published as soon
       // as it finishes, so the ledger visibly fills while the second request
@@ -630,6 +606,7 @@ class SyncNotifier extends Notifier<SyncState> {
                 .insertExpensesProgressively(result.expenses);
             importedCount += result.expenses.length;
           }
+          skippedCount += result.skipReasons.length;
           final confirmed = batch
               .where((sms) => result.skipReasons[sms['body']] != 'parse_error')
               .toList();
@@ -648,6 +625,8 @@ class SyncNotifier extends Notifier<SyncState> {
             detail: '$processed of $total analyzed · $importedCount imported',
             current: processed,
             total: total,
+            imported: importedCount,
+            skipped: skippedCount,
           );
         }
       }
@@ -672,10 +651,11 @@ class SyncNotifier extends Notifier<SyncState> {
         state = SyncState(
           phase: SyncPhase.complete,
           detail: 'Stopped after $done / $total',
+          current: done,
+          total: total,
+          imported: importedCount,
+          skipped: skippedCount,
         );
-        Future.delayed(const Duration(seconds: 4), () {
-          if (state.phase == SyncPhase.complete) state = SyncState.idle;
-        });
         return;
       }
 
@@ -694,10 +674,14 @@ class SyncNotifier extends Notifier<SyncState> {
     final completeDetail = total == 0
         ? 'No new messages (${alreadyParsedCount > 0 ? '$alreadyParsedCount already parsed' : 'none matched'})'
         : '$total analyzed · $importedCount imported';
-    state = SyncState(phase: SyncPhase.complete, detail: completeDetail);
-    Future.delayed(const Duration(seconds: 4), () {
-      if (state.phase == SyncPhase.complete) state = SyncState.idle;
-    });
+    state = SyncState(
+      phase: SyncPhase.complete,
+      detail: completeDetail,
+      current: total,
+      total: total,
+      imported: importedCount,
+      skipped: skippedCount,
+    );
   }
 }
 

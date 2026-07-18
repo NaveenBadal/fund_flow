@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
 import '../services/database_helper.dart';
 import '../theme/app_tokens.dart';
-import '../widgets/ui/command_ui.dart';
+import '../widgets/ui/flow_ui.dart';
 
 enum _Filter { all, imported, skipped }
 
@@ -20,7 +20,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(parsedSmsAuditProvider);
-    return CommandScaffold(
+    return FlowScaffold(
       eyebrow: 'See what happened during import',
       title: 'Import history',
       slivers: [

@@ -4,6 +4,7 @@ import 'package:expense_manager/models/expense.dart';
 import 'package:expense_manager/providers/expense_provider.dart';
 import 'package:expense_manager/screens/activity_screen.dart';
 import 'package:expense_manager/screens/settings_screen.dart';
+import 'package:expense_manager/screens/onboarding_screen.dart';
 import 'package:expense_manager/services/database_helper.dart';
 import 'package:expense_manager/theme/app_theme.dart';
 import 'package:expense_manager/widgets/money_chat_sheet.dart';
@@ -69,12 +70,12 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Activity'), findsOneWidget);
-    expect(find.byTooltip('Add transaction'), findsOneWidget);
+    expect(find.byTooltip('More activity actions'), findsOneWidget);
     expect(find.byTooltip('Hide amounts'), findsOneWidget);
     semantics.dispose();
   });
 
-  testWidgets('Settings remains usable on a narrow screen at 200% text', (
+  testWidgets('You remains usable on a narrow screen at 200% text', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 720);
@@ -99,11 +100,47 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Choose how Flow works for you.'), findsOneWidget);
+    expect(find.text('You'), findsOneWidget);
+    expect(
+      find.text(
+        'Control Flow intelligence, data sources, privacy, and preferences.',
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('Ask Flow input stays visible when the keyboard opens', (
+  testWidgets('AI-first onboarding supports 200% text', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.light(null),
+          home: const MediaQuery(
+            data: MediaQueryData(
+              size: Size(360, 800),
+              textScaler: TextScaler.linear(2),
+            ),
+            child: OnboardingScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Transaction messages become answers.'), findsOneWidget);
+    await tester.tap(find.text('Set up Flow'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Connect Flow intelligence'), findsOneWidget);
+    expect(find.text('Connect intelligence'), findsOneWidget);
+  });
+
+  testWidgets('Flow input stays visible when the keyboard opens', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 720);
@@ -124,8 +161,8 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Ask Flow'), findsOneWidget);
-    expect(find.text('Connect Flow AI in Settings'), findsOneWidget);
+    expect(find.text('Flow'), findsOneWidget);
+    expect(find.text('Connect intelligence to ask Flow'), findsOneWidget);
   });
 
   testWidgets('agent financial cards support narrow screens and 200% text', (
@@ -220,6 +257,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('uncertain SMS records expose focused review decisions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [expenseListProvider.overrideWith(_ReviewExpenses.new)],
+        child: MaterialApp(
+          theme: AppTheme.light(null),
+          home: const ActivityScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('1 to review'), findsOneWidget);
+    await tester.tap(find.text('Needs review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm'), findsOneWidget);
+    expect(find.text('Correct'), findsOneWidget);
+    expect(find.text('Not a transaction'), findsOneWidget);
+    expect(find.textContaining('55%'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Activity stays bounded on a tablet layout', (tester) async {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
@@ -271,6 +334,24 @@ class _PopulatedExpenses extends ExpenseListNotifier {
       category: 'Others',
       date: DateTime(2026, 7, 17),
       originalSms: '',
+    ),
+  ];
+}
+
+class _ReviewExpenses extends ExpenseListNotifier {
+  @override
+  Future<List<Expense>> build() async => [
+    Expense(
+      id: 9001,
+      amount: 499,
+      currency: 'INR',
+      merchant: 'Unknown',
+      category: 'Others',
+      date: DateTime(2026, 7, 18),
+      originalSms: 'Protected source message',
+      source: 'sms',
+      status: 'needs_review',
+      confidence: 0.55,
     ),
   ];
 }

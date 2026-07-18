@@ -9,7 +9,7 @@ const defaultOllamaBaseUrl = 'https://ollama.com';
 const defaultOllamaModel = 'gpt-oss:20b-cloud';
 
 /// No hardcoded key. User provides the key from Settings; it is persisted in
-/// secure storage and loaded on startup.
+/// secure storage and loaded on startup through the You controls.
 const defaultOllamaApiKey = '';
 
 /// Models worth surfacing in the picker, fastest → most capable.

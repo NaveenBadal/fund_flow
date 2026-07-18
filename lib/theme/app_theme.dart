@@ -8,20 +8,21 @@ class AppTheme {
   static const seed = Color(0xFF5B4BDB);
   static const _tabular = [FontFeature.tabularFigures()];
 
-  static ThemeData light(ColorScheme? dynamic) =>
-      _build(Brightness.light, dynamic);
-  static ThemeData dark(ColorScheme? dynamic) =>
-      _build(Brightness.dark, dynamic);
+  static ThemeData light(ColorScheme? _) => _build(Brightness.light);
+  static ThemeData dark(ColorScheme? _) => _build(Brightness.dark);
 
-  static ThemeData _build(Brightness brightness, ColorScheme? dynamic) {
+  static ThemeData _build(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     final generated = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
       contrastLevel: .15,
     );
-    final scheme = dynamic ?? generated;
+    // Flow's intelligence signal and financial semantics must remain stable.
+    // Device wallpaper colors are intentionally not allowed to redefine the
+    // brand or trust states of this finance product.
+    final scheme = generated;
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
@@ -156,6 +157,38 @@ class AppTheme {
         style: IconButton.styleFrom(
           minimumSize: const Size(48, 48),
           shape: const CircleBorder(),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 76,
+        elevation: 0,
+        backgroundColor: scheme.surfaceContainer,
+        indicatorColor: scheme.secondaryContainer,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return text.labelMedium?.copyWith(
+            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+          );
+        }),
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        indicatorColor: scheme.secondaryContainer,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        selectedLabelTextStyle: text.labelLarge?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelTextStyle: text.labelLarge?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(

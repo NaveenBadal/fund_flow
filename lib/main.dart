@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'providers/expense_provider.dart';
 import 'providers/development_update_provider.dart';
 import 'providers/notification_ingestion_provider.dart';
@@ -34,15 +33,13 @@ class ExpenseManagerApp extends ConsumerWidget {
     ref.watch(settingsInitializer);
     final themeMode = ref.watch(themeModeProvider);
 
-    return DynamicColorBuilder(
-      builder: (lightDynamic, darkDynamic) => MaterialApp(
-        title: 'Fund Flow',
-        debugShowCheckedModeBanner: false,
-        themeMode: themeMode,
-        theme: AppTheme.light(lightDynamic),
-        darkTheme: AppTheme.dark(darkDynamic),
-        home: const _AppGate(),
-      ),
+    return MaterialApp(
+      title: 'Fund Flow',
+      debugShowCheckedModeBanner: false,
+      themeMode: themeMode,
+      theme: AppTheme.light(null),
+      darkTheme: AppTheme.dark(null),
+      home: const _AppGate(),
     );
   }
 }
@@ -292,17 +289,17 @@ class _AppShellState extends ConsumerState<AppShell>
   void initState() {
     super.initState();
     _pages = [
+      MoneyChatSheet(
+        key: const PageStorageKey('flow'),
+        fullScreen: true,
+        onOpenSettings: _openSettings,
+        onOpenActivity: () => _selectDestination(1),
+      ),
       ActivityScreen(
         key: const PageStorageKey('activity'),
-        onOpenSettings: () => _selectDestination(2),
+        onOpenSettings: _openSettings,
       ),
-      MoneyChatSheet(
-        key: const PageStorageKey('ask-flow'),
-        fullScreen: true,
-        onOpenSettings: () => _selectDestination(2),
-        onOpenActivity: () => _selectDestination(0),
-      ),
-      const SettingsScreen(key: PageStorageKey('settings')),
+      const SettingsScreen(key: PageStorageKey('you')),
     ];
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -338,6 +335,10 @@ class _AppShellState extends ConsumerState<AppShell>
     setState(() => _destination = value);
   }
 
+  void _openSettings() {
+    _selectDestination(2);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -355,31 +356,31 @@ class _AppShellState extends ConsumerState<AppShell>
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 840;
+        final wide = constraints.maxWidth >= AppBreakpoint.rail;
         if (wide) {
           return Scaffold(
             body: Row(
               children: [
                 NavigationRail(
                   selectedIndex: _destination,
-                  extended: constraints.maxWidth >= 1100,
+                  extended: constraints.maxWidth >= AppBreakpoint.extendedRail,
                   groupAlignment: -.72,
                   onDestinationSelected: _selectDestination,
                   destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.blur_on_outlined),
+                      selectedIcon: Icon(Icons.blur_on_rounded),
+                      label: Text('Flow'),
+                    ),
                     NavigationRailDestination(
                       icon: Icon(Icons.receipt_long_outlined),
                       selectedIcon: Icon(Icons.receipt_long_rounded),
                       label: Text('Activity'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.auto_awesome_outlined),
-                      selectedIcon: Icon(Icons.auto_awesome_rounded),
-                      label: Text('Ask Flow'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.tune_outlined),
-                      selectedIcon: Icon(Icons.tune_rounded),
-                      label: Text('Settings'),
+                      icon: Icon(Icons.person_outline_rounded),
+                      selectedIcon: Icon(Icons.person_rounded),
+                      label: Text('You'),
                     ),
                   ],
                 ),
@@ -391,8 +392,7 @@ class _AppShellState extends ConsumerState<AppShell>
         }
         return Scaffold(
           body: pages,
-          extendBody: true,
-          bottomNavigationBar: FloatingGlassNavigationBar(
+          bottomNavigationBar: FlowNavigationBar(
             selectedIndex: _destination,
             onDestinationSelected: _selectDestination,
           ),
@@ -432,10 +432,7 @@ class _DestinationLayer extends StatelessWidget {
             excluding: !active,
             child: IgnorePointer(
               ignoring: !active,
-              child: FocusScope(
-                canRequestFocus: active,
-                child: child,
-              ),
+              child: FocusScope(canRequestFocus: active, child: child),
             ),
           ),
         ),
@@ -444,8 +441,10 @@ class _DestinationLayer extends StatelessWidget {
   }
 }
 
-class FloatingGlassNavigationBar extends StatelessWidget {
-  const FloatingGlassNavigationBar({
+/// The phone navigation occupies layout space so it can never cover content or
+/// collide with a screen-level action. See docs/design_system.md.
+class FlowNavigationBar extends StatelessWidget {
+  const FlowNavigationBar({
     super.key,
     required this.selectedIndex,
     required this.onDestinationSelected,
@@ -456,71 +455,30 @@ class FloatingGlassNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final items = const [
-      (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Activity'),
-      (Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'Ask Flow'),
-      (Icons.tune_outlined, Icons.tune_rounded, 'Settings'),
-    ];
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: GlassmorphicContainer(
-          height: 68,
-          borderRadius: BorderRadius.circular(32),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (index) {
-              final item = items[index];
-              final active = index == selectedIndex;
-              final color = active ? scheme.primary : scheme.onSurfaceVariant;
-              
-              return Expanded(
-                child: BouncyInkWell(
-                  onTap: () => onDestinationSelected(index),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Center(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: AppMotion.emphasizedDecelerate,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? scheme.primary.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            active ? item.$2 : item.$1,
-                            color: color,
-                            size: 22,
-                          ),
-                          if (active) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              item.$3,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
+    return NavigationBar(
+      selectedIndex: selectedIndex,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      onDestinationSelected: onDestinationSelected,
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.blur_on_outlined),
+          selectedIcon: Icon(Icons.blur_on_rounded),
+          label: 'Flow',
+          tooltip: 'Flow agent',
         ),
-      ),
+        NavigationDestination(
+          icon: Icon(Icons.receipt_long_outlined),
+          selectedIcon: Icon(Icons.receipt_long_rounded),
+          label: 'Activity',
+          tooltip: 'Activity',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(Icons.person_rounded),
+          label: 'You',
+          tooltip: 'Your settings and privacy',
+        ),
+      ],
     );
   }
 }

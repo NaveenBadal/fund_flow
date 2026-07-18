@@ -1,5 +1,9 @@
 # Ask Flow agent architecture
 
+> Historical implementation reference. Product, UX, navigation, and visual
+> decisions are governed exclusively by `docs/design_system.md` v2.0. Where
+> this document conflicts with that AI-first specification, ignore it.
+
 Ask Flow uses cloud AI for all natural-language interpretation. It does not
 use a local intent parser or local language model. Financial arithmetic,
 database filtering, policy enforcement, mutations, and verification remain

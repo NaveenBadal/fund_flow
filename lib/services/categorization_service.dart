@@ -53,6 +53,7 @@ class CategorizationService {
         skipped: smsList.length,
         status: 'Error: Ollama Cloud API key not set',
       );
+      cloud.close();
       return SmsBatchResult(expenses: [], skipReasons: reasons);
     }
 
@@ -92,6 +93,13 @@ class CategorizationService {
         String category = result.category ?? 'Others';
         final learned = learnedMap[merchant.toLowerCase()];
         if (learned != null && learned.isNotEmpty) category = learned;
+        final merchantKnown = merchant.toLowerCase() != 'unknown';
+        final categoryKnown = category != 'Others';
+        final confidence = !merchantKnown
+            ? 0.55
+            : categoryKnown
+            ? 0.90
+            : 0.75;
 
         expenses.add(
           Expense(
@@ -107,8 +115,9 @@ class CategorizationService {
               'transfer' => 'transfer',
               _ => 'expense',
             },
+            status: confidence < 0.7 ? 'needs_review' : 'settled',
             source: 'sms',
-            confidence: 0.85,
+            confidence: confidence,
           ),
         );
         expenseCount++;
@@ -179,6 +188,7 @@ class CategorizationService {
       skipped: skipCount,
       status: status,
     );
+    cloud.close();
     return SmsBatchResult(expenses: expenses, skipReasons: skipReasons);
   }
 

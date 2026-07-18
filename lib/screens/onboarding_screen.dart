@@ -2,137 +2,121 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../main.dart';
+import '../models/ai_provider.dart';
 import '../providers/expense_provider.dart';
+import '../services/ollama_cloud_service.dart';
 import '../theme/app_tokens.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
+
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final _controller = PageController();
-  final _income = TextEditingController();
-  final _buffer = TextEditingController();
+  static const _pageCount = 4;
+  final _pages = PageController();
+  final _key = TextEditingController();
+  final _endpoint = TextEditingController(text: defaultOllamaBaseUrl);
   int _page = 0;
-  String _currency = 'INR';
-  static const _steps = [
-    _Step(
-      number: '01',
-      title: 'See your money clearly',
-      body:
-          'Flow keeps incoming and outgoing transactions together in one simple activity list.',
-      icon: Icons.receipt_long_outlined,
-    ),
-    _Step(
-      number: '02',
-      title: 'Private by design',
-      body:
-          'Your financial records stay on this device. Flow only requests access when a feature needs it.',
-      icon: Icons.shield_outlined,
-    ),
-    _Step(
-      number: '03',
-      title: 'Set your preferences',
-      body:
-          'Choose your currency and add an optional income estimate and safety buffer.',
-      icon: Icons.tune_rounded,
-    ),
-  ];
+  bool _working = false;
+  bool _restoring = true;
+  bool _showKey = false;
+  bool _showAdvanced = false;
+  bool _continuedWithoutAi = false;
+  String _model = defaultOllamaModel;
+  String? _connectionError;
+
+  @override
+  void initState() {
+    super.initState();
+    _key.text = ref.read(ollamaApiKeyProvider);
+    _endpoint.text = ref.read(ollamaBaseUrlProvider);
+    _model = ref.read(ollamaModelProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreStage());
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
-    _income.dispose();
-    _buffer.dispose();
+    _pages.dispose();
+    _key.dispose();
+    _endpoint.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final sync = ref.watch(syncProvider);
     final scheme = Theme.of(context).colorScheme;
-    final last = _page == _steps.length - 1;
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                AppSpacing.lg,
+                AppSpacing.page,
+                AppSpacing.sm,
+              ),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
-                      borderRadius: AppRadius.all(14),
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: scheme.primary,
+                  _FlowMark(active: _working || sync.isAnalyzing),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'FLOW',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        letterSpacing: 1.6,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                   Text(
-                    'Flow',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                    '${_page + 1} / $_pageCount',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _finish,
-                    child: Text(last ? 'Use defaults' : 'Skip'),
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: _steps.length,
-                onPageChanged: (value) => setState(() => _page = value),
-                itemBuilder: (context, index) => index == 2
-                    ? _SetupView(
-                        currency: _currency,
-                        income: _income,
-                        buffer: _buffer,
-                        onCurrency: (value) =>
-                            setState(() => _currency = value),
-                      )
-                    : _StepView(step: _steps[index]),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-              child: Row(
+              child: PageView(
+                controller: _pages,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (page) => setState(() => _page = page),
                 children: [
-                  for (var index = 0; index < _steps.length; index++)
-                    AnimatedContainer(
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 250),
-                      width: index == _page ? 34 : 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 7),
-                      decoration: BoxDecoration(
-                        color: index == _page
-                            ? scheme.primary
-                            : scheme.outlineVariant,
-                        borderRadius: AppRadius.all(99),
-                      ),
-                    ),
-                  const Spacer(),
-                  FloatingActionButton.extended(
-                    onPressed: last ? _finish : _next,
-                    icon: Icon(
-                      last ? Icons.check_rounded : Icons.arrow_forward_rounded,
-                    ),
-                    label: Text(last ? 'Start using Flow' : 'Continue'),
+                  const _PromiseStage(),
+                  _ConnectionStage(
+                    keyController: _key,
+                    endpointController: _endpoint,
+                    model: _model,
+                    showKey: _showKey,
+                    showAdvanced: _showAdvanced,
+                    error: _connectionError,
+                    onToggleKey: () => setState(() => _showKey = !_showKey),
+                    onToggleAdvanced: () =>
+                        setState(() => _showAdvanced = !_showAdvanced),
+                    onModelChanged: (value) => setState(() => _model = value),
                   ),
+                  _SmsStage(aiReady: !_continuedWithoutAi),
+                  _AnalysisStage(sync: sync, aiReady: !_continuedWithoutAi),
                 ],
               ),
+            ),
+            _BottomAction(
+              page: _page,
+              working: _working || _restoring,
+              sync: sync,
+              onBack: _back,
+              onPrimary: _primaryAction,
+              onSkipAi: _page == 1 && !_working ? _skipAi : null,
+              onSkipSms: _page == 2 && !_working ? _skipSms : null,
+              onStop: sync.isAnalyzing
+                  ? () => ref.read(syncProvider.notifier).cancel()
+                  : null,
             ),
           ],
         ),
@@ -140,105 +124,534 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  void _next() => _controller.nextPage(
-    duration: MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 420),
-    curve: Curves.easeOutCubic,
-  );
+  Future<void> _primaryAction() async {
+    switch (_page) {
+      case 0:
+        await _saveStage(1);
+        _next();
+      case 1:
+        await _connectAi();
+      case 2:
+        await _analyzeSms();
+      case 3:
+        final phase = ref.read(syncProvider).phase;
+        if (phase == SyncPhase.error || phase == SyncPhase.idle) {
+          if (_continuedWithoutAi) {
+            _back();
+          } else {
+            await _analyzeSms(fromAnalysis: true);
+          }
+        } else if (phase == SyncPhase.complete) {
+          await _finish();
+        }
+    }
+  }
+
+  Future<void> _connectAi() async {
+    final key = _key.text.trim();
+    if (key.isEmpty) {
+      setState(
+        () => _connectionError = 'Enter your Ollama API key to connect Flow.',
+      );
+      return;
+    }
+    setState(() {
+      _working = true;
+      _connectionError = null;
+    });
+    final endpoint = _endpoint.text.trim().isEmpty
+        ? defaultOllamaBaseUrl
+        : _endpoint.text.trim();
+    final service = OllamaCloudService(
+      apiKey: key,
+      baseUrl: endpoint,
+      model: _model,
+    );
+    final connected = await service.validateKey();
+    service.close();
+    if (!mounted) return;
+    if (!connected) {
+      setState(() {
+        _working = false;
+        _connectionError =
+            'Flow could not connect. Check the key, endpoint, and internet connection.';
+      });
+      return;
+    }
+    await Future.wait([
+      ref
+          .read(secureStorageProvider)
+          .write(key: ollamaApiKeyStorageKey, value: key),
+      ref
+          .read(secureStorageProvider)
+          .write(key: ollamaBaseUrlStorageKey, value: endpoint),
+      ref
+          .read(secureStorageProvider)
+          .write(key: ollamaModelStorageKey, value: _model),
+    ]);
+    ref.read(ollamaApiKeyProvider.notifier).set(key);
+    ref.read(ollamaBaseUrlProvider.notifier).set(endpoint);
+    ref.read(ollamaModelProvider.notifier).set(_model);
+    if (!mounted) return;
+    setState(() {
+      _working = false;
+      _continuedWithoutAi = false;
+    });
+    await _saveStage(2);
+    _next();
+  }
+
+  void _skipAi() {
+    setState(() {
+      _continuedWithoutAi = true;
+      _connectionError = null;
+    });
+    _saveStage(2);
+    _next();
+  }
+
+  Future<void> _analyzeSms({bool fromAnalysis = false}) async {
+    if (_continuedWithoutAi) {
+      if (!fromAnalysis) _next();
+      return;
+    }
+    if (!fromAnalysis) {
+      await _saveStage(3);
+      _next();
+    }
+    await ref.read(syncProvider.notifier).sync();
+  }
+
+  Future<void> _skipSms() async {
+    _next();
+    await _finish();
+  }
 
   Future<void> _finish() async {
-    await ref.read(preferredCurrencyProvider.notifier).setCurrency(_currency);
-    await ref
-        .read(monthlyPlanProvider.notifier)
-        .setPlan(
-          income: double.tryParse(_income.text.trim()) ?? 0,
-          buffer: double.tryParse(_buffer.text.trim()) ?? 0,
-        );
+    await ref.read(secureStorageProvider).delete(key: 'onboarding_stage');
     await markOnboardingDone(ref.read(secureStorageProvider));
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AppShell()),
-      );
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const AppShell()),
+    );
+  }
+
+  void _next() => _pages.nextPage(
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppMotion.medium,
+    curve: AppMotion.emphasizedDecelerate,
+  );
+
+  void _back() => _pages.previousPage(
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppMotion.fast,
+    curve: AppMotion.standard,
+  );
+
+  Future<void> _saveStage(int stage) async {
+    try {
+      await ref
+          .read(secureStorageProvider)
+          .write(key: 'onboarding_stage', value: '$stage')
+          .timeout(const Duration(milliseconds: 500));
+    } catch (_) {
+      // Persistence improves recovery but must never block activation.
     }
+  }
+
+  Future<void> _restoreStage() async {
+    String? raw;
+    try {
+      raw = await ref
+          .read(secureStorageProvider)
+          .read(key: 'onboarding_stage')
+          .timeout(const Duration(milliseconds: 500));
+    } catch (_) {
+      raw = null;
+    }
+    if (!mounted) return;
+    final saved = int.tryParse(raw ?? '') ?? 0;
+    // An interrupted network/permission task resumes at explicit SMS consent
+    // so work is never silently repeated on launch.
+    final target = saved >= 3 ? 2 : saved.clamp(0, 2);
+    if (target > 0 && _pages.hasClients) _pages.jumpToPage(target);
+    if (mounted) setState(() => _restoring = false);
   }
 }
 
-class _SetupView extends StatelessWidget {
-  const _SetupView({
-    required this.currency,
-    required this.income,
-    required this.buffer,
-    required this.onCurrency,
-  });
-
-  final String currency;
-  final TextEditingController income;
-  final TextEditingController buffer;
-  final ValueChanged<String> onCurrency;
+class _FlowMark extends StatelessWidget {
+  const _FlowMark({required this.active});
+  final bool active;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-    child: Column(
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : AppMotion.medium,
+      width: 42,
+      height: 42,
+      decoration: ShapeDecoration(
+        color: active ? scheme.primary : scheme.primaryContainer,
+        shape: ExpressiveShape.hero(),
+      ),
+      child: Icon(
+        Icons.blur_on_rounded,
+        color: active ? scheme.onPrimary : scheme.primary,
+      ),
+    );
+  }
+}
+
+class _PromiseStage extends StatelessWidget {
+  const _PromiseStage();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.narrative,
+        AppSpacing.page,
+        AppSpacing.section,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 224,
+            width: double.infinity,
+            decoration: ShapeDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [scheme.primaryContainer, scheme.tertiaryContainer],
+              ),
+              shape: ExpressiveShape.hero(),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(Icons.sms_outlined, size: 108, color: scheme.primary),
+                Positioned(
+                  right: 54,
+                  bottom: 44,
+                  child: CircleAvatar(
+                    radius: 30,
+                    backgroundColor: scheme.primary,
+                    foregroundColor: scheme.onPrimary,
+                    child: const Icon(Icons.blur_on_rounded, size: 32),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.region),
+          Text(
+            'YOUR MONEY, UNDERSTOOD',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: scheme.primary,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Transaction messages become answers.',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Flow uses AI to understand bank SMS, show what changed, and answer real questions about your money with evidence.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionStage extends StatelessWidget {
+  const _ConnectionStage({
+    required this.keyController,
+    required this.endpointController,
+    required this.model,
+    required this.showKey,
+    required this.showAdvanced,
+    required this.error,
+    required this.onToggleKey,
+    required this.onToggleAdvanced,
+    required this.onModelChanged,
+  });
+
+  final TextEditingController keyController;
+  final TextEditingController endpointController;
+  final String model;
+  final bool showKey;
+  final bool showAdvanced;
+  final String? error;
+  final VoidCallback onToggleKey;
+  final VoidCallback onToggleAdvanced;
+  final ValueChanged<String> onModelChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.page),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xxl),
+          Text(
+            'Connect Flow intelligence',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Flow needs an Ollama connection to understand messages and answer questions. Your credential is stored securely on this device.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.section),
+          TextField(
+            controller: keyController,
+            obscureText: !showKey,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: 'Ollama API key',
+              prefixIcon: const Icon(Icons.key_rounded),
+              suffixIcon: IconButton(
+                tooltip: showKey ? 'Hide API key' : 'Show API key',
+                onPressed: onToggleKey,
+                icon: Icon(showKey ? Icons.visibility_off : Icons.visibility),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton.icon(
+            onPressed: onToggleAdvanced,
+            icon: Icon(showAdvanced ? Icons.expand_less : Icons.tune_rounded),
+            label: Text(showAdvanced ? 'Hide advanced' : 'Advanced connection'),
+          ),
+          if (showAdvanced) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: endpointController,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Endpoint',
+                prefixIcon: Icon(Icons.link_rounded),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            DropdownButtonFormField<String>(
+              initialValue: model,
+              decoration: const InputDecoration(
+                labelText: 'Model',
+                prefixIcon: Icon(Icons.memory_rounded),
+              ),
+              items: ollamaModelChoices
+                  .map(
+                    (value) =>
+                        DropdownMenuItem(value: value, child: Text(value)),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) onModelChanged(value);
+              },
+            ),
+          ],
+          if (error != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _InlineMessage(
+              icon: Icons.cloud_off_rounded,
+              text: error!,
+              error: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SmsStage extends StatelessWidget {
+  const _SmsStage({required this.aiReady});
+  final bool aiReady;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.page),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xxl),
+          Icon(Icons.sms_rounded, size: 54, color: scheme.primary),
+          const SizedBox(height: AppSpacing.section),
+          Text(
+            'Connect transaction SMS',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            aiReady
+                ? 'Flow will scan recent messages on this device for supported bank and payment transactions, then analyze those candidates with your connected AI.'
+                : 'AI is not connected, so Flow cannot analyze transaction messages yet. You can connect it from Flow after setup.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.region),
+          const _TrustRow(
+            icon: Icons.filter_alt_outlined,
+            title: 'Financial candidates only',
+            body: 'Unrelated conversations are ignored by the import flow.',
+          ),
+          const _TrustRow(
+            icon: Icons.cloud_outlined,
+            title: 'Clear processing boundary',
+            body:
+                'Candidate message text is sent to your configured Ollama endpoint for extraction.',
+          ),
+          const _TrustRow(
+            icon: Icons.phone_android_rounded,
+            title: 'Records stay local',
+            body:
+                'Structured transactions, provenance, and conversation history are stored on this device.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _InlineMessage(
+            icon: Icons.shield_outlined,
+            text: aiReady
+                ? 'Android will ask for SMS access after you choose Analyze messages.'
+                : 'Return to the previous step to connect AI before analysis.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalysisStage extends StatelessWidget {
+  const _AnalysisStage({required this.sync, required this.aiReady});
+  final SyncState sync;
+  final bool aiReady;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progress = sync.total == 0 ? null : sync.current / sync.total;
+    final complete = sync.phase == SyncPhase.complete;
+    final error = sync.phase == SyncPhase.error;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.page),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xxl),
+          _FlowMark(active: !complete && !error && aiReady),
+          const SizedBox(height: AppSpacing.section),
+          Text(
+            complete
+                ? 'Your first brief is ready'
+                : error
+                ? 'Flow needs your help'
+                : aiReady
+                ? 'Understanding your messages'
+                : 'Connect AI to start analysis',
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            complete
+                ? 'Flow has finished checking recent transaction messages. Open the agent to explore what it understood.'
+                : error
+                ? sync.errorMessage ?? 'Analysis could not finish.'
+                : aiReady
+                ? sync.detail ??
+                      'Preparing a private financial picture from your transaction messages.'
+                : 'The core SMS analysis and Flow agent require an AI connection.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: error ? scheme.error : scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.region),
+          if (!complete && !error && aiReady) ...[
+            LinearProgressIndicator(value: progress, minHeight: 8),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              sync.total > 0
+                  ? '${sync.current} of ${sync.total} messages analyzed'
+                  : _phaseLabel(sync.phase),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ],
+          if (complete)
+            _InlineMessage(
+              icon: Icons.verified_rounded,
+              text: sync.detail ?? 'Analysis complete.',
+            ),
+          if (error)
+            const _InlineMessage(
+              icon: Icons.info_outline_rounded,
+              text:
+                  'Nothing is deleted. Retry is duplicate-safe, or adjust access and try again.',
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _phaseLabel(SyncPhase phase) => switch (phase) {
+    SyncPhase.requestingPermissions => 'Waiting for SMS access',
+    SyncPhase.fetchingSms => 'Finding recent transaction messages',
+    SyncPhase.analyzing => 'Analyzing with Flow intelligence',
+    _ => 'Preparing analysis',
+  };
+}
+
+class _TrustRow extends StatelessWidget {
+  const _TrustRow({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.section),
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '03',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.4,
-          ),
-        ),
-        const SizedBox(height: 34),
-        Text(
-          'Choose your money preferences',
-          style: Theme.of(context).textTheme.headlineLarge,
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'These are planning guides, not account balances. You can change them later.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            height: 1.45,
-          ),
-        ),
-        const SizedBox(height: 28),
-        DropdownButtonFormField<String>(
-          initialValue: currency,
-          decoration: const InputDecoration(
-            labelText: 'Primary currency',
-            prefixIcon: Icon(Icons.language_rounded),
-          ),
-          items: const ['INR', 'USD', 'EUR', 'GBP', 'SGD', 'AED']
-              .map(
-                (value) => DropdownMenuItem(value: value, child: Text(value)),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) onCurrency(value);
-          },
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: income,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Expected monthly income (optional)',
-            prefixIcon: const Icon(Icons.south_west_rounded),
-            prefixText: '$currency ',
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: buffer,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Safety buffer (optional)',
-            prefixIcon: const Icon(Icons.shield_outlined),
-            prefixText: '$currency ',
+        Icon(icon, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                body,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -246,116 +659,117 @@ class _SetupView extends StatelessWidget {
   );
 }
 
-class _Step {
-  const _Step({
-    required this.number,
-    required this.title,
-    required this.body,
+class _InlineMessage extends StatelessWidget {
+  const _InlineMessage({
     required this.icon,
+    required this.text,
+    this.error = false,
   });
-  final String number;
-  final String title;
-  final String body;
   final IconData icon;
-}
+  final String text;
+  final bool error;
 
-class _StepView extends StatelessWidget {
-  const _StepView({required this.step});
-  final _Step step;
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
-      child: Column(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: error ? scheme.errorContainer : scheme.secondaryContainer,
+        borderRadius: AppRadius.all(AppRadius.lg),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            step.number,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const Spacer(),
-          TweenAnimationBuilder<double>(
-            key: ValueKey(step.icon.codePoint),
-            tween: Tween(begin: 0, end: 1),
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : AppMotion.slow,
-            curve: AppMotion.emphasizedDecelerate,
-            builder: (context, t, child) => Opacity(
-              opacity: t.clamp(0, 1),
-              child: Transform.scale(scale: 0.9 + 0.1 * t, child: child),
-            ),
-            child: Container(
-              height: 240,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(64),
-                  bottomLeft: Radius.circular(64),
-                  bottomRight: Radius.circular(36),
+          Icon(icon, color: error ? scheme.error : scheme.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomAction extends StatelessWidget {
+  const _BottomAction({
+    required this.page,
+    required this.working,
+    required this.sync,
+    required this.onBack,
+    required this.onPrimary,
+    this.onSkipAi,
+    this.onSkipSms,
+    this.onStop,
+  });
+  final int page;
+  final bool working;
+  final SyncState sync;
+  final VoidCallback onBack;
+  final VoidCallback onPrimary;
+  final VoidCallback? onSkipAi;
+  final VoidCallback? onSkipSms;
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final running =
+        sync.phase == SyncPhase.requestingPermissions ||
+        sync.phase == SyncPhase.fetchingSms ||
+        sync.phase == SyncPhase.analyzing;
+    final primaryEnabled = !working && !running;
+    final label = switch (page) {
+      0 => 'Set up Flow',
+      1 => working ? 'Checking connection…' : 'Connect intelligence',
+      2 => 'Allow and analyze',
+      3 when sync.phase == SyncPhase.complete => 'Open Flow',
+      3 when sync.phase == SyncPhase.error => 'Try analysis again',
+      3 => 'Connect AI',
+      _ => 'Continue',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.sm,
+        AppSpacing.page,
+        AppSpacing.section,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (page > 0 && !running)
+                IconButton(
+                  tooltip: 'Back',
+                  onPressed: working ? null : onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                )
+              else
+                const SizedBox(width: 48),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: FilledButton(
+                  onPressed: primaryEnabled ? onPrimary : null,
+                  child: working
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(label),
                 ),
-                boxShadow: PremiumShadows.ambient(context, color: scheme.primary),
               ),
-              child: Material(
-                color: scheme.primaryContainer,
-                shape: ExpressiveShape.hero(),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: PremiumGradients.mesh(context),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: -40,
-                      top: -46,
-                      child: Container(
-                        width: 180,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          color: scheme.primary.withValues(alpha: .1),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    Center(
-                      child: GlassmorphicContainer(
-                        width: 112,
-                        height: 112,
-                        borderRadius: BorderRadius.circular(36),
-                        child: Icon(step.icon, size: 46, color: scheme.primary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            ],
           ),
-          const Spacer(),
-          Text(
-            step.title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(height: 1.1),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            step.body,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
-          const Spacer(),
+          if (onStop != null)
+            TextButton(onPressed: onStop, child: const Text('Stop safely'))
+          else if (onSkipAi != null)
+            TextButton(
+              onPressed: onSkipAi,
+              child: const Text('Continue with limited capabilities'),
+            )
+          else if (onSkipSms != null)
+            TextButton(onPressed: onSkipSms, child: const Text('Not now')),
         ],
       ),
     );

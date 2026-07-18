@@ -1,5 +1,8 @@
 # Fund Flow — Product Experience Roadmap
 
+> Archived direction. This roadmap predates the locked AI-first product system
+> in `docs/design_system.md` v2.0 and must not guide new product or UI work.
+
 ## Product promise
 
 Fund Flow should reduce the number of money decisions a person has to make. It

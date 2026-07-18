@@ -4,14 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/custom_category.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_tokens.dart';
-import '../widgets/ui/command_ui.dart';
+import '../widgets/ui/flow_ui.dart';
 
 class CustomCategoriesScreen extends ConsumerWidget {
   const CustomCategoriesScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(customCategoryListProvider);
-    return CommandScaffold(
+    return FlowScaffold(
       eyebrow: 'Personalize how transactions are grouped',
       title: 'Categories',
       floatingActionButton: FloatingActionButton.extended(

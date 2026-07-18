@@ -5,14 +5,14 @@ import 'package:intl/intl.dart';
 import '../models/ai_log.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_tokens.dart';
-import '../widgets/ui/command_ui.dart';
+import '../widgets/ui/flow_ui.dart';
 
 class LogsScreen extends ConsumerWidget {
   const LogsScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(aiLogProvider);
-    return CommandScaffold(
+    return FlowScaffold(
       eyebrow: 'Requests, results and errors',
       title: 'AI activity',
       actions: [

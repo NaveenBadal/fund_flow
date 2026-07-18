@@ -1,5 +1,5 @@
 name: expense_manager
-description: "A new Flutter project."
+description: "An AI-first financial agent that understands transaction SMS."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -39,7 +39,6 @@ dependencies:
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   flutter_sms_inbox: ^1.0.4
-  flex_color_scheme: ^8.4.0
   flutter_secure_storage: ^10.0.0
   intl: ^0.20.2
   path: ^1.9.1
@@ -52,7 +51,6 @@ dependencies:
   package_info_plus: ^10.2.0
   crypto: ^3.0.7
   flutter_markdown_plus: ^1.0.12
-  dynamic_color: ^1.8.1
 
 dev_dependencies:
   flutter_test:
