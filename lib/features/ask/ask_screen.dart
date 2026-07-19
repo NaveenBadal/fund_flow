@@ -19,6 +19,7 @@ import '../you/connect_intelligence_sheet.dart';
 import '../you/you_screen.dart';
 import 'agent_answer_view.dart';
 import 'ask_composer.dart';
+import 'conversation_history_sheet.dart';
 import 'money_pulse.dart';
 import 'agent_approval_card.dart';
 
@@ -114,13 +115,21 @@ class _State extends ConsumerState<AskScreen> {
           title: 'Fund Flow',
           contextLine: 'Your money, made clearer',
           actions: [
+            // Offered only when there is something to leave.
             if (app.conversation.isNotEmpty)
               CurrentIconAction(
-                icon: Icons.delete_sweep_outlined,
-                label: 'Clear conversation',
-                onPressed: () => ref
-                    .read(appControllerProvider.notifier)
-                    .clearConversation(),
+                icon: Icons.edit_square,
+                label: 'New chat',
+                onPressed: () {
+                  ref.read(appControllerProvider.notifier).startNewChat();
+                  _openedAtLatest = false;
+                },
+              ),
+            if (app.threads.isNotEmpty)
+              CurrentIconAction(
+                icon: Icons.history_rounded,
+                label: 'Chat history',
+                onPressed: _openHistory,
               ),
             CurrentIconAction(
               icon: Icons.tune_rounded,
@@ -261,6 +270,29 @@ class _State extends ConsumerState<AskScreen> {
       ],
     );
   }
+
+  Future<void> _openHistory() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheet) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .8,
+      minChildSize: .4,
+      maxChildSize: .95,
+      builder: (context, controller) => PrimaryScrollController(
+        controller: controller,
+        child: ConversationHistorySheet(
+          // Opening a thread replaces what is behind the sheet, so the sheet
+          // gets out of the way rather than covering the result.
+          onOpened: () {
+            _openedAtLatest = false;
+            if (sheet.mounted) Navigator.pop(sheet);
+          },
+        ),
+      ),
+    ),
+  );
 
   void _openActivity() => ChatShell.openActivitySheet(
     context,

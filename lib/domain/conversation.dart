@@ -67,3 +67,51 @@ class ConversationMessage {
         unstructured: map['unstructured'] == 1,
       );
 }
+
+/// One conversation in the history list.
+///
+/// Threads are created only when a question is actually sent, so an opened
+/// and abandoned chat never leaves an empty row behind.
+class ConversationThread {
+  const ConversationThread({
+    required this.id,
+    required this.title,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.messageCount,
+    this.preview,
+  });
+
+  final int id;
+  final String title;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int messageCount;
+
+  /// Opening of the most recent message, for the history row.
+  final String? preview;
+
+  factory ConversationThread.fromMap(Map<String, Object?> map) =>
+      ConversationThread(
+        id: map['id']! as int,
+        title: map['title'] as String? ?? 'Untitled chat',
+        createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
+        updatedAt: DateTime.parse(map['updated_at'] as String).toLocal(),
+        messageCount: (map['message_count'] as int?) ?? 0,
+        preview: (map['preview'] as String?)?.trim(),
+      );
+
+  /// Derives a title from the question that started the thread.
+  ///
+  /// Uses the person's own words rather than asking the model for a title:
+  /// a title is worth no round trip, and their phrasing is what they will
+  /// recognise when scanning the list later.
+  static String titleFrom(String question) {
+    final text = question.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) return 'New chat';
+    if (text.length <= 60) return text;
+    // Prefer a word boundary so the title does not end mid-word.
+    final cut = text.lastIndexOf(' ', 60);
+    return '${text.substring(0, cut > 24 ? cut : 60).trimRight()}…';
+  }
+}

@@ -82,12 +82,17 @@ class AppController extends AsyncNotifier<AppState> {
     await store.recoverInterruptedImports();
     final values = await Future.wait([
       store.transactions(),
-      store.conversation(),
+      store.conversationThreads(),
     ]);
     final initial = AppState(
       preferences: prefs,
       transactions: values[0] as List<MoneyTransaction>,
-      conversation: values[1] as List<ConversationMessage>,
+      // Launch lands on an empty chat rather than resuming the last one.
+      // Reopening mid-thread makes the previous answer look like a reply to
+      // whatever gets asked next; earlier threads stay one tap away.
+      conversation: const [],
+      activeThreadId: null,
+      threads: values[1] as List<ConversationThread>,
       aiConnection: key.isEmpty
           ? AiConnection.disconnected
           : AiConnection.connected,
@@ -417,9 +422,71 @@ class AppController extends AsyncNotifier<AppState> {
     );
   }
 
+  /// Leaves the current thread for a fresh one.
+  ///
+  /// Any run in flight is cancelled first: an answer that arrived after the
+  /// move would be written to a thread the person is no longer reading, and
+  /// a pending proposal belongs to the exchange that produced it.
+  Future<void> startNewChat() async {
+    _activeRun?.cancel();
+    _activeRun = null;
+    state = AsyncData(
+      _value.copyWith(
+        conversation: const [],
+        clearActiveThreadId: true,
+        threads: await ref.read(storeProvider).conversationThreads(),
+        asking: false,
+        askStage: null,
+        clearAskDraft: true,
+        clearError: true,
+        clearPendingAgentProposal: true,
+        clearLastAgentAction: true,
+      ),
+    );
+  }
+
+  Future<void> openConversationThread(int threadId) async {
+    _activeRun?.cancel();
+    _activeRun = null;
+    final store = ref.read(storeProvider);
+    state = AsyncData(
+      _value.copyWith(
+        activeThreadId: threadId,
+        conversation: await store.conversation(threadId: threadId),
+        threads: await store.conversationThreads(),
+        asking: false,
+        askStage: null,
+        clearAskDraft: true,
+        clearError: true,
+        clearPendingAgentProposal: true,
+        clearLastAgentAction: true,
+      ),
+    );
+  }
+
+  Future<void> deleteConversationThread(int threadId) async {
+    await ref.read(storeProvider).deleteConversationThread(threadId);
+    // Deleting the thread being read leaves nowhere to return to, so it
+    // becomes a new chat rather than an empty view of something gone.
+    if (_value.activeThreadId == threadId) {
+      await startNewChat();
+      return;
+    }
+    state = AsyncData(
+      _value.copyWith(
+        threads: await ref.read(storeProvider).conversationThreads(),
+      ),
+    );
+  }
+
+  /// Clears the thread being read, which is what the agent proposal offers.
   Future<void> clearConversation() async {
-    await ref.read(storeProvider).clearConversation();
-    state = AsyncData(_value.copyWith(conversation: const []));
+    final threadId = _value.activeThreadId;
+    if (threadId == null) {
+      await startNewChat();
+      return;
+    }
+    await deleteConversationThread(threadId);
   }
 
   Future<void> importMessages() async {
@@ -858,10 +925,20 @@ class AppController extends AsyncNotifier<AppState> {
       text: trimmed,
       createdAt: DateTime.now(),
     );
-    await ref.read(storeProvider).addMessage(user);
+    final store = ref.read(storeProvider);
+    // Created on the first question, so an opened and abandoned chat never
+    // leaves an empty row in history.
+    final threadId =
+        _value.activeThreadId ??
+        await store.createConversationThread(
+          ConversationThread.titleFrom(trimmed),
+        );
+    await store.addMessage(user, threadId: threadId);
     state = AsyncData(
       _value.copyWith(
-        conversation: await ref.read(storeProvider).conversation(),
+        activeThreadId: threadId,
+        conversation: await store.conversation(threadId: threadId),
+        threads: await store.conversationThreads(),
         asking: true,
         askStage: 'Checking your activity',
         clearError: true,
@@ -993,7 +1070,9 @@ class AppController extends AsyncNotifier<AppState> {
         parts: result.presentation.parts,
         unstructured: result.presentation.unstructured,
       );
-      final messageId = await ref.read(storeProvider).addMessage(assistant);
+      final messageId = await ref
+          .read(storeProvider)
+          .addMessage(assistant, threadId: _value.activeThreadId);
       await ref.read(storeProvider).recordToolEvents(messageId, result.events);
       await ref
           .read(storeProvider)
@@ -1009,7 +1088,10 @@ class AppController extends AsyncNotifier<AppState> {
       }
       state = AsyncData(
         _value.copyWith(
-          conversation: await ref.read(storeProvider).conversation(),
+          conversation: await ref
+              .read(storeProvider)
+              .conversation(threadId: _value.activeThreadId),
+          threads: await ref.read(storeProvider).conversationThreads(),
           asking: false,
           askStage: null,
           clearAskDraft: true,
@@ -1102,7 +1184,10 @@ class AppController extends AsyncNotifier<AppState> {
     state = AsyncData(
       _value.copyWith(
         transactions: await ref.read(storeProvider).transactions(),
-        conversation: await ref.read(storeProvider).conversation(),
+        conversation: await ref
+            .read(storeProvider)
+            .conversation(threadId: _value.activeThreadId),
+        threads: await ref.read(storeProvider).conversationThreads(),
         preferences: _value.preferences,
         clearPendingAgentProposal: true,
         lastAgentAction: proposal.title,

@@ -14,7 +14,7 @@ import '../ingestion/message_candidate.dart';
 class FundFlowStore {
   FundFlowStore({Database? database}) : _database = database;
   Database? _database;
-  static const schemaVersion = 5;
+  static const schemaVersion = 6;
 
   Future<Database> get database async => _database ??= await openDatabase(
     path.join(await getDatabasesPath(), 'fund_flow_greenfield.db'),
@@ -46,6 +46,7 @@ class FundFlowStore {
       await _createImportAuditTables(db);
       await _createAgentTelemetryTable(db);
       await _createFinancialMemoryTable(db);
+      await _createConversationThreads(db);
     },
     onUpgrade: (db, oldVersion, _) async {
       if (oldVersion < 2) {
@@ -60,6 +61,7 @@ class FundFlowStore {
       if (oldVersion < 3) await _createImportAuditTables(db);
       if (oldVersion < 4) await _createAgentTelemetryTable(db);
       if (oldVersion < 5) await _createFinancialMemoryTable(db);
+      if (oldVersion < 6) await _migrateToConversationThreads(db);
     },
   );
 
@@ -108,6 +110,47 @@ class FundFlowStore {
       provider_duration_ms INTEGER NOT NULL, metrics_json TEXT NOT NULL)''');
   }
 
+  static Future<void> _createConversationThreads(Database db) async {
+    await db.execute('''CREATE TABLE IF NOT EXISTS conversation_threads(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL)''');
+    final columns = await db.rawQuery('PRAGMA table_info(conversation)');
+    if (!columns.any((row) => row['name'] == 'thread_id')) {
+      await db.execute('ALTER TABLE conversation ADD COLUMN thread_id INTEGER');
+    }
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS conversation_thread '
+      'ON conversation(thread_id)',
+    );
+  }
+
+  /// Moves an existing single conversation into the threaded model.
+  ///
+  /// Messages predate threads and would become unreachable if left
+  /// unassigned, so they are gathered into one thread titled from the first
+  /// question rather than dropped.
+  static Future<void> _migrateToConversationThreads(Database db) async {
+    await _createConversationThreads(db);
+    final existing = await db.query(
+      'conversation',
+      orderBy: 'created_at ASC',
+      limit: 1,
+    );
+    if (existing.isEmpty) return;
+    final firstText = existing.first['text'] as String? ?? '';
+    final createdAt = existing.first['created_at'] as String;
+    final threadId = await db.insert('conversation_threads', {
+      'title': ConversationThread.titleFrom(firstText),
+      'created_at': createdAt,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    await db.update(
+      'conversation',
+      {'thread_id': threadId},
+      where: 'thread_id IS NULL',
+    );
+  }
+
   static Future<void> _createFinancialMemoryTable(Database db) async {
     await db.execute('''CREATE TABLE IF NOT EXISTS financial_memory(
       key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)''');
@@ -137,16 +180,79 @@ class FundFlowStore {
     await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<ConversationMessage>> conversation() async {
+  /// Messages in [threadId]. A null thread has no messages: an unsent chat
+  /// exists only in memory until its first question is asked.
+  Future<List<ConversationMessage>> conversation({int? threadId}) async {
+    if (threadId == null) return const [];
     final db = await database;
-    final rows = await db.query('conversation', orderBy: 'created_at ASC');
+    final rows = await db.query(
+      'conversation',
+      where: 'thread_id = ?',
+      whereArgs: [threadId],
+      orderBy: 'created_at ASC',
+    );
     return rows.map(ConversationMessage.fromMap).toList();
   }
 
-  Future<int> addMessage(ConversationMessage value) async {
+  Future<int> addMessage(ConversationMessage value, {int? threadId}) async {
     final db = await database;
-    final map = value.toMap()..remove('id');
-    return db.insert('conversation', map);
+    final map = value.toMap()
+      ..remove('id')
+      ..['thread_id'] = threadId;
+    final id = db.insert('conversation', map);
+    if (threadId != null) {
+      // Touching the thread keeps the history list ordered by real activity
+      // rather than by when a thread was first opened.
+      await db.update(
+        'conversation_threads',
+        {'updated_at': DateTime.now().toUtc().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [threadId],
+      );
+    }
+    return id;
+  }
+
+  Future<int> createConversationThread(String title) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    return (await database).insert('conversation_threads', {
+      'title': title,
+      'created_at': now,
+      'updated_at': now,
+    });
+  }
+
+  /// History, most recently active first, with a preview of the last message.
+  Future<List<ConversationThread>> conversationThreads() async {
+    final rows = await (await database).rawQuery('''
+      SELECT t.id, t.title, t.created_at, t.updated_at,
+             COUNT(c.id) AS message_count,
+             (SELECT text FROM conversation
+               WHERE thread_id = t.id AND text != ''
+               ORDER BY created_at DESC LIMIT 1) AS preview
+      FROM conversation_threads t
+      LEFT JOIN conversation c ON c.thread_id = t.id
+      GROUP BY t.id
+      HAVING message_count > 0
+      ORDER BY t.updated_at DESC
+    ''');
+    return rows.map(ConversationThread.fromMap).toList();
+  }
+
+  Future<void> deleteConversationThread(int id) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      await transaction.delete(
+        'conversation',
+        where: 'thread_id = ?',
+        whereArgs: [id],
+      );
+      await transaction.delete(
+        'conversation_threads',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    });
   }
 
   Future<void> recordToolEvents(
@@ -398,7 +504,10 @@ class FundFlowStore {
   }
 
   Future<void> clearConversation() async =>
-      (await database).delete('conversation');
+      (await database).transaction((transaction) async {
+        await transaction.delete('conversation');
+        await transaction.delete('conversation_threads');
+      });
 
   Future<Set<String>> seenImportFingerprints(Iterable<String> values) async {
     final fingerprints = values.toList();

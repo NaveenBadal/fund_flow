@@ -54,6 +54,8 @@ class AppState {
     required this.transactions,
     required this.conversation,
     required this.aiConnection,
+    this.activeThreadId,
+    this.threads = const [],
     this.importStatus = const ImportStatus(),
     this.asking = false,
     this.askStage,
@@ -66,6 +68,13 @@ class AppState {
   final AppPreferences preferences;
   final List<MoneyTransaction> transactions;
   final List<ConversationMessage> conversation;
+
+  /// Thread the conversation belongs to. Null means an unsent new chat, which
+  /// is not persisted until its first question.
+  final int? activeThreadId;
+
+  /// History, most recently active first.
+  final List<ConversationThread> threads;
   final AiConnection aiConnection;
   final ImportStatus importStatus;
   final bool asking;
@@ -80,6 +89,9 @@ class AppState {
     AppPreferences? preferences,
     List<MoneyTransaction>? transactions,
     List<ConversationMessage>? conversation,
+    int? activeThreadId,
+    bool clearActiveThreadId = false,
+    List<ConversationThread>? threads,
     AiConnection? aiConnection,
     ImportStatus? importStatus,
     bool? asking,
@@ -97,6 +109,10 @@ class AppState {
     preferences: preferences ?? this.preferences,
     transactions: transactions ?? this.transactions,
     conversation: conversation ?? this.conversation,
+    activeThreadId: clearActiveThreadId
+        ? null
+        : activeThreadId ?? this.activeThreadId,
+    threads: threads ?? this.threads,
     aiConnection: aiConnection ?? this.aiConnection,
     importStatus: importStatus ?? this.importStatus,
     asking: asking ?? this.asking,
