@@ -131,7 +131,11 @@ class _SideNav extends StatelessWidget {
             const SizedBox(height: 20),
             for (final entry in const [
               (FlowDestination.today, Icons.today_rounded, 'Today'),
-              (FlowDestination.activity, Icons.receipt_long_rounded, 'Activity'),
+              (
+                FlowDestination.activity,
+                Icons.receipt_long_rounded,
+                'Activity',
+              ),
               (FlowDestination.review, Icons.rule_rounded, 'Review'),
             ])
               _SideItem(

@@ -57,7 +57,7 @@ Rebuilt:
 | 2 | Today — position first | done |
 | 3 | Review flow — clearing the backlog | done |
 | 4 | Activity — dense, groupable, filterable ledger | done |
-| 5 | Rich chat — charts, tables, interactive cards, deep links | todo |
+| 5 | Rich chat — charts, tables, interactive cards, deep links | done |
 | 6 | Transaction detail as a route | done |
 | 7 | Settings, reorganised by intent | todo |
 | 8 | Motion | todo |
@@ -90,6 +90,19 @@ chat → transaction → back is the requirement current navigation cannot serve
 Answer parts are already typed — see `agent/agent_presentation.dart`. The
 contract the model is given lives in `agent/agent_runner.dart`
 (`_systemContract`).
+
+Landed as `ui2/screens/chat_screen.dart` + `ui2/chat/flow_answer_view.dart`,
+with `FlowCompareBars` and `FlowDonut` added to `ui2/charts/`. The donut is
+guarded mechanically (2–5 segments, real shares, top two ≥ 8 points apart)
+because bars beat donuts for close values; comparisons draw as emphasis —
+current in accent, previous in gray — never two categorical hues. Evidence
+rows route to the transaction detail and back (verified on the emulator with
+a synthetic thread seeded into the db), and carry a ⋮ menu for recategorise
+and flag/confirm. Part-by-part streaming is visual: the agent delivers parts
+in one compose call, so arrival is a staggered entrance (`FlowMotion.stagger`)
+on the newest answer only, not a protocol change. Line charts stay
+`FlowSpark` — no answer part carries a time series, and the agent contract
+is frozen with the engine.
 
 ### Phase 6 — Transaction detail
 

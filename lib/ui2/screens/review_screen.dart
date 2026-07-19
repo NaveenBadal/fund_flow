@@ -254,8 +254,18 @@ class _ReviewCard extends StatelessWidget {
 
   static String _when(DateTime value) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final minute = value.minute.toString().padLeft(2, '0');
     return '${value.day} ${months[value.month - 1]} · ${value.hour}:$minute';
@@ -332,7 +342,9 @@ class _Actions extends StatelessWidget {
                 minimumSize: const Size.fromHeight(FlowDensity.minimumTarget),
                 side: BorderSide(color: flow.line),
                 foregroundColor: flow.inkSoft,
-                shape: const RoundedRectangleBorder(borderRadius: FlowRadius.sm),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: FlowRadius.sm,
+                ),
               ),
               child: const Text('Skip'),
             ),
@@ -346,7 +358,9 @@ class _Actions extends StatelessWidget {
                 minimumSize: const Size.fromHeight(FlowDensity.minimumTarget),
                 backgroundColor: flow.accent,
                 foregroundColor: flow.onAccent,
-                shape: const RoundedRectangleBorder(borderRadius: FlowRadius.sm),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: FlowRadius.sm,
+                ),
               ),
               icon: const Icon(Icons.check_rounded, size: 18),
               label: const Text('Looks right'),

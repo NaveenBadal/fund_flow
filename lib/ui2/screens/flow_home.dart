@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_controller.dart';
 import '../../domain/transaction.dart';
-import '../../features/ask/ask_screen.dart';
 import '../../features/you/you_screen.dart';
 import '../shell/flow_nav.dart';
 import '../shell/flow_shell.dart';
 import 'activity_screen.dart';
+import 'chat_screen.dart';
 import 'review_screen.dart';
 import 'today_screen.dart';
 
@@ -61,7 +61,7 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       initialChildSize: .94,
       minChildSize: .5,
       maxChildSize: .96,
-      builder: (context, controller) => const AskScreen(),
+      builder: (context, controller) => const ChatScreen(),
     ),
   );
 

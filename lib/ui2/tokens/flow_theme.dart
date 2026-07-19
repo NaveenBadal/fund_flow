@@ -52,11 +52,7 @@ abstract final class FlowTheme {
       applyElevationOverlayColor: false,
       splashFactory: NoSplash.splashFactory,
       highlightColor: flow.line.withValues(alpha: .4),
-      dividerTheme: DividerThemeData(
-        color: flow.line,
-        thickness: 1,
-        space: 1,
-      ),
+      dividerTheme: DividerThemeData(color: flow.line, thickness: 1, space: 1),
       appBarTheme: AppBarTheme(
         backgroundColor: flow.canvas,
         foregroundColor: flow.ink,

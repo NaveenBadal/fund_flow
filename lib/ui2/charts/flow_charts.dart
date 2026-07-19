@@ -53,7 +53,9 @@ class FlowDelta extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              rising ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              rising
+                  ? Icons.arrow_upward_rounded
+                  : Icons.arrow_downward_rounded,
               size: compact ? 11 : 13,
               color: color,
             ),
@@ -143,6 +145,232 @@ class _SparkPainter extends CustomPainter {
       old.values != values || old.line != line;
 }
 
+/// Two periods of one measure, drawn to a shared scale.
+///
+/// The current period carries the accent and the previous recedes to gray —
+/// the emphasis form, because the question a comparison answers is about
+/// now, with before as context. Never two categorical hues: the two bars are
+/// the same series at different times, not different series.
+class FlowCompareBars extends StatelessWidget {
+  const FlowCompareBars({
+    super.key,
+    required this.currentLabel,
+    required this.currentAmount,
+    required this.currentMinor,
+    required this.previousLabel,
+    required this.previousAmount,
+    required this.previousMinor,
+    this.showDelta = true,
+  });
+
+  final String currentLabel;
+  final String previousLabel;
+
+  /// Already formatted: this widget does not decide how money is written.
+  final String currentAmount;
+  final String previousAmount;
+  final int currentMinor;
+  final int previousMinor;
+  final bool showDelta;
+
+  @override
+  Widget build(BuildContext context) {
+    final flow = context.flow;
+    final peak = max(1, max(currentMinor, previousMinor));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _bar(
+          context,
+          label: currentLabel,
+          amount: currentAmount,
+          fraction: currentMinor / peak,
+          color: flow.accent,
+          trailing: showDelta && previousMinor > 0
+              ? FlowDelta(
+                  fraction: (currentMinor - previousMinor) / previousMinor,
+                  compact: true,
+                )
+              : null,
+        ),
+        const SizedBox(height: FlowSpace.sm),
+        _bar(
+          context,
+          label: previousLabel,
+          amount: previousAmount,
+          fraction: previousMinor / peak,
+          color: flow.inkFaint,
+        ),
+      ],
+    );
+  }
+
+  Widget _bar(
+    BuildContext context, {
+    required String label,
+    required String amount,
+    required double fraction,
+    required Color color,
+    Widget? trailing,
+  }) {
+    final flow = context.flow;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+              ),
+            ),
+            if (trailing != null) ...[
+              trailing,
+              const SizedBox(width: FlowSpace.sm),
+            ],
+            Text(amount, style: FlowType.amountRow.copyWith(color: flow.ink)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Stack(
+          children: [
+            Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: flow.sunken,
+                borderRadius: FlowRadius.xs,
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: fraction.clamp(.03, 1.0),
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: FlowRadius.xs,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One donut slice.
+class FlowDonutSegment {
+  const FlowDonutSegment({required this.value, required this.color});
+  final double value;
+  final Color color;
+}
+
+/// Part-to-whole at a glance.
+///
+/// Only legitimate under the conditions the caller must enforce: at most six
+/// segments and a story about shares of a whole, not a comparison of close
+/// values — bars win that job. Segments are separated by a gap in the
+/// surface colour so adjacent slices never touch, and the centre carries the
+/// whole the parts belong to.
+class FlowDonut extends StatelessWidget {
+  const FlowDonut({
+    super.key,
+    required this.segments,
+    this.centerLabel,
+    this.centerValue,
+    this.size = 132,
+  });
+
+  final List<FlowDonutSegment> segments;
+  final String? centerLabel;
+  final String? centerValue;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final flow = context.flow;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(size),
+            painter: _DonutPainter(segments: segments),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (centerValue != null)
+                Text(
+                  centerValue!,
+                  style: FlowType.amountSmall.copyWith(
+                    color: flow.ink,
+                    fontSize: 14,
+                  ),
+                ),
+              if (centerLabel != null)
+                Text(
+                  centerLabel!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: flow.inkFaint),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  _DonutPainter({required this.segments});
+  final List<FlowDonutSegment> segments;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = segments.fold<double>(0, (sum, s) => sum + s.value);
+    if (total <= 0) return;
+    const thickness = 14.0;
+    final rect = Rect.fromLTWH(
+      thickness / 2,
+      thickness / 2,
+      size.width - thickness,
+      size.height - thickness,
+    );
+    // The gap between slices, expressed as an angle so it stays a near
+    // constant arc length at this radius.
+    const gap = .06;
+    var start = -pi / 2;
+    for (final segment in segments) {
+      final sweep = (segment.value / total) * 2 * pi;
+      final drawn = max(.02, sweep - gap);
+      canvas.drawArc(
+        rect,
+        start + gap / 2,
+        drawn,
+        false,
+        Paint()
+          ..color = segment.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = thickness
+          ..strokeCap = StrokeCap.butt,
+      );
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DonutPainter old) => old.segments != segments;
+}
+
 /// A labelled row whose bar length carries the magnitude.
 class FlowBarRow extends StatelessWidget {
   const FlowBarRow({
@@ -223,10 +451,6 @@ class FlowBarRow extends StatelessWidget {
       ),
     );
     if (onTap == null) return body;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: FlowRadius.sm,
-      child: body,
-    );
+    return InkWell(onTap: onTap, borderRadius: FlowRadius.sm, child: body);
   }
 }

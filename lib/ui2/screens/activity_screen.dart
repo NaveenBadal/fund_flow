@@ -9,7 +9,7 @@ import '../../app/app_controller.dart';
 import '../../domain/transaction.dart';
 import '../../features/activity/transaction_editor_sheet.dart';
 import '../../ui/format/money_format.dart';
-import '../flow_categories.dart';
+import '../sheets/category_sheet.dart';
 import '../sheets/confirm_delete_sheet.dart';
 import '../tokens/flow_metrics.dart';
 import '../tokens/flow_palette.dart';
@@ -458,13 +458,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   Future<void> _bulkCategory(List<MoneyTransaction> values) async {
     final items = _selectedItems(values);
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheet) => _CategorySheet(
-        title: items.length == 1
-            ? 'Category for 1 transaction'
-            : 'Category for ${items.length} transactions',
-      ),
+    final choice = await pickCategory(
+      context,
+      title: items.length == 1
+          ? 'Category for 1 transaction'
+          : 'Category for ${items.length} transactions',
     );
     if (choice == null || !mounted) return;
     final controller = ref.read(appControllerProvider.notifier);
@@ -1064,57 +1062,6 @@ class _LedgerRow extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ------------------------------------------------------------------- sheets
-
-class _CategorySheet extends StatelessWidget {
-  const _CategorySheet({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final flow = context.flow;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(FlowSpace.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: FlowSpace.lg),
-            Wrap(
-              spacing: FlowSpace.sm,
-              runSpacing: FlowSpace.sm,
-              children: [
-                for (final category in kFlowCategories)
-                  InkWell(
-                    onTap: () => Navigator.pop(context, category),
-                    borderRadius: FlowRadius.pill,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: FlowSpace.md,
-                        vertical: FlowSpace.sm,
-                      ),
-                      decoration: BoxDecoration(
-                        color: flow.raised,
-                        borderRadius: FlowRadius.pill,
-                        border: Border.all(color: flow.line),
-                      ),
-                      child: Text(
-                        category,
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ),
       ),
     );
