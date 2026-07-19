@@ -8,7 +8,6 @@ import '../../domain/conversation.dart';
 import '../../domain/finance_summary.dart';
 import '../../domain/transaction.dart';
 import '../../ui/components/current_button.dart';
-import '../../ui/components/current_field.dart';
 import '../../ui/components/current_edge_fade.dart';
 import '../../ui/components/current_header.dart';
 import '../../ui/foundation/current_colors.dart';
@@ -19,6 +18,7 @@ import '../activity/transaction_editor_sheet.dart';
 import '../you/connect_intelligence_sheet.dart';
 import '../you/you_screen.dart';
 import 'agent_answer_view.dart';
+import 'ask_composer.dart';
 import 'money_pulse.dart';
 import 'agent_approval_card.dart';
 
@@ -99,7 +99,6 @@ class _State extends ConsumerState<AskScreen> {
                         ? _EmptyAsk(
                             app: app,
                             connected: connected,
-                            onConnect: _connect,
                             onAsk: _ask,
                           )
                         : CurrentEdgeFade(
@@ -160,28 +159,12 @@ class _State extends ConsumerState<AskScreen> {
                           ),
                           ),
                   ),
-                  CurrentField(
+                  AskComposer(
                     controller: _question,
-                    hint: connected
-                        ? 'Ask about your money'
-                        : 'Connect intelligence to ask',
-                    helper: connected
-                        ? 'Answers use only the activity you allow'
-                        : 'Your activity stays on this device',
-                    enabled: connected && !app.asking,
-                    minLines: 1,
-                    maxLines: 4,
-                    onSubmitted: (_) => _ask(_question.text),
-                    suffix: Semantics(
-                      button: true,
-                      label: 'Send question',
-                      child: IconButton(
-                        onPressed: connected && !app.asking
-                            ? () => _ask(_question.text)
-                            : null,
-                        icon: const Icon(Icons.arrow_upward_rounded),
-                      ),
-                    ),
+                    connected: connected,
+                    busy: app.asking,
+                    onSubmit: _ask,
+                    onConnect: _connect,
                   ),
                   if (app.lastAgentAction != null) ...[
                     const SizedBox(height: 10),
@@ -262,12 +245,10 @@ class _EmptyAsk extends StatelessWidget {
   const _EmptyAsk({
     required this.app,
     required this.connected,
-    required this.onConnect,
     required this.onAsk,
   });
   final AppState app;
   final bool connected;
-  final VoidCallback onConnect;
   final ValueChanged<String> onAsk;
   @override
   Widget build(BuildContext context) {
@@ -293,17 +274,14 @@ class _EmptyAsk extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Connect a provider to read transaction messages and answer '
-                'questions. Your activity stays on this device.',
+                'questions in your own words.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyLarge?.copyWith(color: context.current.muted),
               ),
-              const SizedBox(height: 22),
-              CurrentButton(
-                label: 'Connect intelligence',
-                icon: Icons.link_rounded,
-                onPressed: onConnect,
-              ),
+              // No button here: the composer below is the single, always
+              // present place to act. Two calls to action for one step read
+              // as two different steps.
             ],
           ),
         ),
