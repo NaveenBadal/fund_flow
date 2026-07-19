@@ -64,7 +64,7 @@ void main() {
     expect(requestBody['model'], 'agent-model');
     expect(requestBody['think'], 'low');
     expect(requestBody['keep_alive'], '10m');
-    expect(requestBody['options'], {'temperature': 0, 'num_predict': 700});
+    expect(requestBody['options'], {'temperature': 0, 'num_predict': 1200});
     expect(requestBody['tools'], hasLength(1));
     expect(turn.toolCalls.single.name, 'settings_get');
     expect(turn.toolCalls.single.arguments, isEmpty);
@@ -208,7 +208,7 @@ void main() {
       expect(sent, isNot(contains('secret-not-logged')));
       expect(requestUri?.path, '/api/chat');
       final request = jsonDecode(sent!) as Map<String, Object?>;
-      expect(request['think'], 'medium');
+      expect(request['think'], 'low');
       expect(request['keep_alive'], '10m');
       expect(request.containsKey('format'), isFalse);
       expect(request['options'], {'temperature': 0, 'num_predict': 1200});

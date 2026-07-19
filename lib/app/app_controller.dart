@@ -61,6 +61,7 @@ final appControllerProvider = AsyncNotifierProvider<AppController, AppState>(
 class AppController extends AsyncNotifier<AppState> {
   bool _stopImportRequested = false;
   bool _lifecycleImportPaused = false;
+  bool _refreshingNotifications = false;
   Completer<void>? _importResumeSignal;
   AgentCancellationToken? _activeRun;
   @override
@@ -74,19 +75,39 @@ class AppController extends AsyncNotifier<AppState> {
       store.transactions(),
       store.conversation(),
     ]);
-    var transactions = values[0] as List<MoneyTransaction>;
-    if (prefs.captureNotifications) {
-      transactions = await _drainNotifications(transactions, key, prefs);
-    }
-    return AppState(
+    final initial = AppState(
       preferences: prefs,
-      transactions: transactions,
+      transactions: values[0] as List<MoneyTransaction>,
       conversation: values[1] as List<ConversationMessage>,
       aiConnection: key.isEmpty
           ? AiConnection.disconnected
           : AiConnection.connected,
       locked: prefs.lockApp,
     );
+    if (prefs.captureNotifications && !prefs.lockApp && key.isNotEmpty) {
+      unawaited(Future<void>(() => _refreshPendingNotifications()));
+    }
+    return initial;
+  }
+
+  Future<void> _refreshPendingNotifications() async {
+    if (_refreshingNotifications || !state.hasValue || _value.locked) return;
+    final preferences = _value.preferences;
+    if (!preferences.captureNotifications) return;
+    _refreshingNotifications = true;
+    try {
+      final key = await ref.read(securePreferencesProvider).apiKey();
+      final transactions = await _drainNotifications(
+        _value.transactions,
+        key,
+        preferences,
+      );
+      if (state.hasValue) {
+        state = AsyncData(_value.copyWith(transactions: transactions));
+      }
+    } finally {
+      _refreshingNotifications = false;
+    }
   }
 
   AppState get _value => state.requireValue;
@@ -293,6 +314,7 @@ class AppController extends AsyncNotifier<AppState> {
     if (ok) {
       state = AsyncData(_value.copyWith(locked: false, clearError: true));
       resumeMessageImportForLifecycle();
+      unawaited(_refreshPendingNotifications());
     }
     return ok;
   }

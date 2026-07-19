@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../agent/agent_presentation.dart';
 import '../../domain/transaction.dart';
@@ -53,12 +54,12 @@ class _PartView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => switch (part.kind) {
-    AgentPartKind.conclusion => Text(
-      _text,
+    AgentPartKind.conclusion => _MarkdownText(
+      text: _text,
       style: Theme.of(context).textTheme.headlineMedium,
     ),
-    AgentPartKind.narrative => Text(
-      _text,
+    AgentPartKind.narrative => _MarkdownText(
+      text: _text,
       style: Theme.of(context).textTheme.bodyLarge,
     ),
     AgentPartKind.metricRow => _MetricRow(data: part.data),
@@ -92,6 +93,38 @@ class _PartView extends StatelessWidget {
       .whereType<num>()
       .map((value) => value.toInt())
       .toList();
+}
+
+class _MarkdownText extends StatelessWidget {
+  const _MarkdownText({required this.text, this.style});
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = style ?? Theme.of(context).textTheme.bodyLarge;
+    return MarkdownBody(
+      data: text,
+      selectable: true,
+      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+        p: base,
+        h1: Theme.of(context).textTheme.headlineLarge,
+        h2: Theme.of(context).textTheme.headlineMedium,
+        h3: Theme.of(context).textTheme.titleLarge,
+        listBullet: base,
+        blockquote: base?.copyWith(color: context.current.muted),
+        code: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontFamily: 'monospace',
+          color: context.current.ink,
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: context.current.subtle,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: context.current.rule),
+        ),
+      ),
+    );
+  }
 }
 
 class _MetricRow extends StatelessWidget {

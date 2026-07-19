@@ -66,10 +66,6 @@ class AgentPresentation {
     unstructured: true,
     parts: [
       AgentPart(kind: AgentPartKind.narrative, data: {'text': text}),
-      const AgentPart(
-        kind: AgentPartKind.warning,
-        data: {'text': 'The provider returned an unstructured answer.'},
-      ),
     ],
   );
 
@@ -83,18 +79,51 @@ class AgentPresentation {
       if (fence != -1) text = text.substring(0, fence);
       text = text.trim();
     }
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is! Map ||
-          decoded.length != 1 ||
-          !decoded.containsKey('parts')) {
-        return null;
+    for (final candidate in _jsonCandidates(text)) {
+      try {
+        final decoded = jsonDecode(candidate);
+        if (decoded is! Map || !decoded.containsKey('parts')) continue;
+        return AgentPresentation.fromComposeArguments(
+          Map<String, Object?>.from(decoded),
+        );
+      } catch (_) {
+        continue;
       }
-      return AgentPresentation.fromComposeArguments(
-        Map<String, Object?>.from(decoded),
-      );
-    } catch (_) {
-      return null;
+    }
+    return null;
+  }
+
+  static Iterable<String> _jsonCandidates(String text) sync* {
+    yield text;
+    for (var start = 0; start < text.length; start++) {
+      if (text.codeUnitAt(start) != 123) continue;
+      var depth = 0;
+      var quoted = false;
+      var escaped = false;
+      for (var index = start; index < text.length; index++) {
+        final code = text.codeUnitAt(index);
+        if (quoted) {
+          if (escaped) {
+            escaped = false;
+          } else if (code == 92) {
+            escaped = true;
+          } else if (code == 34) {
+            quoted = false;
+          }
+          continue;
+        }
+        if (code == 34) {
+          quoted = true;
+        } else if (code == 123) {
+          depth++;
+        } else if (code == 125) {
+          depth--;
+          if (depth == 0) {
+            yield text.substring(start, index + 1);
+            break;
+          }
+        }
+      }
     }
   }
 }

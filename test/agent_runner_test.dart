@@ -160,6 +160,26 @@ void main() {
     expect(result.presentation.parts, hasLength(2));
   });
 
+  test('compose JSON surrounded by provider prose is still structured', () async {
+    const content =
+        'Here is the result:\n{"parts":[{"type":"conclusion","text":"Hello!"},{"type":"followUps","questions":["How can I help?"]}]}\nDone.';
+    final provider = _FakeProvider([
+      const ProviderTurn(
+        message: {'role': 'assistant', 'content': content},
+        content: content,
+        toolCalls: [],
+      ),
+    ]);
+    final result = await AgentRunner(provider: provider, server: server).run(
+      question: 'Hi',
+      now: DateTime(2026, 7, 18),
+      locale: 'en_IN',
+      timeZone: 'Asia/Kolkata',
+    );
+    expect(result.presentation.unstructured, isFalse);
+    expect(result.presentation.parts, hasLength(2));
+  });
+
   test('briefing, anomaly and duplicate tools stay deterministic', () async {
     final values = [
       for (final entry in [
