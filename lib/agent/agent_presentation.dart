@@ -30,6 +30,50 @@ class AgentPart {
   }
 
   Map<String, Object?> toJson() => {'type': kind.name, ...data};
+
+  /// One-line rendering for replay into provider history.
+  ///
+  /// Prose parts carry a `text` field, but figures live in structured fields
+  /// that plain text drops entirely. Without this, an agent rereading its own
+  /// last answer sees the sentences and none of the numbers, and cannot
+  /// resolve a follow-up like "why is that higher than last month?".
+  String? get historyLine {
+    String money(Object? row) {
+      if (row is! Map) return '';
+      final label = row['label'] ?? row['title'] ?? '';
+      final amount = row['amountMinor'];
+      final currency = row['currency'] ?? '';
+      return amount == null ? '$label' : '$label $amount $currency';
+    }
+
+    List<Object?> rows(String key) {
+      final value = data[key];
+      return value is List ? value : const [];
+    }
+
+    return switch (kind) {
+      AgentPartKind.conclusion ||
+      AgentPartKind.narrative ||
+      AgentPartKind.insight ||
+      AgentPartKind.sourceNote ||
+      AgentPartKind.warning => data['text']?.toString(),
+      AgentPartKind.comparison => [
+        data['title'],
+        data['detail'],
+      ].whereType<Object>().join(': '),
+      AgentPartKind.metricRow =>
+        rows('metrics').map(money).where((e) => e.isNotEmpty).join('; '),
+      AgentPartKind.breakdown => [
+        data['title']?.toString() ?? 'Breakdown',
+        rows('rows').map(money).where((e) => e.isNotEmpty).join(', '),
+      ].where((e) => e.isNotEmpty).join(': '),
+      AgentPartKind.transactionList =>
+        'transaction ids ${rows('transactionIds').join(', ')}',
+      AgentPartKind.proposal => 'proposed: ${data['title'] ?? ''}',
+      // Suggested questions were never stated as fact and only add noise.
+      AgentPartKind.followUps => null,
+    };
+  }
 }
 
 class AgentPresentation {

@@ -76,11 +76,63 @@ class McpToolResult {
   final bool isError;
   final String? summary;
 
+  /// Ceiling on a single tool result once encoded.
+  ///
+  /// Results accumulate in the message array for the rest of the run and are
+  /// resent on every subsequent turn, so one broad search can otherwise
+  /// dominate the prompt and slow every turn that follows it.
+  static const int maximumContentCharacters = 6000;
+
   Map<String, Object?> toProviderMessage() => {
     'role': 'tool',
     'tool_name': tool,
-    'content': jsonEncode({'ok': !isError, ...content}),
+    'content': _encodeWithinBudget({'ok': !isError, ...content}),
   };
+
+  /// Encodes [payload], trimming its longest list until the result fits.
+  ///
+  /// Rows are dropped from the end rather than the string being cut, so the
+  /// provider always receives valid JSON, and an explicit marker tells it the
+  /// view is partial so it does not treat the tail as absent data.
+  static String _encodeWithinBudget(Map<String, Object?> payload) {
+    var encoded = jsonEncode(payload);
+    if (encoded.length <= maximumContentCharacters) return encoded;
+
+    final working = Map<String, Object?>.from(payload);
+    // Captured before any trimming so the marker reports how many rows the
+    // capability actually found, not how many survived the last pass.
+    final originalLengths = <String, int>{
+      for (final entry in working.entries)
+        if (entry.value is List) entry.key: (entry.value! as List).length,
+    };
+
+    while (encoded.length > maximumContentCharacters) {
+      String? longestKey;
+      var longestLength = 0;
+      for (final entry in working.entries) {
+        final value = entry.value;
+        if (value is List && value.length > longestLength) {
+          longestKey = entry.key;
+          longestLength = value.length;
+        }
+      }
+      // Nothing left to trim: the payload is large without being list shaped.
+      if (longestKey == null || longestLength <= 1) break;
+      final list = List<Object?>.from(working[longestKey]! as List);
+      final keep = (list.length * 2) ~/ 3;
+      working[longestKey] = list.sublist(0, keep < 1 ? 1 : keep);
+      working['truncated'] = {
+        'field': longestKey,
+        'returned': (working[longestKey]! as List).length,
+        'total': originalLengths[longestKey] ?? longestLength,
+        'note':
+            'Result trimmed to fit the context budget. Narrow the filters or '
+            'use a finance capability to aggregate instead of listing rows.',
+      };
+      encoded = jsonEncode(working);
+    }
+    return encoded;
+  }
 }
 
 class McpProtocolException implements Exception {

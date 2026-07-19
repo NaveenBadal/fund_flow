@@ -912,12 +912,12 @@ class AppController extends AsyncNotifier<AppState> {
       final token = AgentCancellationToken();
       _activeRun = token;
       final history = _value.conversation
-          .where((message) => message.text.trim().isNotEmpty)
+          .where((message) => message.providerContent.trim().isNotEmpty)
           .toList()
           .reversed
           // Keep the hot prompt small. Older turns remain available through
           // the local conversation_search MCP capability when they matter.
-          .take(4)
+          .take(6)
           .toList()
           .reversed
           .map(
@@ -925,7 +925,9 @@ class AppController extends AsyncNotifier<AppState> {
               'role': message.author == MessageAuthor.person
                   ? 'user'
                   : 'assistant',
-              'content': message.text,
+              // Replay figures, not just prose, so follow-up questions can
+              // build on what was already reported.
+              'content': message.providerContent,
             },
           )
           .toList();

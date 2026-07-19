@@ -104,6 +104,7 @@ class AgentRunner {
     required LocalMcpServer server,
     this.maximumTurns = 12,
     this.maximumCalls = 50,
+    this.budget = const Duration(seconds: 75),
   }) : _provider = provider,
        _server = server;
 
@@ -111,6 +112,13 @@ class AgentRunner {
   final LocalMcpServer _server;
   final int maximumTurns;
   final int maximumCalls;
+
+  /// Wall-clock ceiling for a whole run.
+  ///
+  /// The per-request timeout only bounds a single turn, so turn and call
+  /// limits alone allow a run to stall for minutes before surfacing anything.
+  /// Someone waiting on an answer gives up long before that.
+  final Duration budget;
 
   Future<AgentRunResult> run({
     required String question,
@@ -142,6 +150,11 @@ class AgentRunner {
     var calls = 0;
     for (var turn = 0; turn < maximumTurns; turn++) {
       _throwIfCancelled(cancellation);
+      if (stopwatch.elapsed > budget) {
+        throw const AgentRunException(
+          'The answer took too long. Try a narrower question.',
+        );
+      }
       onStage?.call(
         turn == 0 ? 'Understanding your question' : 'Building the answer',
       );

@@ -24,6 +24,21 @@ class ConversationMessage {
   final List<AgentPart> parts;
   final bool unstructured;
 
+  /// What the provider should see when this message is replayed as history.
+  ///
+  /// Falls back to [text] for anything without structured parts, such as the
+  /// person's own questions.
+  String get providerContent {
+    if (parts.isEmpty) return text;
+    final lines = parts
+        .map((part) => part.historyLine)
+        .whereType<String>()
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    return lines.isEmpty ? text : lines.join('\n');
+  }
+
   Map<String, Object?> toMap() => {
     'id': id,
     'author': author.name,
