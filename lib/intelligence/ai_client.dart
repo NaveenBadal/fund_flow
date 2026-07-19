@@ -75,19 +75,24 @@ class AiClient {
       final requestBody = jsonEncode({
         'model': model,
         'stream': false,
-        // Constrained decoding: the provider can only emit tokens that keep
-        // the response valid against the schema, which makes malformed JSON
-        // structurally impossible rather than something to repair afterwards.
+        // Sent for providers that enforce it. Measured against Ollama Cloud
+        // with gpt-oss it changes nothing: output is byte-identical with and
+        // without it, so the system prompt is what actually holds the shape
+        // and the recovery path below is not redundant.
         'format': IngestionPrompt.responseSchema,
-        // Extraction is a reading task, not a planning one. Reasoning tokens
-        // here are pure latency, and the schema already guarantees shape.
-        'think': false,
+        // Low, never false. Disabling reasoning on this model does not
+        // shorten it: measured, "false" produced roughly 5,500 characters of
+        // reasoning against 190 for "low", exhausting the output budget
+        // before any content was emitted, so every batch came back empty.
+        'think': 'low',
         'keep_alive': '10m',
         'options': {
           'temperature': 0,
-          // Roughly 100 tokens per message plus envelope headroom, so a full
-          // batch cannot truncate mid-object.
-          'num_predict': 160 * candidates.length + 256,
+          // Twelve messages measured at about 780 output tokens. The floor
+          // keeps headroom for a verbose reasoning run on a small batch,
+          // where an exhausted budget yields empty content rather than a
+          // short answer.
+          'num_predict': _outputBudget(candidates.length),
         },
         'messages': messages,
       });
@@ -141,8 +146,21 @@ class AiClient {
           }
         }
         if (content == null || content.trim().isEmpty) {
-          throw const IngestionSchemaException(
-            'The provider returned no classifications.',
+          // An empty content field alongside a populated thinking field means
+          // reasoning consumed the whole output budget. Saying so points at
+          // the setting that fixes it instead of implying the messages were
+          // unclassifiable.
+          final reasoned =
+              decoded is Map &&
+              decoded['message'] is Map &&
+              ((decoded['message'] as Map)['thinking']?.toString() ?? '')
+                  .trim()
+                  .isNotEmpty;
+          throw IngestionSchemaException(
+            reasoned
+                ? 'The provider spent its whole response on reasoning and '
+                      'returned no classifications. Try a smaller batch.'
+                : 'The provider returned no classifications.',
           );
         }
         return content;
@@ -362,6 +380,12 @@ class AiRequestFailure implements Exception {
   @override
   String toString() =>
       detail == null ? 'Provider error $statusCode.' : detail!;
+}
+
+/// Output token budget for a batch of [messageCount] messages.
+int _outputBudget(int messageCount) {
+  final scaled = 200 * messageCount + 512;
+  return scaled < 1024 ? 1024 : scaled;
 }
 
 /// Extracts the human-readable reason from a provider error body.

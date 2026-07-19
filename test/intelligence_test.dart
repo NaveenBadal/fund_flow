@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  _emptyContentBlamesReasoningBudget();
   _retiredModelSurfacesProviderReason();
   test('provider adapter sends tools and decodes native tool calls', () async {
     late Map<String, dynamic> requestBody;
@@ -209,13 +210,15 @@ void main() {
       expect(sent, isNot(contains('secret-not-logged')));
       expect(requestUri?.path, '/api/chat');
       final request = jsonDecode(sent!) as Map<String, Object?>;
-      // Extraction is a reading task: reasoning tokens are pure latency.
-      expect(request['think'], isFalse);
+      // Never false: disabling reasoning on this model lengthens it, which
+      // exhausts the output budget and returns empty content.
+      expect(request['think'], 'low');
       expect(request['keep_alive'], '10m');
       // Constrained decoding makes malformed JSON structurally impossible.
       expect(request['format'], IngestionPrompt.responseSchema);
-      // Output budget scales with batch size so a batch cannot truncate.
-      expect(request['options'], {'temperature': 0, 'num_predict': 416});
+      // Budget scales with batch size over a floor that leaves headroom for
+      // a verbose reasoning run on a small batch.
+      expect(request['options'], {'temperature': 0, 'num_predict': 1024});
       final messages = request['messages'] as List;
       final userPayload =
           jsonDecode((messages.last as Map)['content'].toString()) as Map;
@@ -365,6 +368,51 @@ void _retiredModelSurfacesProviderReason() {
         isA<AiRequestFailure>()
             .having((e) => e.statusCode, 'statusCode', 410)
             .having((e) => e.detail, 'detail', contains('was retired')),
+      ),
+    );
+  });
+}
+
+void _emptyContentBlamesReasoningBudget() {
+  test('empty content alongside reasoning names the real cause', () async {
+    // Observed on Ollama Cloud: reasoning consumed the entire output budget
+    // and content came back empty, which read as "no classifications" and
+    // implied the messages were at fault.
+    final client = AiClient(
+      client: MockClient((_) async => http.Response(
+            jsonEncode({
+              'message': {
+                'role': 'assistant',
+                'content': '',
+                'thinking': 'We need to classify these messages. First...',
+              },
+            }),
+            200,
+          )),
+    );
+    addTearDown(client.close);
+
+    await expectLater(
+      client.analyzeMessages(
+        endpoint: 'https://ollama.com',
+        apiKey: 'k',
+        model: 'gpt-oss:20b-cloud',
+        candidates: [
+          MessageCandidate(
+            sender: 'HDFCBK',
+            body: 'Spent Rs 320.00 at Zomato',
+            receivedAt: DateTime(2026, 7, 19),
+          ),
+        ],
+        source: TransactionSource.message,
+        now: DateTime(2026, 7, 19),
+      ),
+      throwsA(
+        isA<IngestionSchemaException>().having(
+          (e) => e.message,
+          'message',
+          contains('reasoning'),
+        ),
       ),
     );
   });
