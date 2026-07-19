@@ -31,6 +31,10 @@ class AskScreen extends ConsumerStatefulWidget {
 class _State extends ConsumerState<AskScreen> {
   final _question = TextEditingController();
   final _scroll = ScrollController();
+
+  /// Set once the opening frame has been pinned to the newest message.
+  bool _openedAtLatest = false;
+
   @override
   void dispose() {
     _question.dispose();
@@ -38,9 +42,71 @@ class _State extends ConsumerState<AskScreen> {
     super.dispose();
   }
 
+  /// Keeps the newest content in view.
+  ///
+  /// A conversation reads from the bottom: the question just sent and the
+  /// answer arriving after it are what matters, and starting at the top left
+  /// someone scrolling to find their own message.
+  ///
+  /// Someone who has deliberately scrolled up to reread something is left
+  /// alone, because yanking the view down mid-sentence is worse than a new
+  /// answer arriving off screen. [force] overrides that for the moment a
+  /// question is sent, which is always an intent to move on.
+  void _stickToLatest({bool force = false}) {
+    if (!_scroll.hasClients) return;
+    if (!force) {
+      final position = _scroll.position;
+      if (position.maxScrollExtent - position.pixels > 240) return;
+    }
+    // Deferred: content added this frame has not been laid out yet, so
+    // maxScrollExtent is still the previous value.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final target = _scroll.position.maxScrollExtent;
+      if ((_scroll.position.pixels - target).abs() < 2) return;
+      // Streaming updates land continuously, so an animation would restart on
+      // every token and never settle. Jump while streaming, glide otherwise.
+      if (force) {
+        _scroll.animateTo(
+          target,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scroll.jumpTo(target);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // A new message is an intent to move on; streaming and stage changes just
+    // keep the tail visible.
+    ref.listen(appControllerProvider, (previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (after == null) return;
+      if (before == null) return;
+      if (after.conversation.length != before.conversation.length) {
+        _stickToLatest(force: true);
+      } else if (after.askDraft != before.askDraft ||
+          after.askStage != before.askStage ||
+          after.asking != before.asking) {
+        _stickToLatest();
+      }
+    });
+
     final app = ref.watch(appControllerProvider).requireValue;
+    // Opening an existing conversation lands on the latest exchange rather
+    // than the oldest one.
+    if (!_openedAtLatest && app.conversation.isNotEmpty) {
+      _openedAtLatest = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
+      });
+    }
     final connected = app.aiConnection == AiConnection.connected;
     return Column(
       children: [
