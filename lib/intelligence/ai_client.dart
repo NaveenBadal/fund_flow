@@ -75,7 +75,7 @@ class AiClient {
       final requestBody = jsonEncode({
         'model': model,
         'stream': false,
-        'think': 'low',
+        'think': 'medium',
         'keep_alive': '10m',
         'options': {'temperature': 0, 'num_predict': 1200},
         'messages': messages,
@@ -216,7 +216,7 @@ class _ConfiguredAiProvider implements AgentProvider {
         // choosing and sequencing local MCP tools.
         'think': 'low',
         'keep_alive': '10m',
-        'options': {'temperature': 0, 'num_predict': 1200},
+        'options': {'temperature': 0, 'num_predict': 700},
         'messages': messages,
         'tools': tools.map((tool) => tool.toProviderJson()).toList(),
       });

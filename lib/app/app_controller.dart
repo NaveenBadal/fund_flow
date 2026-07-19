@@ -15,7 +15,6 @@ import '../domain/import_audit.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
 import '../ingestion/ai_message_ingestion.dart';
-import '../ingestion/message_candidate.dart';
 import '../ingestion/notification_source.dart';
 import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
@@ -23,32 +22,16 @@ import '../update/app_updater.dart';
 import 'app_state.dart';
 
 const _maximumIngestionMessages = 12;
-const _maximumIngestionCharacters = 9000;
 
-int _ingestionBatchLength(List<MessageCandidate> values, int start) {
-  var characters = 0;
-  var count = 0;
-  while (start + count < values.length && count < _maximumIngestionMessages) {
-    final value = values[start + count];
-    // Include a small allowance for IDs, timestamps and JSON field names.
-    final next = (value.sender?.length ?? 0) + value.body.length + 160;
-    if (count > 0 && characters + next > _maximumIngestionCharacters) break;
-    characters += next;
-    count++;
-  }
-  return count;
-}
-
-List<List<T>> _ingestionBatches<T>(
-  List<T> values,
-  MessageCandidate Function(T value) candidateOf,
-) {
-  final candidates = values.map(candidateOf).toList(growable: false);
+List<List<T>> _ingestionBatches<T>(List<T> values) {
   final batches = <List<T>>[];
-  for (var start = 0; start < values.length;) {
-    final count = _ingestionBatchLength(candidates, start);
+  for (
+    var start = 0;
+    start < values.length;
+    start += _maximumIngestionMessages
+  ) {
+    final count = (values.length - start).clamp(0, _maximumIngestionMessages);
     batches.add(values.sublist(start, start + count));
-    start += count;
   }
   return batches;
 }
@@ -186,7 +169,7 @@ class AppController extends AsyncNotifier<AppState> {
           );
       final activeRunId = auditRunId;
       final acknowledged = <String>[];
-      final batches = _ingestionBatches(unseen, (item) => item.candidate);
+      final batches = _ingestionBatches(unseen);
       for (var wave = 0; wave < batches.length; wave += 2) {
         final end = (wave + 2).clamp(0, batches.length);
         await Future.wait([
@@ -500,7 +483,7 @@ class AppController extends AsyncNotifier<AppState> {
       var imported = 0;
       var checked = 0;
       var skipped = seen.length;
-      final batches = _ingestionBatches(unseen, (item) => item);
+      final batches = _ingestionBatches(unseen);
       for (var wave = 0; wave < batches.length; wave += 2) {
         await _waitWhileLifecyclePaused(
           permission: permission,
