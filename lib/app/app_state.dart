@@ -64,6 +64,7 @@ class AppState {
     this.locked = false,
     this.pendingAgentProposal,
     this.lastAgentAction,
+    this.lastAgentUndoId,
   });
   final AppPreferences preferences;
   final List<MoneyTransaction> transactions;
@@ -85,6 +86,14 @@ class AppState {
   final AgentProposal? pendingAgentProposal;
   final String? lastAgentAction;
 
+  /// The undo record the last applied action wrote, if it wrote one.
+  ///
+  /// Undo used to pop whichever record was newest, so undoing after an action
+  /// that saved no record — clearing a conversation — reversed an unrelated
+  /// earlier change instead. Null means the action cannot be undone and the
+  /// offer is not made.
+  final int? lastAgentUndoId;
+
   AppState copyWith({
     AppPreferences? preferences,
     List<MoneyTransaction>? transactions,
@@ -105,6 +114,7 @@ class AppState {
     bool clearPendingAgentProposal = false,
     String? lastAgentAction,
     bool clearLastAgentAction = false,
+    int? lastAgentUndoId,
   }) => AppState(
     preferences: preferences ?? this.preferences,
     transactions: transactions ?? this.transactions,
@@ -126,5 +136,8 @@ class AppState {
     lastAgentAction: clearLastAgentAction
         ? null
         : lastAgentAction ?? this.lastAgentAction,
+    lastAgentUndoId: clearLastAgentAction
+        ? null
+        : lastAgentUndoId ?? this.lastAgentUndoId,
   );
 }

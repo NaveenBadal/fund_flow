@@ -236,12 +236,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
                   ),
                 ),
-                TextButton(
-                  onPressed: () => ref
-                      .read(appControllerProvider.notifier)
-                      .undoLastAgentAction(),
-                  child: const Text('Undo'),
-                ),
+                // Only offered when the change actually wrote something to
+                // reverse. Clearing a conversation cannot be undone, and
+                // offering it there used to reverse an unrelated change.
+                if (app.lastAgentUndoId != null)
+                  TextButton(
+                    onPressed: () => ref
+                        .read(appControllerProvider.notifier)
+                        .undoLastAgentAction(),
+                    child: const Text('Undo'),
+                  ),
               ],
             ),
           ),

@@ -1194,8 +1194,18 @@ class AppController extends AsyncNotifier<AppState> {
       );
       return;
     }
-    final applied = await _applyAgentProposal(proposal);
-    if (!applied) {
+    // The apply path reads model-supplied arguments and touches the database,
+    // and both can fail after the person has already tapped Approve. Whatever
+    // goes wrong, they get a refusal saying nothing changed rather than an
+    // uncaught error: the store wraps each change in a transaction, so a
+    // throw means it rolled back.
+    ({bool applied, int? undoId}) outcome;
+    try {
+      outcome = await _applyAgentProposal(proposal);
+    } catch (_) {
+      outcome = (applied: false, undoId: null);
+    }
+    if (!outcome.applied) {
       await ref
           .read(storeProvider)
           .setProposalStatus(proposal.id!, AgentProposalStatus.stale);
@@ -1220,17 +1230,82 @@ class AppController extends AsyncNotifier<AppState> {
         preferences: _value.preferences,
         clearPendingAgentProposal: true,
         lastAgentAction: proposal.title,
+        lastAgentUndoId: outcome.undoId,
         clearError: true,
       ),
     );
   }
 
-  Future<bool> _applyAgentProposal(AgentProposal proposal) async {
+  /// An integer argument, or null when the provider sent something else.
+  ///
+  /// These arrive from a language model, so `id` can be `7`, `7.0`, `"7"` or
+  /// absent. A bare cast turned the last two into an uncaught error thrown
+  /// after the person had already tapped Approve; reading them defensively
+  /// turns the same input into a refusal they can act on.
+  int? _intArgument(Map<String, Object?> arguments, String key) {
+    final value = arguments[key];
+    if (value is int) return value;
+    if (value is num && value == value.roundToDouble()) return value.toInt();
+    return null;
+  }
+
+  List<int>? _intListArgument(Map<String, Object?> arguments, String key) {
+    final value = arguments[key];
+    if (value is! List || value.isEmpty) return null;
+    final ids = <int>[];
+    for (final item in value) {
+      if (item is int) {
+        ids.add(item);
+      } else if (item is num && item == item.roundToDouble()) {
+        ids.add(item.toInt());
+      } else {
+        return null;
+      }
+    }
+    return ids;
+  }
+
+  /// Whether the records still say what the proposal was written against.
+  ///
+  /// A proposal older than a moment can name a row that has since been
+  /// recategorised or corrected by hand. Approving it would silently
+  /// overwrite work the person did after the agent proposed the change.
+  bool _matchesFingerprint(
+    AgentProposal proposal,
+    List<MoneyTransaction> current,
+  ) {
+    if (proposal.affectedFingerprint.isEmpty) return true;
+    for (final item in current) {
+      final expected = proposal.affectedFingerprint[item.id];
+      if (expected == null) continue;
+      final actual = AgentProposal.fingerprintOf(
+        amountMinor: item.amountMinor,
+        currency: item.currency,
+        merchant: item.merchant,
+        category: item.category,
+        occurredAt: item.occurredAt,
+      );
+      if (actual != expected) return false;
+    }
+    return true;
+  }
+
+  /// Applies an approved proposal.
+  ///
+  /// [undoId] is the record that reverses this particular change, or null
+  /// when the change cannot be reversed. Undo used to pop whichever record
+  /// was newest, which reversed something unrelated whenever the action
+  /// itself saved none.
+  Future<({bool applied, int? undoId})> _applyAgentProposal(
+    AgentProposal proposal,
+  ) async {
+    const refused = (applied: false, undoId: null);
     final arguments = proposal.arguments;
     switch (proposal.kind) {
       case AgentProposalKind.createTransaction:
         final value = _transactionFromArguments(arguments);
-        await ref
+        if (value == null) return refused;
+        final undoId = await ref
             .read(storeProvider)
             .applyTransactionChanges(
               upserts: [value],
@@ -1238,14 +1313,17 @@ class AppController extends AsyncNotifier<AppState> {
               undoKind: 'delete_created_transaction',
               undoPayload: {'createdAt': DateTime.now().toIso8601String()},
             );
-        return true;
+        return (applied: true, undoId: undoId);
       case AgentProposalKind.updateTransaction:
-        final id = arguments['id'] as int;
+        final id = _intArgument(arguments, 'id');
+        if (id == null) return refused;
         final matches = _value.transactions.where((item) => item.id == id);
-        if (matches.length != 1) return false;
+        if (matches.length != 1) return refused;
         final before = matches.single;
+        if (!_matchesFingerprint(proposal, [before])) return refused;
         final after = _transactionFromArguments(arguments, existing: before);
-        await ref
+        if (after == null) return refused;
+        final undoId = await ref
             .read(storeProvider)
             .applyTransactionChanges(
               upserts: [after],
@@ -1253,12 +1331,14 @@ class AppController extends AsyncNotifier<AppState> {
               undoKind: 'restore_transaction',
               undoPayload: {'transaction': before.toMap()},
             );
-        return true;
+        return (applied: true, undoId: undoId);
       case AgentProposalKind.deleteTransaction:
-        final id = arguments['id'] as int;
+        final id = _intArgument(arguments, 'id');
+        if (id == null) return refused;
         final matches = _value.transactions.where((item) => item.id == id);
-        if (matches.length != 1) return false;
-        await ref
+        if (matches.length != 1) return refused;
+        if (!_matchesFingerprint(proposal, [matches.single])) return refused;
+        final undoId = await ref
             .read(storeProvider)
             .applyTransactionChanges(
               upserts: const [],
@@ -1266,17 +1346,19 @@ class AppController extends AsyncNotifier<AppState> {
               undoKind: 'restore_transaction',
               undoPayload: {'transaction': matches.single.toMap()},
             );
-        return true;
+        return (applied: true, undoId: undoId);
       case AgentProposalKind.bulkCategory:
-        final ids = (arguments['ids'] as List).cast<int>();
-        final category = arguments['category'].toString().trim();
+        final ids = _intListArgument(arguments, 'ids');
+        if (ids == null) return refused;
+        final category = arguments['category']?.toString().trim() ?? '';
         final matches = _value.transactions
             .where((item) => ids.contains(item.id))
             .toList();
         if (matches.length != ids.toSet().length || category.isEmpty) {
-          return false;
+          return refused;
         }
-        await ref
+        if (!_matchesFingerprint(proposal, matches)) return refused;
+        final undoId = await ref
             .read(storeProvider)
             .applyTransactionChanges(
               upserts: matches.map((item) => item.copyWith(category: category)),
@@ -1286,14 +1368,19 @@ class AppController extends AsyncNotifier<AppState> {
                 'transactions': matches.map((item) => item.toMap()).toList(),
               },
             );
-        return true;
+        return (applied: true, undoId: undoId);
       case AgentProposalKind.updateSettings:
         var preferences = _value.preferences;
         final appearance = arguments['appearance']?.toString();
         if (appearance != null) {
-          preferences = preferences.copyWith(
-            appearance: AppearancePreference.values.byName(appearance),
+          // Schema validation rejects an unknown name before a proposal is
+          // ever built, but proposals outlive the turn that made them and
+          // are read back from storage, so this refuses rather than throws.
+          final match = AppearancePreference.values.where(
+            (value) => value.name == appearance,
           );
+          if (match.length != 1) return refused;
+          preferences = preferences.copyWith(appearance: match.single);
         }
         if (arguments['currency'] != null) {
           preferences = preferences.copyWith(
@@ -1310,28 +1397,39 @@ class AppController extends AsyncNotifier<AppState> {
             messageLookbackDays: arguments['messageLookbackDays'] as int,
           );
         }
-        await ref.read(storeProvider).saveUndo('restore_settings', {
-          'appearance': _value.preferences.appearance.name,
-          'currency': _value.preferences.currency,
-          'hideAmounts': _value.preferences.hideAmounts,
-          'messageLookbackDays': _value.preferences.messageLookbackDays,
-          'captureNotifications': _value.preferences.captureNotifications,
-        });
+        final settingsUndoId = await ref
+            .read(storeProvider)
+            .saveUndo('restore_settings', {
+              'appearance': _value.preferences.appearance.name,
+              'currency': _value.preferences.currency,
+              'hideAmounts': _value.preferences.hideAmounts,
+              'messageLookbackDays': _value.preferences.messageLookbackDays,
+              'captureNotifications': _value.preferences.captureNotifications,
+            });
         await updatePreferences(preferences);
         if (arguments['captureNotifications'] is bool) {
-          return setNotificationCapture(
+          final capture = await setNotificationCapture(
             arguments['captureNotifications'] as bool,
           );
+          return (applied: capture, undoId: capture ? settingsUndoId : null);
         }
-        return true;
+        return (applied: true, undoId: settingsUndoId);
       case AgentProposalKind.setAppLock:
-        await ref.read(storeProvider).saveUndo('restore_app_lock', {
-          'enabled': _value.preferences.lockApp,
-        });
-        return setAppLock(arguments['enabled'] as bool);
+        final enabled = arguments['enabled'];
+        if (enabled is! bool) return refused;
+        final lockUndoId = await ref
+            .read(storeProvider)
+            .saveUndo('restore_app_lock', {
+              'enabled': _value.preferences.lockApp,
+            });
+        final locked = await setAppLock(enabled);
+        return (applied: locked, undoId: locked ? lockUndoId : null);
       case AgentProposalKind.clearConversation:
         await clearConversation();
-        return true;
+        // Deliberately not reversible: there is no record to restore from,
+        // which is why the proposal is marked irreversible and Undo is not
+        // offered afterwards.
+        return (applied: true, undoId: null);
       case AgentProposalKind.setMemory:
         final key = arguments['key']?.toString().trim() ?? '';
         final value = arguments['value']?.toString().trim() ?? '';
@@ -1339,39 +1437,42 @@ class AppController extends AsyncNotifier<AppState> {
             value.isEmpty ||
             key.length > 80 ||
             value.length > 240) {
-          return false;
+          return refused;
         }
         final existing = await ref.read(storeProvider).financialMemory();
         final previous = existing
             .where((item) => item['key'] == key)
             .map((item) => item['value'])
             .firstOrNull;
-        await ref.read(storeProvider).saveUndo('restore_memory', {
-          'key': key,
-          'value': previous,
-        });
+        final memoryUndoId = await ref
+            .read(storeProvider)
+            .saveUndo('restore_memory', {'key': key, 'value': previous});
         await ref.read(storeProvider).setFinancialMemory(key, value);
-        return true;
+        return (applied: true, undoId: memoryUndoId);
       case AgentProposalKind.deleteMemory:
         final key = arguments['key']?.toString().trim() ?? '';
-        if (key.isEmpty) return false;
+        if (key.isEmpty) return refused;
         final existing = await ref.read(storeProvider).financialMemory();
         final previous = existing
             .where((item) => item['key'] == key)
             .map((item) => item['value'])
             .firstOrNull;
-        if (previous == null) return false;
-        await ref.read(storeProvider).saveUndo('restore_memory', {
-          'key': key,
-          'value': previous,
-        });
+        if (previous == null) return refused;
+        final deleteUndoId = await ref
+            .read(storeProvider)
+            .saveUndo('restore_memory', {'key': key, 'value': previous});
         await ref.read(storeProvider).deleteFinancialMemory(key);
-        return true;
+        return (applied: true, undoId: deleteUndoId);
     }
   }
 
   Future<void> undoLastAgentAction() async {
-    final record = await ref.read(storeProvider).latestUndo();
+    // The record this action wrote, not merely the newest one. Reaching for
+    // the newest reversed whatever happened to be last whenever the action
+    // itself saved nothing to reverse.
+    final undoId = _value.lastAgentUndoId;
+    if (undoId == null) return;
+    final record = await ref.read(storeProvider).undoById(undoId);
     if (record == null) return;
     if (record.kind == 'restore_settings') {
       final payload = record.payload;
@@ -1413,26 +1514,41 @@ class AppController extends AsyncNotifier<AppState> {
     );
   }
 
-  MoneyTransaction _transactionFromArguments(
+  /// Builds a transaction from proposal arguments, or null when they do not
+  /// describe one. An unparseable date or an unknown direction is a refusal,
+  /// not an exception thrown after the person tapped Approve.
+  MoneyTransaction? _transactionFromArguments(
     Map<String, Object?> arguments, {
     MoneyTransaction? existing,
   }) {
-    final occurredAt = arguments['occurredAt'] == null
-        ? existing?.occurredAt ?? DateTime.now()
-        : DateTime.parse(arguments['occurredAt'].toString()).toLocal();
+    final DateTime occurredAt;
+    if (arguments['occurredAt'] == null) {
+      occurredAt = existing?.occurredAt ?? DateTime.now();
+    } else {
+      final parsed = DateTime.tryParse(arguments['occurredAt'].toString());
+      if (parsed == null) return null;
+      occurredAt = parsed.toLocal();
+    }
+    final TransactionDirection direction;
+    if (arguments['direction'] == null) {
+      direction = existing?.direction ?? TransactionDirection.outgoing;
+    } else {
+      final match = TransactionDirection.values.where(
+        (value) => value.name == arguments['direction'].toString(),
+      );
+      if (match.length != 1) return null;
+      direction = match.single;
+    }
+    final amountMinor = _intArgument(arguments, 'amountMinor');
+    if (arguments['amountMinor'] != null && amountMinor == null) return null;
     return MoneyTransaction(
       id: existing?.id,
-      amountMinor:
-          arguments['amountMinor'] as int? ?? existing?.amountMinor ?? 0,
+      amountMinor: amountMinor ?? existing?.amountMinor ?? 0,
       currency:
           arguments['currency']?.toString().toUpperCase() ??
           existing?.currency ??
           _value.preferences.currency,
-      direction: arguments['direction'] == null
-          ? existing?.direction ?? TransactionDirection.outgoing
-          : TransactionDirection.values.byName(
-              arguments['direction'].toString(),
-            ),
+      direction: direction,
       merchant:
           arguments['merchant']?.toString().trim() ??
           existing?.merchant ??

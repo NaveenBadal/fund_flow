@@ -850,10 +850,23 @@ class LocalMcpServer {
     if (id is int) ids.add(id);
     final rawIds = call.arguments['ids'];
     if (rawIds is List) ids.addAll(rawIds.whereType<int>());
+    // Record what each affected row looks like now, so approval can tell a
+    // record that simply still exists from one that still says what the
+    // proposal was written against.
+    final fingerprint = <int, String>{};
     for (final value in ids) {
-      if (!_transactions().any((item) => item.id == value)) {
+      final matches = _transactions().where((item) => item.id == value);
+      if (matches.isEmpty) {
         throw McpProtocolException('Transaction $value no longer exists.');
       }
+      final item = matches.first;
+      fingerprint[value] = AgentProposal.fingerprintOf(
+        amountMinor: item.amountMinor,
+        currency: item.currency,
+        merchant: item.merchant,
+        category: item.category,
+        occurredAt: item.occurredAt,
+      );
     }
     final kind = switch (call.name) {
       'transactions_create' => AgentProposalKind.createTransaction,
@@ -892,6 +905,7 @@ class LocalMcpServer {
           'The agent prepared this local change. Nothing changes until you approve it.',
       arguments: call.arguments,
       affectedIds: ids,
+      affectedFingerprint: fingerprint,
       createdAt: now,
       // Expiry is not the safety net — approval re-checks that the affected
       // records still look as described and refuses a stale change. So a

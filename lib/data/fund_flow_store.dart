@@ -386,21 +386,40 @@ class FundFlowStore {
     );
   }
 
-  Future<void> saveUndo(String kind, Map<String, Object?> payload) async {
-    await (await database).insert('undo_records', {
+  /// Writes an undo record and returns its id.
+  ///
+  /// Undo used to pop whichever record was newest, which is only the right
+  /// one when nothing else has happened since. Returning the id lets the
+  /// caller undo the change it actually made.
+  Future<int> saveUndo(String kind, Map<String, Object?> payload) async {
+    final id = await (await database).insert('undo_records', {
       'kind': kind,
       'payload': jsonEncode(payload),
       'created_at': DateTime.now().toUtc().toIso8601String(),
     });
+    await _pruneUndo();
+    return id;
   }
 
-  Future<void> applyTransactionChanges({
+  /// Keeps the undo table from growing without bound.
+  static const _undoHistoryLimit = 50;
+
+  Future<void> _pruneUndo() async {
+    await (await database).rawDelete(
+      'DELETE FROM undo_records WHERE id NOT IN '
+      '(SELECT id FROM undo_records ORDER BY id DESC LIMIT ?)',
+      [_undoHistoryLimit],
+    );
+  }
+
+  Future<int> applyTransactionChanges({
     required Iterable<MoneyTransaction> upserts,
     required Iterable<int> deletes,
     required String undoKind,
     required Map<String, Object?> undoPayload,
   }) async {
     final db = await database;
+    late int undoId;
     await db.transaction((transaction) async {
       final createdIds = <int>[];
       for (final value in upserts) {
@@ -425,7 +444,7 @@ class FundFlowStore {
         );
         if (count != 1) throw StateError('A transaction became stale.');
       }
-      await transaction.insert('undo_records', {
+      undoId = await transaction.insert('undo_records', {
         'kind': undoKind,
         'payload': jsonEncode({
           ...undoPayload,
@@ -434,6 +453,8 @@ class FundFlowStore {
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
     });
+    await _pruneUndo();
+    return undoId;
   }
 
   Future<UndoRecord?> latestUndo() async {
@@ -442,16 +463,27 @@ class FundFlowStore {
       orderBy: 'id DESC',
       limit: 1,
     );
-    if (rows.isEmpty) return null;
-    final row = rows.single;
-    return UndoRecord(
-      id: row['id'] as int,
-      kind: row['kind'] as String,
-      payload: Map<String, Object?>.from(
-        jsonDecode(row['payload'] as String) as Map,
-      ),
-    );
+    return rows.isEmpty ? null : _undoFromRow(rows.single);
   }
+
+  /// The specific undo record a change wrote, or null once it is consumed.
+  Future<UndoRecord?> undoById(int id) async {
+    final rows = await (await database).query(
+      'undo_records',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : _undoFromRow(rows.single);
+  }
+
+  UndoRecord _undoFromRow(Map<String, Object?> row) => UndoRecord(
+    id: row['id'] as int,
+    kind: row['kind'] as String,
+    payload: Map<String, Object?>.from(
+      jsonDecode(row['payload'] as String) as Map,
+    ),
+  );
 
   Future<void> applyTransactionUndo(UndoRecord record) async {
     final db = await database;
