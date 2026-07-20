@@ -61,7 +61,16 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       initialChildSize: .94,
       minChildSize: .5,
       maxChildSize: .96,
-      builder: (context, controller) => const ChatScreen(),
+      // Without this the sheet keeps its full height when the keyboard opens
+      // and the composer — the whole point of the screen — sits underneath it,
+      // so you cannot see what you are typing. The editor and connect sheets
+      // already inset this way.
+      builder: (context, controller) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: const ChatScreen(),
+      ),
     ),
   );
 

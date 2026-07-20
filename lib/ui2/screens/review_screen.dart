@@ -38,6 +38,18 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   final _skipped = <int>{};
   int _clearedThisSession = 0;
 
+  /// A category chosen for the record on screen but not yet committed.
+  ///
+  /// Tapping a chip used to save and advance in one motion, so correcting a
+  /// category swept the record away before the person could look at what they
+  /// had chosen. Choosing is now separate from confirming: the chip stages,
+  /// "Looks right" commits.
+  String? _pendingCategory;
+  int? _pendingFor;
+
+  String? _stagedFor(MoneyTransaction item) =>
+      _pendingFor == item.id ? _pendingCategory : null;
+
   @override
   Widget build(BuildContext context) {
     final app = ref.watch(appControllerProvider).requireValue;
@@ -111,13 +123,27 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
               child: _ReviewCard(
                 key: ValueKey(current.id),
                 item: current,
-                onCategory: (value) => _recategorise(current, value),
+                staged: _stagedFor(current),
+                onCategory: (value) => setState(() {
+                  _pendingFor = current.id;
+                  // Tapping the staged category again clears it, so a
+                  // mis-tap is undone in place rather than by confirming.
+                  _pendingCategory = _stagedFor(current) == value
+                      ? null
+                      : value;
+                  unawaited(HapticFeedback.selectionClick());
+                }),
               ),
             ),
           ),
         ),
         _Actions(
-          onSkip: () => setState(() => _skipped.add(current.id ?? -1)),
+          onSkip: () => setState(() {
+            _skipped.add(current.id ?? -1);
+            // Passing over a record discards the correction staged on it.
+            _pendingCategory = null;
+            _pendingFor = null;
+          }),
           onConfirm: () => _confirm(current),
         ),
       ],
@@ -128,29 +154,41 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     // Haptic rather than a toast: at this volume a confirmation that has to
     // be read would slow the loop it is meant to reward.
     unawaited(HapticFeedback.lightImpact());
-    setState(() => _clearedThisSession++);
-    await ref.read(appControllerProvider.notifier).confirmTransaction(item);
-  }
-
-  Future<void> _recategorise(MoneyTransaction item, String category) async {
-    unawaited(HapticFeedback.selectionClick());
-    setState(() => _clearedThisSession++);
-    await ref
-        .read(appControllerProvider.notifier)
-        .saveTransaction(
-          item.copyWith(
-            category: category,
-            reviewState: ReviewState.confirmed,
-            confidence: 1,
-          ),
-        );
+    final staged = _stagedFor(item);
+    setState(() {
+      _clearedThisSession++;
+      _pendingCategory = null;
+      _pendingFor = null;
+    });
+    final controller = ref.read(appControllerProvider.notifier);
+    // One write either way: a staged correction is part of confirming, not a
+    // separate save the person never asked for.
+    if (staged == null) {
+      await controller.confirmTransaction(item);
+    } else {
+      await controller.saveTransaction(
+        item.copyWith(
+          category: staged,
+          reviewState: ReviewState.confirmed,
+          confidence: 1,
+        ),
+      );
+    }
   }
 }
 
 class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({super.key, required this.item, required this.onCategory});
+  const _ReviewCard({
+    super.key,
+    required this.item,
+    required this.staged,
+    required this.onCategory,
+  });
 
   final MoneyTransaction item;
+
+  /// Category chosen on this card but not yet committed, if any.
+  final String? staged;
   final ValueChanged<String> onCategory;
 
   @override
@@ -230,11 +268,27 @@ class _ReviewCard extends StatelessWidget {
         ],
 
         const SizedBox(height: FlowSpace.lg),
-        Text(
-          'Category',
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: flow.inkSoft),
+        Row(
+          children: [
+            Text(
+              'Category',
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: flow.inkSoft),
+            ),
+            if (staged != null) ...[
+              const SizedBox(width: FlowSpace.sm),
+              // Says plainly that the change is held, not saved — the
+              // previous behaviour saved on tap and this has to read
+              // differently from that.
+              Text(
+                'changed to $staged · confirm to save',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: flow.attention),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: FlowSpace.sm),
         Wrap(
@@ -245,7 +299,9 @@ class _ReviewCard extends StatelessWidget {
             for (final category in kFlowCategories)
               _CategoryChip(
                 label: category,
-                selected: category.toLowerCase() == item.category.toLowerCase(),
+                selected:
+                    category.toLowerCase() ==
+                    (staged ?? item.category).toLowerCase(),
                 onTap: () => onCategory(category),
               ),
           ],

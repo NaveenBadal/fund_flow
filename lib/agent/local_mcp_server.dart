@@ -237,7 +237,7 @@ class LocalMcpServer {
       'Prepare one category change for an explicit list of transaction IDs.',
       McpSchema.object(
         properties: {
-          'ids': McpSchema.array(McpSchema.integer(minimum: 1)),
+          'ids': McpSchema.array(McpSchema.integer(minimum: 1), minItems: 1),
           'category': McpSchema.string(),
         },
         required: ['ids', 'category'],
@@ -304,7 +304,7 @@ class LocalMcpServer {
     final definition = tools.where((tool) => tool.name == call.name);
     if (definition.length != 1) return _error(call, 'Unknown capability.');
     try {
-      _rejectUnknownArguments(call.arguments, definition.single.inputSchema);
+      _validateArguments(call.arguments, definition.single.inputSchema);
       return switch (call.name) {
         'transactions_search' => _search(call),
         'transactions_get' => _get(call),
@@ -1087,7 +1087,14 @@ class LocalMcpServer {
     return value;
   }
 
-  void _rejectUnknownArguments(
+  /// Checks arguments against the schema the capability already declares.
+  ///
+  /// The schemas carry types, enums and bounds, and for a long time nothing
+  /// read them: a capability accepted `{'id': '7'}` or `{'amountMinor': 'abc'}`
+  /// and the mistake surfaced as a crash deep in the apply path, after the
+  /// person had already tapped Approve. Validating here turns that into a
+  /// message the model can read and correct on its next turn.
+  void _validateArguments(
     Map<String, Object?> arguments,
     Map<String, Object?> schema,
   ) {
@@ -1099,9 +1106,107 @@ class LocalMcpServer {
       throw McpProtocolException('Unknown arguments: ${unknown.join(', ')}.');
     }
     final required = (schema['required'] as List?)?.cast<String>() ?? const [];
-    final missing = required.where((key) => !arguments.containsKey(key));
+    final missing = required.where(
+      (key) =>
+          !arguments.containsKey(key) ||
+          arguments[key] == null ||
+          (arguments[key] is String &&
+              (arguments[key]! as String).trim().isEmpty),
+    );
     if (missing.isNotEmpty) {
       throw McpProtocolException('Missing arguments: ${missing.join(', ')}.');
+    }
+    for (final entry in arguments.entries) {
+      final property = Map<String, Object?>.from(
+        properties[entry.key] as Map? ?? const {},
+      );
+      // gpt-oss fills every property in the schema whether or not it means
+      // to use one, sending empty strings and zeroes rather than omitting
+      // them, and writes "both"/"all" where it means "do not filter". An
+      // optional property spelled that way is absent, not invalid — the same
+      // convention _enumFilter and the text filters already apply.
+      if (!required.contains(entry.key) &&
+          _absentForOptional(entry.value, property)) {
+        continue;
+      }
+      _checkValue(entry.key, entry.value, property);
+    }
+  }
+
+  bool _absentForOptional(Object? value, Map<String, Object?> property) {
+    if (value == null) return true;
+    if (value is String) {
+      final text = value.trim();
+      if (text.isEmpty) return true;
+      if (property['enum'] != null &&
+          const {'both', 'all', 'any'}.contains(text.toLowerCase())) {
+        return true;
+      }
+    }
+    // A zero where the schema demands at least one is the same empty slot.
+    final minimum = property['minimum'];
+    if (value is num && value == 0 && minimum is int && minimum > 0) {
+      return true;
+    }
+    return false;
+  }
+
+  void _checkValue(String key, Object? value, Map<String, Object?> property) {
+    final type = property['type']?.toString();
+    switch (type) {
+      case 'string':
+        if (value is! String) {
+          throw McpProtocolException('$key must be text.');
+        }
+        final values = (property['enum'] as List?)?.cast<String>();
+        if (values != null &&
+            !values.any(
+              (allowed) => allowed.toLowerCase() == value.trim().toLowerCase(),
+            )) {
+          throw McpProtocolException(
+            '$key must be one of ${values.join(', ')}.',
+          );
+        }
+      case 'integer':
+        // A provider that sends 100.0 for an integer meant 100; one that
+        // sends 100.5 or "100" did not.
+        if (value is! num || value != value.roundToDouble()) {
+          throw McpProtocolException('$key must be a whole number.');
+        }
+        final minimum = property['minimum'];
+        if (minimum is int && value < minimum) {
+          throw McpProtocolException('$key must be at least $minimum.');
+        }
+        final maximum = property['maximum'];
+        if (maximum is int && value > maximum) {
+          throw McpProtocolException('$key must be at most $maximum.');
+        }
+      case 'boolean':
+        if (value is! bool) {
+          throw McpProtocolException('$key must be true or false.');
+        }
+      case 'array':
+        if (value is! List) {
+          throw McpProtocolException('$key must be a list.');
+        }
+        final minimumItems = property['minItems'];
+        if (minimumItems is int && value.length < minimumItems) {
+          throw McpProtocolException(
+            '$key needs at least $minimumItems ${minimumItems == 1 ? 'entry' : 'entries'}.',
+          );
+        }
+        final items = Map<String, Object?>.from(
+          property['items'] as Map? ?? const {},
+        );
+        if (items.isNotEmpty) {
+          for (final item in value) {
+            _checkValue('each entry of $key', item, items);
+          }
+        }
+      case 'object':
+        if (value is! Map) {
+          throw McpProtocolException('$key must be an object.');
+        }
     }
   }
 
