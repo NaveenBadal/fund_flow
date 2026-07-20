@@ -501,9 +501,27 @@ class LocalMcpServer {
     rows.sort(
       (a, b) => (b['amountMinor'] as int).compareTo(a['amountMinor'] as int),
     );
+    // The total across every group, not only the rows that survive the
+    // limit. Without it the model adds the visible rows itself and states a
+    // figure its own percentages contradict.
+    final totals = <String, int>{};
+    for (final row in rows) {
+      final currency = row['currency'] as String;
+      totals[currency] = (totals[currency] ?? 0) + (row['amountMinor'] as int);
+    }
     return _ok(call, {
       'groupBy': groupBy,
       'rows': rows.take(limit).toList(),
+      'rowsShown': rows.take(limit).length,
+      'rowsTotal': rows.length,
+      'totals': [
+        for (final total in totals.entries)
+          {
+            'currency': total.key,
+            'amountMinor': total.value,
+            'amountDisplay': formatMoney(total.value, total.key),
+          },
+      ],
       'transactionIds': values.map((item) => item.id).whereType<int>().toList(),
       ..._emptyPeriodHint(values),
     });

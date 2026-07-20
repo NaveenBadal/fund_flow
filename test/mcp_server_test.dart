@@ -236,6 +236,30 @@ void main() {
     expect(execution.result.content['status'], 'approval_required');
   });
 
+  test('a breakdown totals every group, including ones the limit cut', () async {
+    final execution = await server.execute(
+      const McpToolCall(
+        id: 'break',
+        name: 'finance_breakdown',
+        arguments: {
+          'from': '2026-07-01',
+          'to': '2026-07-31',
+          'groupBy': 'category',
+          'currency': 'INR',
+          'limit': 1,
+        },
+      ),
+    );
+    final content = execution.result.content;
+    expect((content['rows'] as List), hasLength(1));
+    expect(content['rowsTotal'], 2);
+    final totals = content['totals'] as List;
+    final inr = totals.cast<Map>().singleWhere((row) => row['currency'] == 'INR');
+    // Both INR categories, not only the one row that survived the limit.
+    expect(inr['amountMinor'], 30000);
+    expect(inr['amountDisplay'], isNotNull);
+  });
+
   test('a reversible proposal waits for the person, not a stopwatch', () async {
     final memory = await server.execute(
       const McpToolCall(

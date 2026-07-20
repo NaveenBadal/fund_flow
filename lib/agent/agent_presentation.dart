@@ -103,7 +103,38 @@ class AgentPresentation {
         'An answer requires a conclusion.',
       );
     }
-    return AgentPresentation(parts: parts);
+    return AgentPresentation(parts: ordered(parts));
+  }
+
+  /// Answer parts in reading order, whatever order they arrived in.
+  ///
+  /// The provider composes parts in the order it thought of them, which has
+  /// put the conclusion underneath the chart it summarises and below the
+  /// provenance note — so the answer opened on a wall of rows and the
+  /// sentence explaining them had to be hunted for. Position is a property of
+  /// the kind, not of the model's train of thought.
+  static List<AgentPart> ordered(List<AgentPart> parts) {
+    int rank(AgentPartKind kind) => switch (kind) {
+      AgentPartKind.conclusion => 0,
+      AgentPartKind.warning => 1,
+      AgentPartKind.narrative => 2,
+      AgentPartKind.metricRow => 3,
+      AgentPartKind.comparison => 4,
+      AgentPartKind.breakdown => 5,
+      AgentPartKind.transactionList => 6,
+      AgentPartKind.insight => 7,
+      AgentPartKind.proposal => 8,
+      AgentPartKind.sourceNote => 9,
+      AgentPartKind.followUps => 10,
+    };
+    // Sorting on the arrival index as a tiebreak keeps the sort stable, so
+    // several parts of one kind stay in the order they were given.
+    final indexed = parts.indexed.toList()
+      ..sort((a, b) {
+        final byKind = rank(a.$2.kind).compareTo(rank(b.$2.kind));
+        return byKind != 0 ? byKind : a.$1.compareTo(b.$1);
+      });
+    return [for (final entry in indexed) entry.$2];
   }
 
   factory AgentPresentation.unstructured(String text) => AgentPresentation(
@@ -174,7 +205,7 @@ class AgentPresentation {
         return null;
       }
     }
-    return AgentPresentation(parts: parts);
+    return AgentPresentation(parts: ordered(parts));
   }
 
   /// A conclusion drawn from the parts themselves, for a reply that is one

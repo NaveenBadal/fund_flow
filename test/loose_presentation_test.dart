@@ -66,11 +66,40 @@ Spending summary.
     final conclusion = presentation!.parts.first;
     expect(conclusion.kind, AgentPartKind.conclusion);
     expect(conclusion.data['text'], contains('Spending fell'));
-    final comparison = presentation.parts
-        .singleWhere((part) => part.kind == AgentPartKind.comparison);
+    final comparison = presentation.parts.singleWhere(
+      (part) => part.kind == AgentPartKind.comparison,
+    );
     // The promoted detail must not be shown twice.
     expect(comparison.data.containsKey('detail'), isFalse);
     expect(comparison.data['currentMinor'], 12789027);
+  });
+
+  test('the conclusion leads however the provider ordered the parts', () {
+    // Observed live: the breakdown and its total came first and the sentence
+    // explaining them sat under the provenance note.
+    final presentation = AgentPresentation.fromComposeArguments({
+      'parts': [
+        {
+          'type': 'breakdown',
+          'title': 'By category',
+          'rows': [
+            {'label': 'Bills', 'amountMinor': 100, 'currency': 'INR'},
+          ],
+        },
+        {
+          'type': 'followUps',
+          'questions': ['Show the transactions'],
+        },
+        {'type': 'sourceNote', 'text': 'Local records only.'},
+        {'type': 'conclusion', 'text': 'July spending totals ₹36,549.93.'},
+      ],
+    });
+    expect(presentation.parts.map((part) => part.kind), [
+      AgentPartKind.conclusion,
+      AgentPartKind.breakdown,
+      AgentPartKind.sourceNote,
+      AgentPartKind.followUps,
+    ]);
   });
 
   test('returns null for ordinary prose with no parts', () {
