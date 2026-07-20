@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../domain/finance_summary.dart';
 import '../domain/conversation.dart';
+import '../domain/insight_engine.dart';
 import '../domain/money_format.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
@@ -669,44 +670,32 @@ class LocalMcpServer {
     }, summary: 'Checked transactions for unusual amounts');
   }
 
-  List<Map<String, Object?>> _anomalyRows(List<MoneyTransaction> values) {
-    final groups = <String, List<MoneyTransaction>>{};
-    for (final item in values) {
-      final key = [
-        item.merchant.toLowerCase(),
-        item.currency,
-        item.direction.name,
-      ].join('|');
-      groups.putIfAbsent(key, () => []).add(item);
-    }
-    final rows = <Map<String, Object?>>[];
-    for (final group in groups.values.where((items) => items.length >= 3)) {
-      final amounts = group.map((item) => item.amountMinor).toList()..sort();
-      final median = amounts[amounts.length ~/ 2];
-      if (median <= 0) continue;
-      for (final item in group.where(
-        (value) => value.amountMinor >= median * 2,
-      )) {
-        rows.add({
-          'transactionId': item.id,
-          'merchant': item.merchant,
-          'amountMinor': item.amountMinor,
-          'amountDisplay': formatMoney(item.amountMinor, item.currency),
-          'medianMinor': median,
-          'medianDisplay': formatMoney(median, item.currency),
-          'multiple': item.amountMinor / median,
-          'currency': item.currency,
-          'direction': item.direction.name,
-          'occurredAt': item.occurredAt.toIso8601String(),
-          'sampleSize': group.length,
-        });
-      }
-    }
-    rows.sort(
-      (a, b) => (b['multiple'] as double).compareTo(a['multiple'] as double),
-    );
-    return rows;
-  }
+  /// The engine's findings in the shape the model reads.
+  ///
+  /// The rule itself lives in [InsightEngine] so the home screen and the
+  /// agent cannot disagree about what counts as unusual.
+  List<Map<String, Object?>> _anomalyRows(List<MoneyTransaction> values) => [
+    for (final finding in InsightEngine.anomalies(values))
+      {
+        'transactionId': finding.transaction.id,
+        'merchant': finding.transaction.merchant,
+        'amountMinor': finding.transaction.amountMinor,
+        'amountDisplay': formatMoney(
+          finding.transaction.amountMinor,
+          finding.transaction.currency,
+        ),
+        'medianMinor': finding.medianMinor,
+        'medianDisplay': formatMoney(
+          finding.medianMinor,
+          finding.transaction.currency,
+        ),
+        'multiple': finding.multiple,
+        'currency': finding.transaction.currency,
+        'direction': finding.transaction.direction.name,
+        'occurredAt': finding.transaction.occurredAt.toIso8601String(),
+        'sampleSize': finding.sampleSize,
+      },
+  ];
 
   McpExecution _duplicates(McpToolCall call) {
     final values = _filtered(call.arguments, requirePeriod: true);
@@ -726,42 +715,21 @@ class LocalMcpServer {
     }, summary: 'Checked transactions for possible duplicates');
   }
 
-  List<Map<String, Object?>> _duplicateRows(List<MoneyTransaction> values) {
-    final groups = <String, List<MoneyTransaction>>{};
-    for (final item in values) {
-      final key = [
-        item.merchant.trim().toLowerCase(),
-        item.amountMinor,
-        item.currency,
-        item.direction.name,
-      ].join('|');
-      groups.putIfAbsent(key, () => []).add(item);
-    }
-    final rows = <Map<String, Object?>>[];
-    for (final group in groups.values) {
-      group.sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
-      for (var index = 1; index < group.length; index++) {
-        final previous = group[index - 1];
-        final current = group[index];
-        final gap = current.occurredAt.difference(previous.occurredAt);
-        if (gap <= const Duration(hours: 48)) {
-          rows.add({
-            'merchant': current.merchant,
-            'amountMinor': current.amountMinor,
-            'amountDisplay': formatMoney(current.amountMinor, current.currency),
-            'currency': current.currency,
-            'direction': current.direction.name,
-            'transactionIds': [previous.id, current.id],
-            'minutesApart': gap.inMinutes,
-          });
-        }
-      }
-    }
-    rows.sort(
-      (a, b) => (a['minutesApart'] as int).compareTo(b['minutesApart'] as int),
-    );
-    return rows;
-  }
+  List<Map<String, Object?>> _duplicateRows(List<MoneyTransaction> values) => [
+    for (final finding in InsightEngine.duplicates(values))
+      {
+        'merchant': finding.later.merchant,
+        'amountMinor': finding.later.amountMinor,
+        'amountDisplay': formatMoney(
+          finding.later.amountMinor,
+          finding.later.currency,
+        ),
+        'currency': finding.later.currency,
+        'direction': finding.later.direction.name,
+        'transactionIds': [finding.earlier.id, finding.later.id],
+        'minutesApart': finding.apart.inMinutes,
+      },
+  ];
 
   McpExecution _categories(McpToolCall call) {
     final counts = <String, int>{};

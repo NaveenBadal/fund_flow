@@ -43,10 +43,22 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       today: TodayScreen(
         onReview: () => setState(() => _destination = FlowDestination.review),
         onOpenSettings: _openSettings,
+        onAsk: _askInChat,
       ),
       activity: const ActivityScreen(),
       review: const ReviewScreen(),
     );
+  }
+
+  /// Opens the conversation already asking [question].
+  ///
+  /// What Today notices is deliberately shallow — it states the finding and
+  /// nothing more — so the card hands straight to the agent for the why
+  /// rather than making someone retype what they just tapped.
+  Future<void> _askInChat(String question) async {
+    final chat = _openChat();
+    await ref.read(appControllerProvider.notifier).ask(question);
+    await chat;
   }
 
   /// Chat opens over whatever is on screen and returns to it. Conversation is

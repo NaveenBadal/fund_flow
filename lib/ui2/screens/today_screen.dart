@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_controller.dart';
 import '../../domain/transaction.dart';
+import '../../domain/insight_engine.dart';
 import '../../domain/money_format.dart';
 import '../charts/flow_charts.dart';
 import '../tokens/flow_metrics.dart';
@@ -21,10 +22,15 @@ class TodayScreen extends ConsumerWidget {
     super.key,
     required this.onReview,
     required this.onOpenSettings,
+    required this.onAsk,
   });
 
   final VoidCallback onReview;
   final VoidCallback onOpenSettings;
+
+  /// Opens the conversation on a question, so a noticed thing can be
+  /// explained by the agent rather than dead-ending on the card.
+  final ValueChanged<String> onAsk;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +41,10 @@ class TodayScreen extends ConsumerWidget {
     final review = app.transactions
         .where((item) => item.reviewState == ReviewState.needsReview)
         .length;
+    // Deterministic, so this costs a pass over the ledger rather than a
+    // model round trip: the screen can say something useful in its first
+    // frame instead of waiting to be asked.
+    final noticed = InsightEngine.insights(app.transactions, DateTime.now());
 
     return CustomScrollView(
       slivers: [
@@ -136,6 +146,37 @@ class TodayScreen extends ConsumerWidget {
               ),
             ),
 
+          // Below the review backlog, which asks something of the person, and
+          // above the breakdowns, which only describe. This is the screen
+          // speaking first rather than waiting for a question.
+          if (noticed.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  FlowSpace.xl,
+                  FlowSpace.xl,
+                  FlowSpace.xl,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'What I noticed',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: FlowSpace.sm),
+                    for (final insight in noticed)
+                      _InsightCard(
+                        insight: insight,
+                        hidden: hidden,
+                        onTap: () => onAsk(insight.question),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
           if (summary.categories.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -218,6 +259,100 @@ class TodayScreen extends ConsumerWidget {
     < 17 => 'Good afternoon',
     _ => 'Good evening',
   };
+}
+
+/// Something the app noticed without being asked.
+///
+/// Tapping hands the finding to the agent, which is the part that can
+/// actually explain it — the card states what, the conversation answers why.
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({
+    required this.insight,
+    required this.hidden,
+    required this.onTap,
+  });
+
+  final Insight insight;
+  final bool hidden;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final flow = context.flow;
+    final tone = switch (insight.kind) {
+      InsightKind.duplicate => flow.attention,
+      InsightKind.anomaly => flow.attention,
+      InsightKind.pace => flow.accent,
+    };
+    final icon = switch (insight.kind) {
+      InsightKind.duplicate => Icons.copy_all_rounded,
+      InsightKind.anomaly => Icons.trending_up_rounded,
+      InsightKind.pace => Icons.speed_rounded,
+    };
+    return Semantics(
+      button: true,
+      label: '${insight.title}. ${insight.detail}',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: FlowRadius.md,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: FlowSpace.sm),
+          padding: const EdgeInsets.all(FlowSpace.lg),
+          decoration: BoxDecoration(
+            color: flow.raised,
+            borderRadius: FlowRadius.md,
+            border: Border.all(color: flow.line),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: tone),
+              const SizedBox(width: FlowSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      insight.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      insight.detail,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: FlowSpace.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatMoney(
+                      insight.amountMinor,
+                      insight.currency,
+                      hidden: hidden,
+                    ),
+                    style: FlowType.amountRow.copyWith(color: flow.ink),
+                  ),
+                  const SizedBox(height: 2),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
+                    color: flow.inkFaint,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Prompts the one job that needs a person.
