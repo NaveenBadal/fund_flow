@@ -79,7 +79,7 @@ void main() {
 
     // The point of the section: this is on screen before anyone asks
     // anything, with no network involved.
-    expect(find.text('What I noticed'), findsOneWidget);
+    expect(find.text('WHAT I NOTICED'), findsOneWidget);
     expect(find.textContaining('charged twice'), findsWidgets);
   });
 
@@ -112,7 +112,7 @@ void main() {
       ]),
     );
     await tester.pumpAndSettle();
-    expect(find.text('What I noticed'), findsNothing);
+    expect(find.text('WHAT I NOTICED'), findsNothing);
   });
 
   testWidgets('sheet content lifts clear of an open keyboard', (tester) async {
