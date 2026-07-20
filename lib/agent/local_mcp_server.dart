@@ -540,11 +540,10 @@ class LocalMcpServer {
             ),
           },
       ],
-      'evidenceTransactionIds': [...currentValues, ...baselineValues]
-          .map((item) => item.id)
-          .whereType<int>()
-          .take(500)
-          .toList(),
+      'evidenceTransactionIds': [
+        ...currentValues,
+        ...baselineValues,
+      ].map((item) => item.id).whereType<int>().take(500).toList(),
       if (currencies.isEmpty) ..._emptyPeriodHint(const []),
     });
   }
@@ -601,10 +600,7 @@ class LocalMcpServer {
                   'label': group.key,
                   'currency': currency.key,
                   'amountMinor': currency.value.$1,
-                  'amountDisplay': formatMoney(
-                    currency.value.$1,
-                    currency.key,
-                  ),
+                  'amountDisplay': formatMoney(currency.value.$1, currency.key),
                   'count': currency.value.$2,
                 },
           ]..sort(
@@ -734,10 +730,7 @@ class LocalMcpServer {
           rows.add({
             'merchant': current.merchant,
             'amountMinor': current.amountMinor,
-            'amountDisplay': formatMoney(
-              current.amountMinor,
-              current.currency,
-            ),
+            'amountDisplay': formatMoney(current.amountMinor, current.currency),
             'currency': current.currency,
             'direction': current.direction.name,
             'transactionIds': [previous.id, current.id],
@@ -870,6 +863,10 @@ class LocalMcpServer {
       AgentProposalKind.setMemory => 'Save a financial memory',
       AgentProposalKind.deleteMemory => 'Delete a financial memory',
     };
+    final reversible = kind != AgentProposalKind.clearConversation;
+    final requiresAuthentication =
+        kind == AgentProposalKind.setAppLock &&
+        call.arguments['enabled'] == true;
     final proposal = AgentProposal(
       kind: kind,
       title: title,
@@ -878,11 +875,19 @@ class LocalMcpServer {
       arguments: call.arguments,
       affectedIds: ids,
       createdAt: now,
-      expiresAt: now.add(const Duration(minutes: 10)),
-      requiresAuthentication:
-          kind == AgentProposalKind.setAppLock &&
-          call.arguments['enabled'] == true,
-      reversible: kind != AgentProposalKind.clearConversation,
+      // Expiry is not the safety net — approval re-checks that the affected
+      // records still look as described and refuses a stale change. So a
+      // reversible local edit can wait as long as the person needs; leaving
+      // to make tea and coming back should not silently void the card.
+      // Changes that cannot be undone or that gate the app keep a short
+      // window, where an unattended screen is the risk being guarded.
+      expiresAt: now.add(
+        reversible && !requiresAuthentication
+            ? const Duration(hours: 24)
+            : const Duration(minutes: 10),
+      ),
+      requiresAuthentication: requiresAuthentication,
+      reversible: reversible,
     );
     return McpExecution(
       proposal: proposal,

@@ -236,6 +236,33 @@ void main() {
     expect(execution.result.content['status'], 'approval_required');
   });
 
+  test('a reversible proposal waits for the person, not a stopwatch', () async {
+    final memory = await server.execute(
+      const McpToolCall(
+        id: 'mem',
+        name: 'memory_set',
+        arguments: {'key': 'monthly_rent', 'value': '25000 INR'},
+      ),
+    );
+    final window = memory.proposal!.expiresAt.difference(
+      memory.proposal!.createdAt,
+    );
+    expect(window, greaterThan(const Duration(hours: 1)));
+
+    // Clearing a conversation cannot be undone, so it keeps a short window.
+    final clear = await server.execute(
+      const McpToolCall(
+        id: 'clear',
+        name: 'conversation_clear',
+        arguments: {},
+      ),
+    );
+    expect(
+      clear.proposal!.expiresAt.difference(clear.proposal!.createdAt),
+      lessThan(const Duration(hours: 1)),
+    );
+  });
+
   test('compose requires a conclusion and produces typed parts', () async {
     final execution = await server.execute(
       const McpToolCall(

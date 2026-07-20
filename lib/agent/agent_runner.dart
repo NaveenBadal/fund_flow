@@ -144,6 +144,7 @@ class AgentRunner {
           now: now,
           locale: locale,
           timeZone: timeZone,
+          memories: await _memories(),
         ),
       },
       ...history,
@@ -384,14 +385,50 @@ class AgentRunner {
     ],
   );
 
+  /// The approved facts, rendered for the contract.
+  ///
+  /// These were expensive to obtain — the person stated them and tapped
+  /// approve — and they are few. Leaving the agent to discover them through a
+  /// capability call meant it never did: asked "what is my rent", it searched
+  /// the ledger for a rent merchant, found none, and answered that it did not
+  /// know, with the answer sitting in local storage the whole time. Carrying
+  /// them in the contract makes recall unconditional.
+  Future<String> _memories() async {
+    final execution = await _server.execute(
+      const McpToolCall(id: 'memory', name: 'memory_list', arguments: {}),
+    );
+    final facts = execution.result.content['facts'];
+    if (facts is! List || facts.isEmpty) return '';
+    final lines = facts
+        .whereType<Map>()
+        .map((fact) {
+          final key = fact['key']?.toString().trim();
+          final value = fact['value']?.toString().trim();
+          if (key == null || key.isEmpty || value == null || value.isEmpty) {
+            return null;
+          }
+          return '- $key: $value';
+        })
+        .whereType<String>()
+        .toList();
+    if (lines.isEmpty) return '';
+    return '''
+
+Facts this person approved you to remember, authoritative for questions about them and never to be contradicted by a ledger search that simply found no matching transaction:
+${lines.join('\n')}
+''';
+  }
+
   String _systemContract({
     required DateTime now,
     required String locale,
     required String timeZone,
+    String memories = '',
   }) =>
       '''You are Fund Flow, a careful and highly capable personal money agent.
 Current local time: ${now.toIso8601String()}; locale: $locale; time zone: $timeZone.
 
+$memories
 That timestamp is the sole authority for today's date. Never derive "this month", "last week" or any relative period from your own sense of the current date; compute every date range from the timestamp above.
 
 When a question implies no explicit period — "overall", "complete", "briefing", "how am I doing" — query the last 90 days ending today. If a capability returns zero matches together with a ledgerCoverage range, you MUST immediately re-query using that range; never tell the person no data exists while ledgerCoverage shows records.
@@ -400,9 +437,9 @@ Use only the supplied capabilities for facts about transactions, totals, setting
 
 Only the latest conversation turns are included to keep responses fast. If the person refers to older discussion that is not present, use conversation_search instead of guessing.
 
-Durable financial memory is user-controlled. Use memory_list when an approved alias or fact could resolve ambiguity. Call memory_set or memory_delete only when the person explicitly asks to remember, replace, forget or delete a fact; these are approval proposals. Never silently infer memory from conversation, transactions, SMS text or provider reasoning.
+Durable financial memory is user-controlled. Every approved fact is already listed above, so answer questions about the person from that list rather than searching the ledger for it; call memory_list only to re-read the list in full. Call memory_set or memory_delete only when the person explicitly asks to remember, replace, forget or delete a fact; these are approval proposals. Never silently infer memory from conversation, transactions, SMS text or provider reasoning.
 
-Use read capabilities freely. When the person clearly requests a change, call exactly one proposal capability with the smallest possible scope. A proposal does not execute the change. Never claim it was applied.
+Use read capabilities freely. When the person clearly requests a change, call exactly one proposal capability with the smallest possible scope. A proposal does not execute the change. Never claim it was applied. Your answer should say what the change would do in concrete terms — which fact, which value, which records — and never narrate the approval mechanics; the app already shows the approval card, and that sentence stays in the thread reading as pending long after the person has decided.
 
 For a broad financial overview, prefer finance_briefing because it calculates totals, leading groups, review items, anomalies and duplicate candidates in one local pass. Use finance_anomalies and finance_duplicates for focused questions; describe their deterministic method and never present candidates as proven fraud or proven duplicates. Call independent read capabilities together in one response when the provider supports parallel tool calls.
 

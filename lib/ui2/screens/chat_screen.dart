@@ -196,6 +196,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               explanation: proposal.explanation,
                               reversible: proposal.reversible,
                               locked: proposal.requiresAuthentication,
+                              expiresAt: proposal.expiresAt,
                               onApprove: () => ref
                                   .read(appControllerProvider.notifier)
                                   .approveAgentProposal(),
@@ -540,6 +541,7 @@ class _ApprovalCard extends StatelessWidget {
     required this.explanation,
     required this.reversible,
     required this.locked,
+    required this.expiresAt,
     required this.onApprove,
     required this.onReject,
   });
@@ -548,12 +550,16 @@ class _ApprovalCard extends StatelessWidget {
   final String explanation;
   final bool reversible;
   final bool locked;
+  final DateTime expiresAt;
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
   @override
   Widget build(BuildContext context) {
     final flow = context.flow;
+    // An expired proposal cannot be applied, so offering Approve only earns
+    // the person a tap and a refusal.
+    final expired = !DateTime.now().isBefore(expiresAt);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: FlowSpace.lg),
@@ -577,7 +583,7 @@ class _ApprovalCard extends StatelessWidget {
               ),
               const SizedBox(width: FlowSpace.sm),
               Text(
-                'Needs your approval',
+                expired ? 'This proposal expired' : 'Needs your approval',
                 style: Theme.of(
                   context,
                 ).textTheme.labelMedium?.copyWith(color: flow.accent),
@@ -593,7 +599,7 @@ class _ApprovalCard extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
           ),
-          if (reversible) ...[
+          if (reversible && !expired) ...[
             const SizedBox(height: FlowSpace.xs),
             Text(
               'This can be undone.',
@@ -618,27 +624,29 @@ class _ApprovalCard extends StatelessWidget {
                       borderRadius: FlowRadius.sm,
                     ),
                   ),
-                  child: const Text('Not now'),
+                  child: Text(expired ? 'Dismiss' : 'Not now'),
                 ),
               ),
-              const SizedBox(width: FlowSpace.md),
-              Expanded(
-                flex: 2,
-                child: FilledButton(
-                  onPressed: onApprove,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(
-                      FlowDensity.minimumTarget,
+              if (!expired) ...[
+                const SizedBox(width: FlowSpace.md),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: onApprove,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(
+                        FlowDensity.minimumTarget,
+                      ),
+                      backgroundColor: flow.accent,
+                      foregroundColor: flow.onAccent,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: FlowRadius.sm,
+                      ),
                     ),
-                    backgroundColor: flow.accent,
-                    foregroundColor: flow.onAccent,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: FlowRadius.sm,
-                    ),
+                    child: const Text('Approve'),
                   ),
-                  child: const Text('Approve'),
                 ),
-              ),
+              ],
             ],
           ),
         ],

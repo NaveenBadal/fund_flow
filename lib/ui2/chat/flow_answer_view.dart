@@ -843,8 +843,13 @@ class _ProposalSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // This is the answer's record of what was proposed, and it stays in
+          // the thread after the change is approved or declined. Only the
+          // live approval card below may speak about the pending decision:
+          // an answer still reading "nothing changes until you approve" an
+          // hour after the change was applied is a lie about the ledger.
           Text(
-            'Approval required',
+            'Proposed change',
             style: Theme.of(
               context,
             ).textTheme.labelMedium?.copyWith(color: flow.accent),
@@ -853,15 +858,6 @@ class _ProposalSummary extends StatelessWidget {
           Text(
             data['title']?.toString() ?? 'Review the proposed change',
             style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: FlowSpace.xs),
-          Text(
-            data['reversible'] == true
-                ? 'Nothing changes until you approve. This can be undone.'
-                : 'Nothing changes until you approve.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
           ),
         ],
       ),
