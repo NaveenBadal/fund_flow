@@ -76,10 +76,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       final status = next.value?.importStatus;
       if (status == null || status.phase == before) return;
       final text = switch (status.phase) {
-        ImportPhase.complete => status.imported > 0
-            ? 'Synced · ${status.imported} new'
-                  '${status.skipped > 0 ? ' · ${status.skipped} skipped' : ''}'
-            : 'Up to date · nothing new',
+        ImportPhase.complete =>
+          status.imported > 0
+              ? 'Synced · ${status.imported} new'
+                    '${status.skipped > 0 ? ' · ${status.skipped} skipped' : ''}'
+              : 'Up to date · nothing new',
         ImportPhase.providerDisconnected ||
         ImportPhase.rateLimited ||
         ImportPhase.error ||

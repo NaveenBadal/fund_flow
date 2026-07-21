@@ -46,8 +46,7 @@ class _EditorSheetState extends ConsumerState<_EditorSheet> {
   late TransactionDirection _direction =
       widget.transaction?.direction ?? TransactionDirection.outgoing;
   late String _category = widget.transaction?.category ?? 'Other';
-  late DateTime _occurredAt =
-      widget.transaction?.occurredAt ?? DateTime.now();
+  late DateTime _occurredAt = widget.transaction?.occurredAt ?? DateTime.now();
   String? _error;
 
   @override
@@ -97,9 +96,9 @@ class _EditorSheetState extends ConsumerState<_EditorSheet> {
                 // Carry the category across only when it belongs to both sides
                 // (Transfer, Other); otherwise fall back to the new side's
                 // default so a stale "Food" never rides onto money in.
-                if (!categoriesFor(value).any(
-                  (c) => c.toLowerCase() == _category.toLowerCase(),
-                )) {
+                if (!categoriesFor(
+                  value,
+                ).any((c) => c.toLowerCase() == _category.toLowerCase())) {
                   _category = defaultCategoryFor(value);
                 }
               }),
@@ -123,10 +122,7 @@ class _EditorSheetState extends ConsumerState<_EditorSheet> {
               hint: 'Who was this with?',
             ),
             const SizedBox(height: FlowSpace.md),
-            Text(
-              'When',
-              style: text.labelSmall?.copyWith(color: flow.inkSoft),
-            ),
+            Text('When', style: text.labelSmall?.copyWith(color: flow.inkSoft)),
             const SizedBox(height: FlowSpace.sm),
             _DateField(value: _occurredAt, onTap: _pickDate),
             const SizedBox(height: FlowSpace.md),
@@ -263,11 +259,7 @@ class _DateField extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.calendar_today_rounded,
-                size: 18,
-                color: flow.inkSoft,
-              ),
+              Icon(Icons.calendar_today_rounded, size: 18, color: flow.inkSoft),
               const SizedBox(width: FlowSpace.sm),
               Expanded(
                 child: Text(
@@ -275,11 +267,7 @@ class _DateField extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
-              Icon(
-                Icons.expand_more_rounded,
-                size: 20,
-                color: flow.inkFaint,
-              ),
+              Icon(Icons.expand_more_rounded, size: 20, color: flow.inkFaint),
             ],
           ),
         ),
