@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/app_state.dart';
 import '../../domain/transaction.dart';
+import '../flow_category_icon.dart';
 import '../sheets/transaction_editor_sheet.dart';
 import '../../domain/money_format.dart';
 import '../sheets/category_sheet.dart';
@@ -138,6 +140,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 ),
                 color: flow.inkSoft,
               ),
+              // Reading more messages without leaving the ledger. Only new
+              // messages are parsed — the importer dedups against what it has
+              // already seen — so this is cheap to tap repeatedly.
+              if (app.aiConnection == AiConnection.connected)
+                _SyncButton(
+                  working: app.importStatus.working,
+                  onSync: () => ref
+                      .read(appControllerProvider.notifier)
+                      .importMessages(),
+                ),
               IconButton(
                 tooltip: 'Add transaction',
                 onPressed: () => _edit(null),
@@ -945,6 +957,34 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
+/// Header action that reads more messages, spinning while it works.
+class _SyncButton extends StatelessWidget {
+  const _SyncButton({required this.working, required this.onSync});
+
+  final bool working;
+  final VoidCallback onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    final flow = context.flow;
+    return IconButton(
+      tooltip: working ? 'Reading messages…' : 'Sync messages',
+      onPressed: working ? null : onSync,
+      color: flow.inkSoft,
+      icon: working
+          ? SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: flow.accent,
+              ),
+            )
+          : const Icon(Icons.sync_rounded),
+    );
+  }
+}
+
 class _LedgerRow extends StatelessWidget {
   const _LedgerRow({
     required this.item,
@@ -1012,17 +1052,47 @@ class _LedgerRow extends StatelessWidget {
                   ),
                 )
               else
-                Container(
-                  width: 3,
-                  height: 26,
-                  margin: const EdgeInsets.only(right: FlowSpace.md),
-                  decoration: BoxDecoration(
-                    color: pending
-                        ? flow.attention
-                        : incoming
-                        ? flow.income
-                        : flow.line,
-                    borderRadius: FlowRadius.xs,
+                Padding(
+                  padding: const EdgeInsets.only(right: FlowSpace.md),
+                  // Money in is the exception worth marking, so it keeps a
+                  // dedicated avatar; everything else is identified by its
+                  // category. A pending row carries a small dot so "needs a
+                  // look" is visible without reading the subline.
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (incoming)
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: flow.income.withValues(alpha: .16),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.south_west_rounded,
+                            size: 19,
+                            color: flow.income,
+                          ),
+                        )
+                      else
+                        FlowCategoryAvatar(category: item.category),
+                      if (pending)
+                        Positioned(
+                          right: -1,
+                          top: -1,
+                          child: Container(
+                            width: 11,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              color: flow.attention,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: flow.canvas, width: 2),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               Expanded(

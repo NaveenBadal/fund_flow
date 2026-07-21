@@ -101,7 +101,38 @@ class AppController extends AsyncNotifier<AppState> {
     if (prefs.captureNotifications && !prefs.lockApp && key.isNotEmpty) {
       unawaited(Future<void>(() => _refreshPendingNotifications()));
     }
+    // Reading new messages on launch, unawaited so the UI paints first — the
+    // ledger is already in [initial] and fresh transactions stream in behind
+    // it. Rate-limited and permission-gated inside, so a relaunch seconds
+    // later does not re-scan or spend tokens.
+    if (!prefs.lockApp && key.isNotEmpty) {
+      unawaited(Future<void>(_maybeAutoSync));
+    }
     return initial;
+  }
+
+  /// How recently a sync must have run for launch to skip starting another.
+  static const _autoSyncCooldown = Duration(minutes: 30);
+
+  /// Starts a background message sync on launch unless one ran recently.
+  ///
+  /// Gated on message permission being already granted: launch is the wrong
+  /// moment to raise a permission dialog nobody asked for, so a first run
+  /// with no permission stays silent and the manual button or onboarding
+  /// prompts for it instead.
+  Future<void> _maybeAutoSync() async {
+    if (!state.hasValue || _value.locked) return;
+    if (_value.importStatus.working) return;
+    final source = ref.read(smsSourceProvider);
+    if (await source.permission(request: false) != MessagePermission.granted) {
+      return;
+    }
+    final runs = await ref.read(storeProvider).importRuns(limit: 1);
+    final last = runs.isEmpty ? null : runs.first.startedAt;
+    if (last != null && DateTime.now().difference(last) < _autoSyncCooldown) {
+      return;
+    }
+    await importMessages();
   }
 
   Future<void> _refreshPendingNotifications() async {
