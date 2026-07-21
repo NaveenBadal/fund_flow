@@ -283,12 +283,10 @@ class _MetricRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              value['label']?.toString() ?? 'Total',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+              (value['label']?.toString() ?? 'Total').toUpperCase(),
+              style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
             ),
-            const SizedBox(height: FlowSpace.xs),
+            const SizedBox(height: FlowSpace.sm),
             Row(
               children: [
                 Flexible(
@@ -297,7 +295,8 @@ class _MetricRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: FlowType.amountHero.copyWith(
-                      fontSize: 34,
+                      fontSize: 40,
+                      letterSpacing: -1.4,
                       color: flow.ink,
                     ),
                   ),
@@ -458,8 +457,8 @@ class _Breakdown extends StatelessWidget {
       children: [
         if (data['title'] != null) ...[
           Text(
-            data['title'].toString(),
-            style: Theme.of(context).textTheme.titleMedium,
+            data['title'].toString().toUpperCase(),
+            style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
           ),
           const SizedBox(height: FlowSpace.md),
         ],
