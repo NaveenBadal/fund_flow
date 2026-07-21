@@ -1,5 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../domain/ai_provider.dart';
 import '../domain/preferences.dart';
 
 class SecurePreferences {
@@ -13,6 +14,7 @@ class SecurePreferences {
   static const _lock = 'greenfield.lock';
   static const _lookback = 'greenfield.lookback';
   static const _capture = 'greenfield.capture';
+  static const _provider = 'greenfield.provider';
   static const _endpoint = 'greenfield.endpoint';
   static const _model = 'greenfield.model';
   static const _chatModel = 'greenfield.chat_model';
@@ -36,6 +38,7 @@ class SecurePreferences {
             maximumLookbackDays,
           ),
       captureNotifications: values[_capture] == 'true',
+      aiProvider: AiProvider.fromName(values[_provider]),
       aiEndpoint: values[_endpoint] ?? 'https://ollama.com',
       aiModel: switch (values[_model]) {
         null || 'gpt-oss:20b' => defaultParsingModel,
@@ -60,6 +63,7 @@ class SecurePreferences {
       _storage.write(key: _lock, value: '${value.lockApp}'),
       _storage.write(key: _lookback, value: '${value.messageLookbackDays}'),
       _storage.write(key: _capture, value: '${value.captureNotifications}'),
+      _storage.write(key: _provider, value: value.aiProvider.name),
       _storage.write(key: _endpoint, value: value.aiEndpoint),
       _storage.write(key: _model, value: value.aiModel),
       _storage.write(key: _chatModel, value: value.aiChatModel),

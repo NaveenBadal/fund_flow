@@ -2,23 +2,73 @@ import 'dart:convert';
 import 'dart:async';
 import '../agent/agent_runner.dart';
 import '../agent/mcp_protocol.dart';
+import '../domain/ai_provider.dart';
 import '../domain/transaction.dart';
 import '../ingestion/ai_message_ingestion.dart';
 import '../ingestion/message_candidate.dart';
 import 'package:http/http.dart' as http;
 
+import 'ai_failure.dart';
+import 'anthropic_adapter.dart';
+import 'gemini_adapter.dart';
+import 'openai_adapter.dart';
+
+export 'ai_failure.dart' show AiRequestFailure;
+
+/// Talks to whichever provider is configured, each through its own native
+/// wire. Ollama keeps its original `/api/chat` path; OpenAI and Sarvam share
+/// the chat-completions adapter; Claude and Gemini have native adapters.
 class AiClient {
   AiClient({http.Client? client}) : _client = client ?? http.Client();
   final http.Client _client;
 
-  Uri _uri(String endpoint) {
+  Uri _ollamaUri(String endpoint) {
     final base = endpoint.endsWith('/')
         ? endpoint.substring(0, endpoint.length - 1)
         : endpoint;
     return Uri.parse('$base/api/chat');
   }
 
+  String _base(String endpoint) => endpoint.endsWith('/')
+      ? endpoint.substring(0, endpoint.length - 1)
+      : endpoint;
+
   Future<bool> validate({
+    required AiProvider provider,
+    required String endpoint,
+    required String apiKey,
+    required String model,
+  }) async {
+    final base = _base(endpoint);
+    switch (providerInfo(provider).wire) {
+      case AiWireKind.openai:
+        return OpenAiAdapter(
+          _client,
+          base: base,
+          apiKey: apiKey,
+        ).validate(model);
+      case AiWireKind.anthropic:
+        return AnthropicAdapter(
+          _client,
+          base: base,
+          apiKey: apiKey,
+        ).validate(model);
+      case AiWireKind.gemini:
+        return GeminiAdapter(
+          _client,
+          base: base,
+          apiKey: apiKey,
+        ).validate(model);
+      case AiWireKind.ollamaNative:
+        return _ollamaValidate(
+          endpoint: endpoint,
+          apiKey: apiKey,
+          model: model,
+        );
+    }
+  }
+
+  Future<bool> _ollamaValidate({
     required String endpoint,
     required String apiKey,
     required String model,
@@ -26,7 +76,7 @@ class AiClient {
     try {
       final response = await _client
           .post(
-            _uri(endpoint),
+            _ollamaUri(endpoint),
             headers: {
               'Authorization': 'Bearer $apiKey',
               'Content-Type': 'application/json',
@@ -47,17 +97,42 @@ class AiClient {
   }
 
   AgentProvider configured({
+    required AiProvider provider,
     required String endpoint,
     required String apiKey,
     required String model,
-  }) => _ConfiguredAiProvider(
-    client: _client,
-    uri: _uri(endpoint),
-    apiKey: apiKey,
-    model: model,
-  );
+  }) {
+    final base = _base(endpoint);
+    return switch (providerInfo(provider).wire) {
+      AiWireKind.openai => OpenAiAgentProvider(
+        client: _client,
+        base: base,
+        apiKey: apiKey,
+        model: model,
+      ),
+      AiWireKind.anthropic => AnthropicAgentProvider(
+        client: _client,
+        base: base,
+        apiKey: apiKey,
+        model: model,
+      ),
+      AiWireKind.gemini => GeminiAgentProvider(
+        client: _client,
+        base: base,
+        apiKey: apiKey,
+        model: model,
+      ),
+      AiWireKind.ollamaNative => _OllamaAiProvider(
+        client: _client,
+        uri: _ollamaUri(endpoint),
+        apiKey: apiKey,
+        model: model,
+      ),
+    };
+  }
 
   Future<AiIngestionBatch> analyzeMessages({
+    required AiProvider provider,
     required String endpoint,
     required String apiKey,
     required String model,
@@ -67,109 +142,62 @@ class AiClient {
     void Function(String requestJson)? onRequest,
     void Function(String responseJson)? onResponse,
   }) async {
+    final base = _base(endpoint);
+    final wire = providerInfo(provider).wire;
+    final budget = _outputBudget(candidates.length);
     final baseMessages = <Map<String, Object?>>[
       {'role': 'system', 'content': IngestionPrompt.system(now)},
       {'role': 'user', 'content': IngestionPrompt.user(candidates)},
     ];
+
     Future<String> send(List<Map<String, Object?>> messages) async {
-      final requestBody = jsonEncode({
-        'model': model,
-        'stream': false,
-        // Sent for providers that enforce it. Measured against Ollama Cloud
-        // with gpt-oss it changes nothing: output is byte-identical with and
-        // without it, so the system prompt is what actually holds the shape
-        // and the recovery path below is not redundant.
-        'format': IngestionPrompt.responseSchema,
-        // Low, never false. Disabling reasoning on this model does not
-        // shorten it: measured, "false" produced roughly 5,500 characters of
-        // reasoning against 190 for "low", exhausting the output budget
-        // before any content was emitted, so every batch came back empty.
-        'think': 'low',
-        'keep_alive': '10m',
-        'options': {
-          'temperature': 0,
-          // Twelve messages measured at about 780 output tokens. The floor
-          // keeps headroom for a verbose reasoning run on a small batch,
-          // where an exhausted budget yields empty content rather than a
-          // short answer.
-          'num_predict': _outputBudget(candidates.length),
-        },
-        'messages': messages,
-      });
-      http.Response? response;
-      Object? lastError;
-      for (var attempt = 0; attempt < 3; attempt++) {
-        onRequest?.call(requestBody);
-        try {
-          response = await _client
-              .post(
-                _uri(endpoint),
-                headers: {
-                  'Authorization': 'Bearer $apiKey',
-                  'Content-Type': 'application/json',
-                },
-                body: requestBody,
-              )
-              .timeout(const Duration(seconds: 60));
-          onResponse?.call(response.body);
-          final retryable =
-              response.statusCode == 429 ||
-              response.statusCode == 502 ||
-              response.statusCode == 503 ||
-              response.statusCode >= 500;
-          if (!retryable) break;
-          lastError = AiRequestFailure(response.statusCode);
-        } catch (error) {
-          lastError = error;
-        }
-        if (attempt < 2) {
-          await Future<void>.delayed(Duration(milliseconds: 300 << attempt));
-        }
-      }
-      if (response == null ||
-          response.statusCode < 200 ||
-          response.statusCode >= 300) {
-        throw lastError ?? AiRequestFailure(response?.statusCode ?? 0);
-      }
-      try {
-        final decoded = jsonDecode(response.body);
-        String? content;
-        if (decoded is Map) {
-          final message = decoded['message'];
-          if (message is Map) content = message['content']?.toString();
-          final choices = decoded['choices'];
-          if (content == null && choices is List && choices.isNotEmpty) {
-            final choice = choices.first;
-            if (choice is Map && choice['message'] is Map) {
-              content = (choice['message'] as Map)['content']?.toString();
-            }
-          }
-        }
-        if (content == null || content.trim().isEmpty) {
-          // An empty content field alongside a populated thinking field means
-          // reasoning consumed the whole output budget. Saying so points at
-          // the setting that fixes it instead of implying the messages were
-          // unclassifiable.
-          final reasoned =
-              decoded is Map &&
-              decoded['message'] is Map &&
-              ((decoded['message'] as Map)['thinking']?.toString() ?? '')
-                  .trim()
-                  .isNotEmpty;
-          throw IngestionSchemaException(
-            reasoned
-                ? 'The provider spent its whole response on reasoning and '
-                      'returned no classifications. Try a smaller batch.'
-                : 'The provider returned no classifications.',
+      switch (wire) {
+        case AiWireKind.openai:
+          return OpenAiAdapter(
+            _client,
+            base: base,
+            apiKey: apiKey,
+          ).completeJson(
+            model: model,
+            messages: messages,
+            maxTokens: budget,
+            onRequest: onRequest,
+            onResponse: onResponse,
           );
-        }
-        return content;
-      } on IngestionSchemaException {
-        rethrow;
-      } on FormatException {
-        throw const IngestionSchemaException(
-          'The provider response envelope was not valid JSON.',
-        );
+        case AiWireKind.anthropic:
+          return AnthropicAdapter(
+            _client,
+            base: base,
+            apiKey: apiKey,
+          ).completeJson(
+            model: model,
+            messages: messages,
+            maxTokens: budget,
+            onRequest: onRequest,
+            onResponse: onResponse,
+          );
+        case AiWireKind.gemini:
+          return GeminiAdapter(
+            _client,
+            base: base,
+            apiKey: apiKey,
+          ).completeJson(
+            model: model,
+            messages: messages,
+            maxTokens: budget,
+            onRequest: onRequest,
+            onResponse: onResponse,
+          );
+        case AiWireKind.ollamaNative:
+          return _ollamaComplete(
+            endpoint: endpoint,
+            apiKey: apiKey,
+            model: model,
+            messages: messages,
+            budget: budget,
+            onRequest: onRequest,
+            onResponse: onResponse,
+          );
       }
     }
 
@@ -206,11 +234,105 @@ class AiClient {
     }
   }
 
+  /// One Ollama `/api/chat` structured completion, returning the assistant
+  /// text. Kept as the original device-verified request shape.
+  Future<String> _ollamaComplete({
+    required String endpoint,
+    required String apiKey,
+    required String model,
+    required List<Map<String, Object?>> messages,
+    required int budget,
+    void Function(String requestJson)? onRequest,
+    void Function(String responseJson)? onResponse,
+  }) async {
+    final requestBody = jsonEncode({
+      'model': model,
+      'stream': false,
+      'format': IngestionPrompt.responseSchema,
+      'think': 'low',
+      'keep_alive': '10m',
+      'options': {'temperature': 0, 'num_predict': budget},
+      'messages': messages,
+    });
+    http.Response? response;
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      onRequest?.call(requestBody);
+      try {
+        response = await _client
+            .post(
+              _ollamaUri(endpoint),
+              headers: {
+                'Authorization': 'Bearer $apiKey',
+                'Content-Type': 'application/json',
+              },
+              body: requestBody,
+            )
+            .timeout(const Duration(seconds: 60));
+        onResponse?.call(response.body);
+        final retryable =
+            response.statusCode == 429 ||
+            response.statusCode == 502 ||
+            response.statusCode == 503 ||
+            response.statusCode >= 500;
+        if (!retryable) break;
+        lastError = AiRequestFailure(response.statusCode);
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 300 << attempt));
+      }
+    }
+    if (response == null ||
+        response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      throw lastError ?? AiRequestFailure(response?.statusCode ?? 0);
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      String? content;
+      if (decoded is Map) {
+        final message = decoded['message'];
+        if (message is Map) content = message['content']?.toString();
+        final choices = decoded['choices'];
+        if (content == null && choices is List && choices.isNotEmpty) {
+          final choice = choices.first;
+          if (choice is Map && choice['message'] is Map) {
+            content = (choice['message'] as Map)['content']?.toString();
+          }
+        }
+      }
+      if (content == null || content.trim().isEmpty) {
+        final reasoned =
+            decoded is Map &&
+            decoded['message'] is Map &&
+            ((decoded['message'] as Map)['thinking']?.toString() ?? '')
+                .trim()
+                .isNotEmpty;
+        throw IngestionSchemaException(
+          reasoned
+              ? 'The provider spent its whole response on reasoning and '
+                    'returned no classifications. Try a smaller batch.'
+              : 'The provider returned no classifications.',
+        );
+      }
+      return content;
+    } on IngestionSchemaException {
+      rethrow;
+    } on FormatException {
+      throw const IngestionSchemaException(
+        'The provider response envelope was not valid JSON.',
+      );
+    }
+  }
+
   void close() => _client.close();
 }
 
-class _ConfiguredAiProvider implements AgentProvider {
-  const _ConfiguredAiProvider({
+/// Ollama's native `/api/chat` NDJSON streaming agent turn.
+class _OllamaAiProvider implements AgentProvider {
+  const _OllamaAiProvider({
     required http.Client client,
     required Uri uri,
     required String apiKey,
@@ -240,9 +362,6 @@ class _ConfiguredAiProvider implements AgentProvider {
       ..body = jsonEncode({
         'model': _model,
         'stream': true,
-        // The agent loop genuinely plans: it picks tools, sequences them and
-        // decides when it has enough evidence. Low effort keeps first-token
-        // latency down while retaining that planning.
         'think': 'low',
         'keep_alive': '10m',
         'options': {'temperature': 0, 'num_predict': 1200},
@@ -253,9 +372,6 @@ class _ConfiguredAiProvider implements AgentProvider {
         .send(request)
         .timeout(const Duration(seconds: 45));
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      // Read rather than drain: the body carries the reason. A retired model
-      // answers 410 with the name and retirement date, which is the whole
-      // explanation, and discarding it left only a status code to report.
       final body = await streamed.stream.bytesToString();
       throw AiRequestFailure(streamed.statusCode, _providerError(body));
     }
@@ -370,24 +486,13 @@ class _ConfiguredAiProvider implements AgentProvider {
   }
 }
 
-class AiRequestFailure implements Exception {
-  const AiRequestFailure(this.statusCode, [this.detail]);
-  final int statusCode;
-
-  /// What the provider said went wrong, when it said anything.
-  final String? detail;
-
-  @override
-  String toString() => detail == null ? 'Provider error $statusCode.' : detail!;
-}
-
 /// Output token budget for a batch of [messageCount] messages.
 int _outputBudget(int messageCount) {
   final scaled = 200 * messageCount + 512;
   return scaled < 1024 ? 1024 : scaled;
 }
 
-/// Extracts the human-readable reason from a provider error body.
+/// Extracts the human-readable reason from an Ollama error body.
 String? _providerError(String body) {
   final text = body.trim();
   if (text.isEmpty) return null;

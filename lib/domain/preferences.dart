@@ -1,3 +1,5 @@
+import 'ai_provider.dart';
+
 enum AppearancePreference { system, light, dark }
 
 /// Ceiling for historical message scanning. Kept deliberately small: real
@@ -45,6 +47,7 @@ class AppPreferences {
     this.lockApp = false,
     this.messageLookbackDays = maximumLookbackDays,
     this.captureNotifications = false,
+    this.aiProvider = AiProvider.ollama,
     this.aiEndpoint = 'https://ollama.com',
     this.aiModel = defaultParsingModel,
     this.aiChatModel = defaultChatModel,
@@ -56,6 +59,11 @@ class AppPreferences {
   final bool lockApp;
   final int messageLookbackDays;
   final bool captureNotifications;
+
+  /// Which provider the agent and extraction talk to.
+  final AiProvider aiProvider;
+
+  /// The provider's wire base URL (paths are appended by the adapter).
   final String aiEndpoint;
 
   /// Model used for structured SMS extraction.
@@ -72,6 +80,7 @@ class AppPreferences {
     bool? lockApp,
     int? messageLookbackDays,
     bool? captureNotifications,
+    AiProvider? aiProvider,
     String? aiEndpoint,
     String? aiModel,
     String? aiChatModel,
@@ -84,6 +93,7 @@ class AppPreferences {
     messageLookbackDays: (messageLookbackDays ?? this.messageLookbackDays)
         .clamp(minimumLookbackDays, maximumLookbackDays),
     captureNotifications: captureNotifications ?? this.captureNotifications,
+    aiProvider: aiProvider ?? this.aiProvider,
     aiEndpoint: aiEndpoint ?? this.aiEndpoint,
     aiModel: aiModel ?? this.aiModel,
     aiChatModel: aiChatModel ?? this.aiChatModel,

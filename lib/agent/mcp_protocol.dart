@@ -85,6 +85,9 @@ class McpToolResult {
 
   Map<String, Object?> toProviderMessage() => {
     'role': 'tool',
+    // Canonical history carries both: Ollama reads tool_name, OpenAI reads
+    // tool_call_id, and the Claude/Gemini adapters translate from these.
+    'tool_call_id': callId,
     'tool_name': tool,
     'content': _encodeWithinBudget({'ok': !isError, ...content}),
   };

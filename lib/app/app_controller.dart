@@ -12,6 +12,7 @@ import '../agent/local_mcp_server.dart';
 import '../data/secure_preferences.dart';
 import '../domain/conversation.dart';
 import '../domain/import_audit.dart';
+import '../domain/ai_provider.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
 import '../ingestion/ai_message_ingestion.dart';
@@ -262,6 +263,7 @@ class AppController extends AsyncNotifier<AppState> {
                 analysis = await ref
                     .read(aiClientProvider)
                     .analyzeMessages(
+                      provider: preferences.aiProvider,
                       endpoint: preferences.aiEndpoint,
                       apiKey: apiKey,
                       model: preferences.aiModel,
@@ -379,6 +381,7 @@ class AppController extends AsyncNotifier<AppState> {
   }
 
   Future<bool> connectAi({
+    required AiProvider provider,
     required String key,
     required String endpoint,
     required String model,
@@ -389,7 +392,12 @@ class AppController extends AsyncNotifier<AppState> {
     );
     final valid = await ref
         .read(aiClientProvider)
-        .validate(endpoint: endpoint, apiKey: key, model: model);
+        .validate(
+          provider: provider,
+          endpoint: endpoint,
+          apiKey: key,
+          model: model,
+        );
     if (!valid) {
       state = AsyncData(
         _value.copyWith(
@@ -402,6 +410,7 @@ class AppController extends AsyncNotifier<AppState> {
     }
     await ref.read(securePreferencesProvider).writeApiKey(key);
     final prefs = _value.preferences.copyWith(
+      aiProvider: provider,
       aiEndpoint: endpoint,
       aiModel: model,
       aiChatModel: chatModel,
@@ -672,6 +681,7 @@ class AppController extends AsyncNotifier<AppState> {
                 analysis = await ref
                     .read(aiClientProvider)
                     .analyzeMessages(
+                      provider: _value.preferences.aiProvider,
                       endpoint: _value.preferences.aiEndpoint,
                       apiKey: apiKey,
                       model: _value.preferences.aiModel,
@@ -1042,6 +1052,7 @@ class AppController extends AsyncNotifier<AppState> {
       final client = ref.read(aiClientProvider);
       final runner = AgentRunner(
         provider: client.configured(
+          provider: _value.preferences.aiProvider,
           endpoint: _value.preferences.aiEndpoint,
           apiKey: key,
           // The agent orchestrates tools across turns; the parsing model is

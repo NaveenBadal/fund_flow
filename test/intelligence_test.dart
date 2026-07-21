@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:fund_flow/agent/agent_runner.dart';
 import 'package:fund_flow/agent/mcp_protocol.dart';
 import 'package:fund_flow/intelligence/ai_client.dart';
+import 'package:fund_flow/domain/ai_provider.dart';
 import 'package:fund_flow/domain/transaction.dart';
 import 'package:fund_flow/ingestion/ai_message_ingestion.dart';
 import 'package:fund_flow/ingestion/message_candidate.dart';
@@ -42,6 +43,7 @@ void main() {
     );
     addTearDown(client.close);
     final provider = client.configured(
+      provider: AiProvider.ollama,
       endpoint: 'https://provider.example',
       apiKey: 'secret',
       model: 'agent-model',
@@ -99,6 +101,7 @@ void main() {
       final deltas = <String>[];
       final turn = await client
           .configured(
+            provider: AiProvider.ollama,
             endpoint: 'http://localhost:11434',
             apiKey: 'secret',
             model: 'model',
@@ -128,6 +131,7 @@ void main() {
     final token = AgentCancellationToken();
     final future = client
         .configured(
+          provider: AiProvider.ollama,
           endpoint: 'http://localhost:11434',
           apiKey: 'secret',
           model: 'model',
@@ -154,6 +158,7 @@ void main() {
     expect(
       () => client
           .configured(
+            provider: AiProvider.ollama,
             endpoint: 'http://localhost:11434',
             apiKey: 'secret',
             model: 'model',
@@ -196,6 +201,7 @@ void main() {
       addTearDown(client.close);
 
       await client.analyzeMessages(
+        provider: AiProvider.ollama,
         endpoint: 'http://localhost:11434',
         apiKey: 'secret-not-logged',
         model: 'model',
@@ -279,6 +285,7 @@ void main() {
     addTearDown(client.close);
 
     final result = await client.analyzeMessages(
+      provider: AiProvider.ollama,
       endpoint: 'http://localhost:11434',
       apiKey: 'secret',
       model: 'gpt-oss:20b',
@@ -328,6 +335,7 @@ void main() {
     addTearDown(client.close);
 
     final result = await client.analyzeMessages(
+      provider: AiProvider.ollama,
       endpoint: 'https://ollama.com',
       apiKey: 'secret',
       model: 'gpt-oss:20b',
@@ -358,6 +366,7 @@ void _retiredModelSurfacesProviderReason() {
     addTearDown(client.close);
 
     final provider = client.configured(
+      provider: AiProvider.ollama,
       endpoint: 'https://ollama.com',
       apiKey: 'k',
       model: 'qwen3-coder:480b-cloud',
@@ -397,6 +406,7 @@ void _emptyContentBlamesReasoningBudget() {
 
     await expectLater(
       client.analyzeMessages(
+        provider: AiProvider.ollama,
         endpoint: 'https://ollama.com',
         apiKey: 'k',
         model: 'gpt-oss:20b-cloud',
