@@ -77,13 +77,25 @@ class _State extends ConsumerState<OnboardingScreen> {
             ),
             Expanded(
               child: FlowCardAdvance(
-                child: SingleChildScrollView(
+                // Centre the step within the space between the header and the
+                // button when it is short, but let it scroll when a connected
+                // state or an error makes it tall. Without the min-height the
+                // content shrink-wraps to the top and leaves a dead gap above
+                // the primary button.
+                child: LayoutBuilder(
                   key: ValueKey(_step),
-                  padding: const EdgeInsets.all(FlowSpace.xl),
-                  child: Center(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    padding: const EdgeInsets.all(FlowSpace.xl),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 620),
-                      child: _content(app),
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight - FlowSpace.xl * 2,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 620),
+                          child: _content(app),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -295,7 +307,6 @@ class _Narrative extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: MediaQuery.sizeOf(context).height * .07),
         Icon(icon, size: 34, color: flow.accent),
         const SizedBox(height: FlowSpace.xl),
         Text(eyebrow, style: text.bodyMedium?.copyWith(color: flow.inkSoft)),

@@ -259,6 +259,10 @@ class TodayScreen extends ConsumerWidget {
                     for (var i = 0; i < summary.categories.length; i++)
                       FlowBarRow(
                         label: summary.categories[i].label,
+                        // The dot keys each row to its donut arc; only shown
+                        // when the donut is on screen (amounts visible, 2+
+                        // categories) so it never dangles without a ring.
+                        swatch: !hidden && summary.categories.length >= 2,
                         amount: hidden
                             ? '••••'
                             : formatMoney(

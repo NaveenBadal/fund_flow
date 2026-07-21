@@ -392,9 +392,15 @@ class FlowBarRow extends StatelessWidget {
     this.share,
     this.color,
     this.onTap,
+    this.swatch = false,
   });
 
   final String label;
+
+  /// When true, a small filled dot in [color] precedes the label, so a row
+  /// reads as the legend key for a matching donut segment rather than only a
+  /// magnitude bar.
+  final bool swatch;
 
   /// Already formatted: this widget does not decide how money is written.
   final String amount;
@@ -416,6 +422,17 @@ class FlowBarRow extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (swatch) ...[
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: color ?? flow.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: FlowSpace.sm),
+              ],
               Expanded(
                 child: Text(
                   label,
