@@ -236,9 +236,7 @@ class AppController extends AsyncNotifier<AppState> {
       final activeRunId = auditRunId;
       final acknowledged = <String>[];
       final batches = _ingestionBatches(unseen);
-      for (var wave = 0;
-          wave < batches.length;
-          wave += _ingestionConcurrency) {
+      for (var wave = 0; wave < batches.length; wave += _ingestionConcurrency) {
         final end = (wave + _ingestionConcurrency).clamp(0, batches.length);
         await Future.wait([
           for (var batchPosition = wave; batchPosition < end; batchPosition++)
@@ -276,9 +274,7 @@ class AppController extends AsyncNotifier<AppState> {
                 // Notifications arrive one at a time while someone is using
                 // the app, so this path is the most latency sensitive of the
                 // two. Audit payloads are written after the fact.
-                unawaited(
-                  _recordBatchExchanges(batchId, requests, responses),
-                );
+                unawaited(_recordBatchExchanges(batchId, requests, responses));
                 await ref
                     .read(storeProvider)
                     .commitIngestionBatch(
@@ -614,9 +610,7 @@ class AppController extends AsyncNotifier<AppState> {
       // reaches the ledger immediately without re-reading the table.
       var ledger = _value.transactions;
       final batches = _ingestionBatches(unseen);
-      for (var wave = 0;
-          wave < batches.length;
-          wave += _ingestionConcurrency) {
+      for (var wave = 0; wave < batches.length; wave += _ingestionConcurrency) {
         await _waitWhileLifecyclePaused(
           permission: permission,
           checked: checked,
@@ -691,9 +685,7 @@ class AppController extends AsyncNotifier<AppState> {
                 // kilobytes per batch. They are for later inspection, so they
                 // are written off the critical path rather than delaying the
                 // transactions this batch just produced.
-                unawaited(
-                  _recordBatchExchanges(batchId, requests, responses),
-                );
+                unawaited(_recordBatchExchanges(batchId, requests, responses));
                 final created = await ref
                     .read(storeProvider)
                     .commitIngestionBatch(
@@ -841,7 +833,10 @@ class AppController extends AsyncNotifier<AppState> {
     try {
       final store = ref.read(storeProvider);
       if (requests.isNotEmpty) {
-        await store.recordImportBatchRequest(batchId, _auditExchanges(requests));
+        await store.recordImportBatchRequest(
+          batchId,
+          _auditExchanges(requests),
+        );
       }
       if (responses.isNotEmpty) {
         await store.recordImportBatchResponse(
@@ -1469,11 +1464,10 @@ class AppController extends AsyncNotifier<AppState> {
       case AgentProposalKind.setAppLock:
         final enabled = arguments['enabled'];
         if (enabled is! bool) return refused;
-        final lockUndoId = await ref
-            .read(storeProvider)
-            .saveUndo('restore_app_lock', {
-              'enabled': _value.preferences.lockApp,
-            });
+        final lockUndoId = await ref.read(storeProvider).saveUndo(
+          'restore_app_lock',
+          {'enabled': _value.preferences.lockApp},
+        );
         final locked = await setAppLock(enabled);
         return (applied: locked, undoId: locked ? lockUndoId : null);
       case AgentProposalKind.clearConversation:
@@ -1496,9 +1490,10 @@ class AppController extends AsyncNotifier<AppState> {
             .where((item) => item['key'] == key)
             .map((item) => item['value'])
             .firstOrNull;
-        final memoryUndoId = await ref
-            .read(storeProvider)
-            .saveUndo('restore_memory', {'key': key, 'value': previous});
+        final memoryUndoId = await ref.read(storeProvider).saveUndo(
+          'restore_memory',
+          {'key': key, 'value': previous},
+        );
         await ref.read(storeProvider).setFinancialMemory(key, value);
         return (applied: true, undoId: memoryUndoId);
       case AgentProposalKind.deleteMemory:
@@ -1510,9 +1505,10 @@ class AppController extends AsyncNotifier<AppState> {
             .map((item) => item['value'])
             .firstOrNull;
         if (previous == null) return refused;
-        final deleteUndoId = await ref
-            .read(storeProvider)
-            .saveUndo('restore_memory', {'key': key, 'value': previous});
+        final deleteUndoId = await ref.read(storeProvider).saveUndo(
+          'restore_memory',
+          {'key': key, 'value': previous},
+        );
         await ref.read(storeProvider).deleteFinancialMemory(key);
         return (applied: true, undoId: deleteUndoId);
     }

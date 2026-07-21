@@ -75,17 +75,17 @@ abstract final class FlowElevation {
     final dark = brightness == Brightness.dark;
     return [
       BoxShadow(
-        color: const Color(0xFF1A1C1B).withValues(
-          alpha: dark ? opacity * 3.2 : opacity,
-        ),
+        color: const Color(
+          0xFF1A1C1B,
+        ).withValues(alpha: dark ? opacity * 3.2 : opacity),
         blurRadius: blur,
         offset: Offset(0, y),
       ),
       // A tight contact shadow stops a large soft one reading as a blur.
       BoxShadow(
-        color: const Color(0xFF1A1C1B).withValues(
-          alpha: dark ? opacity * 2 : opacity * .7,
-        ),
+        color: const Color(
+          0xFF1A1C1B,
+        ).withValues(alpha: dark ? opacity * 2 : opacity * .7),
         blurRadius: blur / 6,
         offset: Offset(0, y / 3),
       ),

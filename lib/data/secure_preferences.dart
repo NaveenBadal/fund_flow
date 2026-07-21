@@ -30,9 +30,11 @@ class SecurePreferences {
       hideAmounts: values[_hidden] == 'true',
       lockApp: values[_lock] == 'true',
       // Stored values may predate the 30 day ceiling, so clamp on read.
-      messageLookbackDays: (int.tryParse(values[_lookback] ?? '') ??
-              maximumLookbackDays)
-          .clamp(minimumLookbackDays, maximumLookbackDays),
+      messageLookbackDays:
+          (int.tryParse(values[_lookback] ?? '') ?? maximumLookbackDays).clamp(
+            minimumLookbackDays,
+            maximumLookbackDays,
+          ),
       captureNotifications: values[_capture] == 'true',
       aiEndpoint: values[_endpoint] ?? 'https://ollama.com',
       aiModel: switch (values[_model]) {

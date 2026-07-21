@@ -346,13 +346,14 @@ void _retiredModelSurfacesProviderReason() {
     // Ollama answers 410 and names the model and its retirement date. The
     // body used to be drained, leaving only a status code to report.
     final client = AiClient(
-      client: MockClient((request) async => http.Response(
-            jsonEncode({
-              'error':
-                  'qwen3-coder:480b was retired at 2026-07-15 00:00:00 PDT',
-            }),
-            410,
-          )),
+      client: MockClient(
+        (request) async => http.Response(
+          jsonEncode({
+            'error': 'qwen3-coder:480b was retired at 2026-07-15 00:00:00 PDT',
+          }),
+          410,
+        ),
+      ),
     );
     addTearDown(client.close);
 
@@ -379,16 +380,18 @@ void _emptyContentBlamesReasoningBudget() {
     // and content came back empty, which read as "no classifications" and
     // implied the messages were at fault.
     final client = AiClient(
-      client: MockClient((_) async => http.Response(
-            jsonEncode({
-              'message': {
-                'role': 'assistant',
-                'content': '',
-                'thinking': 'We need to classify these messages. First...',
-              },
-            }),
-            200,
-          )),
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'message': {
+              'role': 'assistant',
+              'content': '',
+              'thinking': 'We need to classify these messages. First...',
+            },
+          }),
+          200,
+        ),
+      ),
     );
     addTearDown(client.close);
 

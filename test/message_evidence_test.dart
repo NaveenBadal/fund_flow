@@ -148,7 +148,8 @@ void main() {
     test('accepts a reversal, which is a real movement', () {
       expect(
         verifyExtractedAmount(
-          body: 'HDFC Bank : Your UPI transaction of 250.00 has been '
+          body:
+              'HDFC Bank : Your UPI transaction of 250.00 has been '
               'reversed in your account due to technical problem',
           amountMinor: 25000,
           currency: 'INR',

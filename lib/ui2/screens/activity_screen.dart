@@ -146,9 +146,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               if (app.aiConnection == AiConnection.connected)
                 _SyncButton(
                   working: app.importStatus.working,
-                  onSync: () => ref
-                      .read(appControllerProvider.notifier)
-                      .importMessages(),
+                  onSync: () =>
+                      ref.read(appControllerProvider.notifier).importMessages(),
                 ),
               IconButton(
                 tooltip: 'Add transaction',

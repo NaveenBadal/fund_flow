@@ -102,42 +102,47 @@ void main() {
     expect(execution.result.content['checkedCount'], transactions.length);
   });
 
-  test('an invalid enum filter fails loudly instead of matching nothing', () async {
-    final execution = await server.execute(
-      const McpToolCall(
-        id: 'bad',
-        name: 'finance_briefing',
-        arguments: {
-          'from': '2026-07-01',
-          'to': '2026-07-31',
-          'direction': 'sideways',
-        },
-      ),
-    );
-    expect(execution.result.isError, isTrue);
-    expect(
-      execution.result.content['error'].toString(),
-      contains('incoming'),
-    );
-  });
+  test(
+    'an invalid enum filter fails loudly instead of matching nothing',
+    () async {
+      final execution = await server.execute(
+        const McpToolCall(
+          id: 'bad',
+          name: 'finance_briefing',
+          arguments: {
+            'from': '2026-07-01',
+            'to': '2026-07-31',
+            'direction': 'sideways',
+          },
+        ),
+      );
+      expect(execution.result.isError, isTrue);
+      expect(
+        execution.result.content['error'].toString(),
+        contains('incoming'),
+      );
+    },
+  );
 
-  test('an empty period result carries ledger coverage for self-correction',
-      () async {
-    final execution = await server.execute(
-      const McpToolCall(
-        id: 'empty',
-        name: 'finance_briefing',
-        arguments: {'from': '2024-01-01', 'to': '2024-02-01'},
-      ),
-    );
-    expect(execution.result.isError, isFalse);
-    expect(execution.result.content['checkedCount'], 0);
-    final coverage =
-        execution.result.content['ledgerCoverage'] as Map<String, Object?>;
-    expect(coverage['totalCount'], transactions.length);
-    expect(coverage['earliestOccurredAt'], isNotNull);
-    expect(execution.result.content['hint'], isNotNull);
-  });
+  test(
+    'an empty period result carries ledger coverage for self-correction',
+    () async {
+      final execution = await server.execute(
+        const McpToolCall(
+          id: 'empty',
+          name: 'finance_briefing',
+          arguments: {'from': '2024-01-01', 'to': '2024-02-01'},
+        ),
+      );
+      expect(execution.result.isError, isFalse);
+      expect(execution.result.content['checkedCount'], 0);
+      final coverage =
+          execution.result.content['ledgerCoverage'] as Map<String, Object?>;
+      expect(coverage['totalCount'], transactions.length);
+      expect(coverage['earliestOccurredAt'], isNotNull);
+      expect(execution.result.content['hint'], isNotNull);
+    },
+  );
 
   test('conversation search returns bounded local follow-up context', () async {
     server = LocalMcpServer(
@@ -236,29 +241,34 @@ void main() {
     expect(execution.result.content['status'], 'approval_required');
   });
 
-  test('a breakdown totals every group, including ones the limit cut', () async {
-    final execution = await server.execute(
-      const McpToolCall(
-        id: 'break',
-        name: 'finance_breakdown',
-        arguments: {
-          'from': '2026-07-01',
-          'to': '2026-07-31',
-          'groupBy': 'category',
-          'currency': 'INR',
-          'limit': 1,
-        },
-      ),
-    );
-    final content = execution.result.content;
-    expect((content['rows'] as List), hasLength(1));
-    expect(content['rowsTotal'], 2);
-    final totals = content['totals'] as List;
-    final inr = totals.cast<Map>().singleWhere((row) => row['currency'] == 'INR');
-    // Both INR categories, not only the one row that survived the limit.
-    expect(inr['amountMinor'], 30000);
-    expect(inr['amountDisplay'], isNotNull);
-  });
+  test(
+    'a breakdown totals every group, including ones the limit cut',
+    () async {
+      final execution = await server.execute(
+        const McpToolCall(
+          id: 'break',
+          name: 'finance_breakdown',
+          arguments: {
+            'from': '2026-07-01',
+            'to': '2026-07-31',
+            'groupBy': 'category',
+            'currency': 'INR',
+            'limit': 1,
+          },
+        ),
+      );
+      final content = execution.result.content;
+      expect((content['rows'] as List), hasLength(1));
+      expect(content['rowsTotal'], 2);
+      final totals = content['totals'] as List;
+      final inr = totals.cast<Map>().singleWhere(
+        (row) => row['currency'] == 'INR',
+      );
+      // Both INR categories, not only the one row that survived the limit.
+      expect(inr['amountMinor'], 30000);
+      expect(inr['amountDisplay'], isNotNull);
+    },
+  );
 
   test('a reversible proposal waits for the person, not a stopwatch', () async {
     final memory = await server.execute(
@@ -275,11 +285,7 @@ void main() {
 
     // Clearing a conversation cannot be undone, so it keeps a short window.
     final clear = await server.execute(
-      const McpToolCall(
-        id: 'clear',
-        name: 'conversation_clear',
-        arguments: {},
-      ),
+      const McpToolCall(id: 'clear', name: 'conversation_clear', arguments: {}),
     );
     expect(
       clear.proposal!.expiresAt.difference(clear.proposal!.createdAt),

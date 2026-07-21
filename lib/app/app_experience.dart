@@ -113,9 +113,7 @@ class _LockedView extends StatelessWidget {
               FilledButton(
                 onPressed: onUnlock,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(
-                    FlowDensity.minimumTarget,
-                  ),
+                  minimumSize: const Size.fromHeight(FlowDensity.minimumTarget),
                   backgroundColor: flow.accent,
                   foregroundColor: flow.onAccent,
                   shape: const RoundedRectangleBorder(

@@ -41,9 +41,10 @@ void main() {
       ).toProviderMessage();
       final raw = message['content']! as String;
 
-      expect(raw.length, lessThanOrEqualTo(
-        McpToolResult.maximumContentCharacters,
-      ));
+      expect(
+        raw.length,
+        lessThanOrEqualTo(McpToolResult.maximumContentCharacters),
+      );
       // Must remain parseable: a cut string would break the provider.
       final decoded = jsonDecode(raw) as Map<String, Object?>;
       expect(decoded['transactions'], isA<List<Object?>>());

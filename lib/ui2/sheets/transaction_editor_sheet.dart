@@ -73,9 +73,7 @@ class _EditorSheetState extends ConsumerState<_EditorSheet> {
 
     return Padding(
       // Rides above the keyboard instead of being covered by it.
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(FlowSpace.xl),
         child: Column(
@@ -122,8 +120,7 @@ class _EditorSheetState extends ConsumerState<_EditorSheet> {
                 for (final category in categories)
                   _CategoryChip(
                     label: category,
-                    selected:
-                        category.toLowerCase() == _category.toLowerCase(),
+                    selected: category.toLowerCase() == _category.toLowerCase(),
                     onTap: () => setState(() => _category = category),
                   ),
               ],

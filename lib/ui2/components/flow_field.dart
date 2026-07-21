@@ -76,7 +76,10 @@ class _FlowFieldState extends State<FlowField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label, style: text.labelSmall?.copyWith(color: flow.inkSoft)),
+        Text(
+          widget.label,
+          style: text.labelSmall?.copyWith(color: flow.inkSoft),
+        ),
         const SizedBox(height: FlowSpace.xs),
         AnimatedContainer(
           duration: FlowMotion.respecting(context, FlowMotion.instant),

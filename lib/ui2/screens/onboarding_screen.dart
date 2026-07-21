@@ -47,9 +47,7 @@ class _State extends ConsumerState<OnboardingScreen> {
                 children: [
                   const FlowMark(size: 32),
                   const SizedBox(width: FlowSpace.md),
-                  Expanded(
-                    child: Text('Fund Flow', style: text.titleLarge),
-                  ),
+                  Expanded(child: Text('Fund Flow', style: text.titleLarge)),
                   FlowAnimatedCount(
                     text: '${_step + 1} of 4',
                     style: text.labelMedium?.copyWith(color: flow.inkSoft),
@@ -70,9 +68,7 @@ class _State extends ConsumerState<OnboardingScreen> {
                       ),
                       curve: FlowMotion.move,
                       height: 2,
-                      margin: EdgeInsets.only(
-                        right: i == 3 ? 0 : FlowSpace.xs,
-                      ),
+                      margin: EdgeInsets.only(right: i == 3 ? 0 : FlowSpace.xs),
                       color: i <= _step ? flow.accent : flow.line,
                     ),
                   ),
@@ -107,10 +103,7 @@ class _State extends ConsumerState<OnboardingScreen> {
                       onPressed: () => setState(() => _step--),
                       style: TextButton.styleFrom(
                         foregroundColor: flow.inkSoft,
-                        minimumSize: const Size(
-                          0,
-                          FlowDensity.minimumTarget,
-                        ),
+                        minimumSize: const Size(0, FlowDensity.minimumTarget),
                       ),
                       icon: const Icon(Icons.arrow_back_rounded, size: 18),
                       label: const Text('Back'),

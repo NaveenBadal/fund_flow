@@ -8,8 +8,11 @@ import 'package:fund_flow/ui2/tokens/flow_type.dart';
 double _luminance(Color c) {
   double channel(double v) {
     v = v / 255.0;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) * ((v + 0.055) / 1.055);
+    return v <= 0.03928
+        ? v / 12.92
+        : ((v + 0.055) / 1.055) * ((v + 0.055) / 1.055);
   }
+
   // Approximation is adequate: the exact ratios were already checked by the
   // palette validator. This guards against a value being edited by hand later.
   return 0.2126 * channel(c.r * 255) +

@@ -99,9 +99,7 @@ class TodayScreen extends ConsumerWidget {
                 decoration: BoxDecoration(
                   borderRadius: FlowRadius.xl,
                   border: Border.all(color: flow.line),
-                  boxShadow: FlowElevation.hero(
-                    Theme.of(context).brightness,
-                  ),
+                  boxShadow: FlowElevation.hero(Theme.of(context).brightness),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,

@@ -125,10 +125,7 @@ class _State extends ConsumerState<MessageIntelligenceSheet> {
                   final information = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Message intelligence',
-                        style: text.headlineMedium,
-                      ),
+                      Text('Message intelligence', style: text.headlineMedium),
                       const SizedBox(height: FlowSpace.xs),
                       Text(
                         app.importStatus.working
@@ -234,9 +231,7 @@ class _State extends ConsumerState<MessageIntelligenceSheet> {
                   padding: const EdgeInsets.all(FlowSpace.md),
                   decoration: BoxDecoration(
                     color: active ? flow.sunken : flow.raised,
-                    border: Border.all(
-                      color: active ? flow.accent : flow.line,
-                    ),
+                    border: Border.all(color: active ? flow.accent : flow.line),
                     borderRadius: FlowRadius.sm,
                   ),
                   child: Column(
@@ -679,9 +674,7 @@ class _Empty extends StatelessWidget {
               minimumSize: const Size(0, FlowDensity.minimumTarget),
               backgroundColor: flow.accent,
               foregroundColor: flow.onAccent,
-              shape: const RoundedRectangleBorder(
-                borderRadius: FlowRadius.sm,
-              ),
+              shape: const RoundedRectangleBorder(borderRadius: FlowRadius.sm),
             ),
             child: const Text('Check messages'),
           ),

@@ -378,8 +378,7 @@ class AiRequestFailure implements Exception {
   final String? detail;
 
   @override
-  String toString() =>
-      detail == null ? 'Provider error $statusCode.' : detail!;
+  String toString() => detail == null ? 'Provider error $statusCode.' : detail!;
 }
 
 /// Output token budget for a batch of [messageCount] messages.

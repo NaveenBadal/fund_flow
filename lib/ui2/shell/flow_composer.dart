@@ -74,41 +74,41 @@ class FlowComposer extends StatelessWidget {
                   borderRadius: FlowRadius.pill,
                   border: Border.all(color: flow.line),
                 ),
-              child: Row(
-                children: [
-                  if (busy)
-                    SizedBox(
-                      width: 15,
-                      height: 15,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+                child: Row(
+                  children: [
+                    if (busy)
+                      SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: flow.accent,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.auto_awesome_outlined,
+                        size: 17,
                         color: flow.accent,
                       ),
-                    )
-                  else
-                    Icon(
-                      Icons.auto_awesome_outlined,
-                      size: 17,
-                      color: flow.accent,
-                    ),
-                  const SizedBox(width: FlowSpace.md),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: enabled ? flow.inkSoft : flow.inkFaint,
+                    const SizedBox(width: FlowSpace.md),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: enabled ? flow.inkSoft : flow.inkFaint,
+                        ),
                       ),
                     ),
-                  ),
-                  Icon(
-                    Icons.arrow_upward_rounded,
-                    size: 17,
-                    color: flow.inkFaint,
-                  ),
-                ],
-              ),
+                    Icon(
+                      Icons.arrow_upward_rounded,
+                      size: 17,
+                      color: flow.inkFaint,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

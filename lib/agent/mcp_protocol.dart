@@ -169,9 +169,5 @@ abstract final class McpSchema {
   static Map<String, Object?> array(
     Map<String, Object?> items, {
     int? minItems,
-  }) => {
-    'type': 'array',
-    'items': items,
-    'minItems': ?minItems,
-  };
+  }) => {'type': 'array', 'items': items, 'minItems': ?minItems};
 }

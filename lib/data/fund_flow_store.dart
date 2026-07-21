@@ -144,11 +144,9 @@ class FundFlowStore {
       'created_at': createdAt,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
-    await db.update(
-      'conversation',
-      {'thread_id': threadId},
-      where: 'thread_id IS NULL',
-    );
+    await db.update('conversation', {
+      'thread_id': threadId,
+    }, where: 'thread_id IS NULL');
   }
 
   static Future<void> _createFinancialMemoryTable(Database db) async {

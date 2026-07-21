@@ -40,11 +40,7 @@ abstract final class InsightEngine {
         final gap = current.occurredAt.difference(previous.occurredAt);
         if (gap <= within) {
           findings.add(
-            DuplicateFinding(
-              earlier: previous,
-              later: current,
-              apart: gap,
-            ),
+            DuplicateFinding(earlier: previous, later: current, apart: gap),
           );
         }
       }
