@@ -113,7 +113,9 @@ void main() {
     _usePhone(tester);
     FlowDestination? chosen;
     await tester.pumpWidget(_host(onChanged: (value) => chosen = value));
-    await tester.tap(find.text('Review'));
+    // Only the selected item carries a text label; the rest are icon only,
+    // so an unselected destination is reached by its semantics.
+    await tester.tap(find.bySemanticsLabel('Review'));
     await tester.pump();
     expect(chosen, FlowDestination.review);
   });

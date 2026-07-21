@@ -31,18 +31,27 @@ class FlowNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final flow = context.flow;
-    return Container(
-      decoration: BoxDecoration(
-        color: flow.canvas,
-        border: Border(top: BorderSide(color: flow.line)),
+    // A floating pill rather than a full-width bar with a top rule. The bar
+    // read as a boundary drawn under the content; a pill reads as a control
+    // resting on it, which is the whole difference in register.
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(
+        FlowSpace.xxl,
+        0,
+        FlowSpace.xxl,
+        FlowSpace.sm,
       ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.symmetric(
-          horizontal: FlowSpace.sm,
-          vertical: FlowSpace.xs,
+      child: Container(
+        padding: const EdgeInsets.all(FlowSpace.xs),
+        decoration: BoxDecoration(
+          color: flow.raised,
+          borderRadius: FlowRadius.pill,
+          border: Border.all(color: flow.line),
+          boxShadow: FlowElevation.card(Theme.of(context).brightness),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _Item(
               icon: Icons.today_outlined,
@@ -93,71 +102,78 @@ class _Item extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final flow = context.flow;
-    final scale = MediaQuery.textScalerOf(context).scale(1);
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: badge > 0 ? '$label, $badge needing review' : label,
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: FlowRadius.md,
-          child: SizedBox(
-            // Grows with text scale so a label never clips at 200%.
-            height: 56 + ((scale - 1).clamp(0, 1) * 26),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      selected ? activeIcon : icon,
-                      size: 22,
-                      color: selected ? flow.accent : flow.inkFaint,
-                    ),
-                    if (badge > 0)
-                      Positioned(
-                        right: -7,
-                        top: -4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: flow.attention,
-                            borderRadius: FlowRadius.pill,
-                          ),
-                          child: FlowAnimatedCount(
-                            // Not capped at 99: a review backlog is a job to
-                            // be sized, and "99+" hides whether that means an
-                            // evening or a minute.
-                            text: badge > 999 ? '999+' : '$badge',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  height: 1.3,
-                                ),
-                          ),
+    // The active destination is a filled accent pill with its label beside
+    // the icon; the others are icon only. The label appearing on selection
+    // is what animates the switch and keeps the bar quiet the rest of the
+    // time.
+    final onPill = flow.onAccent;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: badge > 0 ? '$label, $badge needing review' : label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: FlowRadius.pill,
+        child: AnimatedContainer(
+          duration: FlowMotion.respecting(context, FlowMotion.quick),
+          curve: FlowMotion.enter,
+          padding: EdgeInsets.symmetric(
+            horizontal: selected ? FlowSpace.lg : FlowSpace.md,
+            vertical: FlowSpace.md,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? flow.accent : Colors.transparent,
+            borderRadius: FlowRadius.pill,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    selected ? activeIcon : icon,
+                    size: 22,
+                    color: selected ? onPill : flow.inkFaint,
+                  ),
+                  if (badge > 0 && !selected)
+                    Positioned(
+                      right: -7,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: flow.attention,
+                          borderRadius: FlowRadius.pill,
+                        ),
+                        child: FlowAnimatedCount(
+                          text: badge > 999 ? '999+' : '$badge',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontSize: 10,
+                                height: 1.3,
+                              ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: FlowSpace.xs),
+                    ),
+                ],
+              ),
+              if (selected) ...[
+                const SizedBox(width: FlowSpace.sm),
                 Text(
                   label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? flow.ink : flow.inkFaint,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: onPill,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),

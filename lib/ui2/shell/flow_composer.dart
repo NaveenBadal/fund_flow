@@ -56,19 +56,24 @@ class FlowComposer extends StatelessWidget {
           FlowSpace.lg,
           FlowSpace.sm,
         ),
-        child: Material(
-          color: flow.raised,
-          borderRadius: FlowRadius.pill,
-          child: InkWell(
-            onTap: enabled ? onOpen : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
             borderRadius: FlowRadius.pill,
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: FlowSpace.lg),
-              decoration: BoxDecoration(
-                borderRadius: FlowRadius.pill,
-                border: Border.all(color: flow.line),
-              ),
+            boxShadow: FlowElevation.card(Theme.of(context).brightness),
+          ),
+          child: Material(
+            color: flow.raised,
+            borderRadius: FlowRadius.pill,
+            child: InkWell(
+              onTap: enabled ? onOpen : null,
+              borderRadius: FlowRadius.pill,
+              child: Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: FlowSpace.lg),
+                decoration: BoxDecoration(
+                  borderRadius: FlowRadius.pill,
+                  border: Border.all(color: flow.line),
+                ),
               child: Row(
                 children: [
                   if (busy)
@@ -103,6 +108,7 @@ class FlowComposer extends StatelessWidget {
                     color: flow.inkFaint,
                   ),
                 ],
+              ),
               ),
             ),
           ),

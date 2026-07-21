@@ -305,9 +305,9 @@ class TodayScreen extends ConsumerWidget {
                 ),
               ),
             ),
-          // Clears the composer, which floats over this scroll view. At
-          // FlowSpace.xl the last section sat underneath it and was cut off.
-          const SliverToBoxAdapter(child: SizedBox(height: FlowSpace.huge * 2)),
+          // Clears the composer and the floating nav, both of which sit over
+          // this scroll view.
+          const SliverToBoxAdapter(child: SizedBox(height: 200)),
         ],
       ],
     );
