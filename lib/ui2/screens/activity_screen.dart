@@ -67,6 +67,31 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A sync that finishes silently reads as a sync that did nothing. Surface
+    // the outcome — new records, nothing new, or a failure — the moment the
+    // import leaves its working phases.
+    ref.listen(appControllerProvider, (previous, next) {
+      final before = previous?.value?.importStatus.phase;
+      final status = next.value?.importStatus;
+      if (status == null || status.phase == before) return;
+      final text = switch (status.phase) {
+        ImportPhase.complete => status.imported > 0
+            ? 'Synced · ${status.imported} new'
+                  '${status.skipped > 0 ? ' · ${status.skipped} skipped' : ''}'
+            : 'Up to date · nothing new',
+        ImportPhase.providerDisconnected ||
+        ImportPhase.rateLimited ||
+        ImportPhase.error ||
+        ImportPhase.invalidResponse ||
+        ImportPhase.stopped => status.message ?? 'Sync could not finish.',
+        _ => null,
+      };
+      if (text == null) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(text)));
+    });
+
     final app = ref.watch(appControllerProvider).requireValue;
     final flow = context.flow;
     final hidden = app.preferences.hideAmounts;
@@ -245,6 +270,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   importing: app.importStatus.working,
                   onImport: () =>
                       ref.read(appControllerProvider.notifier).importMessages(),
+                  onAddByHand: () => showTransactionEditor(context),
                 )
               : values.isEmpty
               ? _NoMatch(onClear: _clearFilters)
@@ -1137,9 +1163,14 @@ class _LedgerRow extends StatelessWidget {
 // ------------------------------------------------------------- empty states
 
 class _EmptyLedger extends StatelessWidget {
-  const _EmptyLedger({required this.importing, required this.onImport});
+  const _EmptyLedger({
+    required this.importing,
+    required this.onImport,
+    required this.onAddByHand,
+  });
   final bool importing;
   final VoidCallback onImport;
+  final VoidCallback onAddByHand;
 
   @override
   Widget build(BuildContext context) {
@@ -1160,7 +1191,7 @@ class _EmptyLedger extends StatelessWidget {
             const SizedBox(height: FlowSpace.sm),
             Text(
               'Fund Flow reads your transaction messages and keeps the '
-              'ledger for you. Nothing is typed in by hand.',
+              'ledger for you — or add one yourself whenever you like.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: flow.inkSoft),
@@ -1178,6 +1209,12 @@ class _EmptyLedger extends StatelessWidget {
               ),
               icon: const Icon(Icons.sms_outlined, size: 18),
               label: Text(importing ? 'Checking messages…' : 'Check messages'),
+            ),
+            const SizedBox(height: FlowSpace.xs),
+            TextButton(
+              onPressed: importing ? null : onAddByHand,
+              style: TextButton.styleFrom(foregroundColor: flow.inkSoft),
+              child: const Text('Add one by hand'),
             ),
           ],
         ),

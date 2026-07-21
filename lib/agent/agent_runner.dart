@@ -340,7 +340,7 @@ class AgentRunner {
         !presentation.parts.any(
           (part) => part.kind == AgentPartKind.sourceNote,
         )) {
-      return 'A financial answer requires a sourceNote describing the period, filters and checked records.';
+      return 'A financial answer requires a sourceNote describing the period, filters and currencies.';
     }
     return null;
   }
@@ -459,10 +459,10 @@ Every amountMinor is an integer in the currency's smallest unit, so 362763.42 ru
 Optional numeric fields are drawn as charts, so supply them whenever a capability returned the values. changeFraction is the signed change against the previous period as a fraction, so 0.12 means twelve percent higher; include it only when a capability actually returned both periods. Order breakdown rows largest first. Never estimate any of these numbers.
 - {"type":"transactionList","transactionIds":[1,2]}
 - {"type":"insight","text":"useful observation"}
-- {"type":"sourceNote","text":"period, filters, tools and transaction count"}
+- {"type":"sourceNote","text":"period, filters and tools used"} — describe how you measured, but never state a record count: the app appends the exact checked-record count beneath the answer, and any count you write yourself is a guess that contradicts it.
 - {"type":"followUps","questions":["question one","question two"]}
 - {"type":"warning","text":"important limitation"}
-Include one conclusion. Add only parts that materially help. Keep prose concise. Every numeric claim and transaction ID must come from a capability result. Every financial answer must include a sourceNote naming the period, filters, currencies and checked-record count. If evidence is insufficient, say so plainly.''';
+Include one conclusion. Add only parts that materially help. Keep prose concise. Every numeric claim and transaction ID must come from a capability result. Every financial answer must include a sourceNote naming the period, filters and currencies; the app appends the exact checked-record count separately, so never write a record count into the sourceNote. If evidence is insufficient, say so plainly.''';
 }
 
 class AgentRunException implements Exception {

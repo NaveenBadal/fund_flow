@@ -10,6 +10,7 @@ import '../motion/flow_motion_widgets.dart';
 import '../tokens/flow_metrics.dart';
 import '../tokens/flow_palette.dart';
 import '../tokens/flow_type.dart';
+import '../sheets/transaction_editor_sheet.dart';
 import 'transaction_detail_screen.dart';
 
 /// Where you stand.
@@ -79,7 +80,12 @@ class TodayScreen extends ConsumerWidget {
         if (summary == null)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _NothingYet(onReview: onReview),
+            child: _NothingYet(
+              importing: app.importStatus.working,
+              onCheck: () =>
+                  ref.read(appControllerProvider.notifier).importMessages(),
+              onAddByHand: () => showTransactionEditor(context),
+            ),
           )
         else ...[
           SliverToBoxAdapter(
@@ -538,8 +544,14 @@ class _CaptureRow extends StatelessWidget {
 }
 
 class _NothingYet extends StatelessWidget {
-  const _NothingYet({required this.onReview});
-  final VoidCallback onReview;
+  const _NothingYet({
+    required this.importing,
+    required this.onCheck,
+    required this.onAddByHand,
+  });
+  final bool importing;
+  final VoidCallback onCheck;
+  final VoidCallback onAddByHand;
 
   @override
   Widget build(BuildContext context) {
@@ -560,10 +572,30 @@ class _NothingYet extends StatelessWidget {
             const SizedBox(height: FlowSpace.sm),
             Text(
               'Fund Flow reads your transaction messages and builds your '
-              'ledger for you. You never add anything by hand.',
+              'ledger for you — or add one yourself whenever you like.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: flow.inkSoft),
+            ),
+            const SizedBox(height: FlowSpace.lg),
+            FilledButton.icon(
+              onPressed: importing ? null : onCheck,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(FlowDensity.minimumTarget),
+                backgroundColor: flow.accent,
+                foregroundColor: flow.onAccent,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: FlowRadius.sm,
+                ),
+              ),
+              icon: const Icon(Icons.sms_outlined, size: 18),
+              label: Text(importing ? 'Checking messages…' : 'Check messages'),
+            ),
+            const SizedBox(height: FlowSpace.xs),
+            TextButton(
+              onPressed: importing ? null : onAddByHand,
+              style: TextButton.styleFrom(foregroundColor: flow.inkSoft),
+              child: const Text('Add one by hand'),
             ),
           ],
         ),

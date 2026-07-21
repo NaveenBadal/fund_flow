@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Monochrome mark for Android 13+ themed icons. Single flat tint; the system
+  recolours it. Same flow-ribbon + spark silhouette as the full-colour mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108"
+    android:tint="#000000">
+    <path android:strokeColor="#000000" android:strokeWidth="7.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M27,67 C40,61 47,72 60,63 C68,57.5 74,58.5 81,53" />
+    <path android:strokeColor="#000000" android:strokeWidth="7.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M27,56 C40,50 47,61 60,52 C68,46.5 74,47.5 81,42" />
+    <path android:strokeColor="#000000" android:strokeWidth="7.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M27,45 C38,40 45,49 55,42" />
+    <path android:fillColor="#000000"
+        android:pathData="M79,23 C79.9,28.4 82.6,31.1 88,32 C82.6,32.9 79.9,35.6 79,41 C78.1,35.6 75.4,32.9 70,32 C75.4,31.1 78.1,28.4 79,23 Z" />
+</vector>
