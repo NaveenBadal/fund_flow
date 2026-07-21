@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:fund_flow/agent/agent_runner.dart';
 import 'package:fund_flow/agent/mcp_protocol.dart';
 import 'package:fund_flow/intelligence/ai_client.dart';
+import 'package:fund_flow/intelligence/gemini_adapter.dart';
+import 'package:fund_flow/intelligence/model_catalog.dart';
 import 'package:fund_flow/domain/ai_provider.dart';
 import 'package:fund_flow/domain/transaction.dart';
 import 'package:fund_flow/ingestion/ai_message_ingestion.dart';
@@ -15,6 +17,8 @@ import 'package:http/testing.dart';
 void main() {
   _emptyContentBlamesReasoningBudget();
   _retiredModelSurfacesProviderReason();
+  _geminiSchemaDropsUnsupportedKeywords();
+  _recommendPrefersRoleSeedWhenServed();
   test('provider adapter sends tools and decodes native tool calls', () async {
     late Map<String, dynamic> requestBody;
     final client = AiClient(
@@ -346,6 +350,78 @@ void main() {
 
     expect(calls, 2);
     expect(result.results.single.decision, IngestionDecision.notTransaction);
+  });
+}
+
+void _geminiSchemaDropsUnsupportedKeywords() {
+  test('Gemini schema sanitizer strips additionalProperties recursively', () {
+    // Gemini's functionDeclarations.parameters rejects the whole request if it
+    // sees a keyword outside its OpenAPI subset. The canonical tool schemas set
+    // additionalProperties on every nested object, so it must be gone at every
+    // depth while the real schema shape survives.
+    final schema = McpSchema.object(
+      properties: {
+        'filter': McpSchema.object(
+          properties: {'merchant': McpSchema.string()},
+        ),
+        'tags': {'type': 'array', 'items': McpSchema.string()},
+      },
+      required: ['filter'],
+    );
+
+    final sanitized = sanitizeGeminiSchema(schema) as Map;
+
+    expect(sanitized.containsKey('additionalProperties'), isFalse);
+    final props = sanitized['properties'] as Map;
+    final filter = props['filter'] as Map;
+    expect(filter.containsKey('additionalProperties'), isFalse);
+    final items = (props['tags'] as Map)['items'] as Map;
+    expect(items.containsKey('additionalProperties'), isFalse);
+    // The parts Gemini does understand are untouched.
+    expect(sanitized['type'], 'object');
+    expect(sanitized['required'], ['filter']);
+    expect((filter['properties'] as Map).containsKey('merchant'), isTrue);
+  });
+}
+
+void _recommendPrefersRoleSeedWhenServed() {
+  test('recommend keeps the role seed when the catalog serves it', () {
+    // The parsing and chat fields share one recommendedContains list, and for
+    // Gemini "flash" also matches "flash-lite", so substring matching alone
+    // collapses both fields onto the same lite model. When the curated seed is
+    // actually served it must win, keeping the light model on parsing and the
+    // stronger one on chat.
+    final catalog = [
+      'gemini-2.0-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+    ];
+
+    expect(
+      ModelCatalog.recommend(
+        provider: AiProvider.gemini,
+        models: catalog,
+        seed: 'gemini-flash-lite-latest',
+      ),
+      'gemini-flash-lite-latest',
+    );
+    expect(
+      ModelCatalog.recommend(
+        provider: AiProvider.gemini,
+        models: catalog,
+        seed: 'gemini-flash-latest',
+      ),
+      'gemini-flash-latest',
+    );
+    // Seed absent: fall back to the substring net rather than crash.
+    expect(
+      ModelCatalog.recommend(
+        provider: AiProvider.gemini,
+        models: const ['gemini-2.0-flash-lite', 'gemini-2.5-pro'],
+        seed: 'gemini-flash-latest',
+      ),
+      'gemini-2.0-flash-lite',
+    );
   });
 }
 

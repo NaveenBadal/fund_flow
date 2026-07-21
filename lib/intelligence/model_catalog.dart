@@ -124,20 +124,28 @@ class ModelCatalog {
     ];
   }
 
-  /// The recommended default within [models] for [provider]: the first model
-  /// whose id contains one of the provider's recommended substrings, else the
-  /// given [seed].
+  /// The recommended default within [models] for [provider].
+  ///
+  /// The per-role [seed] is the curated pick, so prefer it whenever the live
+  /// catalog actually serves it — this is what keeps a role-appropriate model
+  /// on each field (e.g. Gemini's `gemini-flash-lite-latest` for parsing vs
+  /// `gemini-flash-latest` for chat). Only when the seed is not served does it
+  /// fall back to the provider's recommended substrings, then to the first
+  /// model. The substring list is a coarse net (Gemini's `flash` also matches
+  /// `flash-lite`), so it must not override an available seed — that was the
+  /// bug that collapsed both fields onto the same lite model.
   static String recommend({
     required AiProvider provider,
     required List<String> models,
     required String seed,
   }) {
     if (models.isEmpty) return seed;
+    if (models.contains(seed)) return seed;
     for (final needle in providerInfo(provider).recommendedContains) {
       for (final id in models) {
         if (id.toLowerCase().contains(needle.toLowerCase())) return id;
       }
     }
-    return models.contains(seed) ? seed : models.first;
+    return models.first;
   }
 }

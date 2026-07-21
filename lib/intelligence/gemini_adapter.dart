@@ -221,6 +221,28 @@ GeminiContents translateContents(List<Map<String, Object?>> messages) {
   );
 }
 
+/// Gemini's `functionDeclarations.parameters` accepts only a subset of JSON
+/// Schema (the OpenAPI Schema object) and rejects the request outright — with
+/// "Unknown name \"additionalProperties\" … Cannot find field" — if it sees a
+/// keyword it does not model. The canonical tool schemas carry
+/// `additionalProperties: false` on every object (see [McpSchema.object]), so
+/// strip that and other unsupported keywords recursively before sending. Other
+/// providers (OpenAI, Anthropic) accept the raw schema unchanged.
+Object? sanitizeGeminiSchema(Object? schema) {
+  const unsupported = {r'$schema', 'additionalProperties'};
+  if (schema is Map) {
+    return {
+      for (final entry in schema.entries)
+        if (!unsupported.contains(entry.key))
+          entry.key: sanitizeGeminiSchema(entry.value),
+    };
+  }
+  if (schema is List) {
+    return [for (final item in schema) sanitizeGeminiSchema(item)];
+  }
+  return schema;
+}
+
 /// Streaming agent turn over Gemini `streamGenerateContent`.
 class GeminiAgentProvider implements AgentProvider {
   const GeminiAgentProvider({
@@ -265,7 +287,7 @@ class GeminiAgentProvider implements AgentProvider {
                       (tool) => {
                         'name': tool.name,
                         'description': tool.description,
-                        'parameters': tool.inputSchema,
+                        'parameters': sanitizeGeminiSchema(tool.inputSchema),
                       },
                     )
                     .toList(),
