@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../ui2/components/flow_mark.dart';
-import '../ui2/screens/flow_home.dart';
-import '../ui2/screens/onboarding_screen.dart';
-import '../ui2/tokens/flow_metrics.dart';
-import '../ui2/tokens/flow_palette.dart';
+import '../zero/zero_home.dart';
+import '../zero/zero_onboarding.dart';
+import '../zero/zero_theme.dart';
 import 'app_controller.dart';
 
 class AppExperience extends ConsumerStatefulWidget {
@@ -49,7 +47,14 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final async = ref.watch(appControllerProvider);
     return async.when(
-      loading: () => const Scaffold(body: Center(child: FlowMark(size: 48))),
+      loading: () => const Scaffold(
+        body: Center(
+          child: SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
       error: (e, _) => Scaffold(
         body: Center(
           child: Text(
@@ -60,7 +65,7 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
       ),
       data: (app) {
         if (!app.preferences.onboardingComplete) {
-          return const OnboardingScreen();
+          return const ZeroOnboarding();
         }
         if (app.locked) {
           if (!_unlockScheduled) {
@@ -74,7 +79,7 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
             onUnlock: () => ref.read(appControllerProvider.notifier).unlock(),
           );
         }
-        return const FlowHome();
+        return const ZeroHome();
       },
     );
   }
@@ -86,38 +91,38 @@ class _LockedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final flow = context.flow;
+    final z = context.zero;
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(FlowSpace.xl),
+          padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const FlowMark(size: 38),
+              Text('F', style: Theme.of(context).textTheme.headlineMedium),
               const Spacer(),
-              Icon(Icons.lock_outline_rounded, size: 34, color: flow.accent),
-              const SizedBox(height: FlowSpace.xl),
+              Icon(Icons.lock_outline_rounded, size: 34, color: z.accent),
+              const SizedBox(height: 24),
               Text(
                 'Your money is locked.',
                 style: Theme.of(context).textTheme.headlineLarge,
               ),
-              const SizedBox(height: FlowSpace.md),
+              const SizedBox(height: 12),
               Text(
                 'Authenticate with this device to open Fund Flow.',
                 style: Theme.of(
                   context,
-                ).textTheme.bodyLarge?.copyWith(color: flow.inkSoft),
+                ).textTheme.bodyLarge?.copyWith(color: z.muted),
               ),
-              const SizedBox(height: FlowSpace.xl),
+              const SizedBox(height: 24),
               FilledButton(
                 onPressed: onUnlock,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(FlowDensity.minimumTarget),
-                  backgroundColor: flow.accent,
-                  foregroundColor: flow.onAccent,
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: z.accent,
+                  foregroundColor: z.onAccent,
                   shape: const RoundedRectangleBorder(
-                    borderRadius: FlowRadius.sm,
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
                   ),
                 ),
                 child: const Text('Unlock Fund Flow'),

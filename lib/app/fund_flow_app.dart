@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/preferences.dart';
-import '../ui2/tokens/flow_theme.dart';
+import '../zero/zero_theme.dart';
 import 'app_controller.dart';
 import 'app_experience.dart';
 
@@ -21,8 +21,8 @@ class FundFlowApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Fund Flow',
       debugShowCheckedModeBanner: false,
-      theme: FlowTheme.light(),
-      darkTheme: FlowTheme.dark(),
+      theme: ZeroTheme.light(),
+      darkTheme: ZeroTheme.dark(),
       themeMode: mode,
       home: const AppExperience(),
     );

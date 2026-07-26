@@ -1,0 +1,2128 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../agent/agent_presentation.dart';
+import '../agent/agent_proposal.dart';
+import '../app/app_controller.dart';
+import '../app/app_state.dart';
+import '../domain/conversation.dart';
+import '../domain/insight_engine.dart';
+import '../domain/money_format.dart';
+import '../domain/preferences.dart';
+import '../domain/transaction.dart';
+import '../ui2/sheets/connect_intelligence_sheet.dart';
+import '../ui2/sheets/message_intelligence_sheet.dart';
+import '../ui2/sheets/transaction_editor_sheet.dart';
+import 'zero_theme.dart';
+
+enum _Place { overview, transactions }
+
+class ZeroHome extends ConsumerStatefulWidget {
+  const ZeroHome({super.key});
+
+  @override
+  ConsumerState<ZeroHome> createState() => _ZeroHomeState();
+}
+
+class _ZeroHomeState extends ConsumerState<ZeroHome> {
+  _Place _place = _Place.overview;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide = box.maxWidth >= 760;
+        final content = IndexedStack(
+          index: _place.index,
+          children: [
+            ZeroOverview(
+              onTransactions: () =>
+                  setState(() => _place = _Place.transactions),
+              onAsk: _openAsk,
+              onSettings: _openSettings,
+              onReview: _openReview,
+            ),
+            ZeroTransactions(onAsk: _openAsk, onSettings: _openSettings),
+          ],
+        );
+        if (wide) {
+          return Scaffold(
+            body: Row(
+              children: [
+                _Rail(
+                  place: _place,
+                  onChanged: (value) => setState(() => _place = value),
+                  onAsk: _openAsk,
+                ),
+                Expanded(child: SafeArea(child: content)),
+              ],
+            ),
+          );
+        }
+        return Scaffold(
+          body: SafeArea(bottom: false, child: content),
+          bottomNavigationBar: _Dock(
+            place: _place,
+            busy: app.asking,
+            onChanged: (value) => setState(() => _place = value),
+            onAsk: _openAsk,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openAsk([String? question]) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => ZeroAsk(seed: question)));
+  }
+
+  Future<void> _openReview() => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const ZeroReview()));
+
+  Future<void> _openSettings() => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const ZeroSettings()));
+}
+
+class _Dock extends StatelessWidget {
+  const _Dock({
+    required this.place,
+    required this.busy,
+    required this.onChanged,
+    required this.onAsk,
+  });
+  final _Place place;
+  final bool busy;
+  final ValueChanged<_Place> onChanged;
+  final VoidCallback onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+      child: SizedBox(
+        height: 66,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              top: 8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: z.surface,
+                  border: Border.all(color: z.line),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Destination(
+                        label: 'Overview',
+                        icon: Icons.space_dashboard_outlined,
+                        selected: place == _Place.overview,
+                        onTap: () => onChanged(_Place.overview),
+                      ),
+                    ),
+                    const SizedBox(width: 78),
+                    Expanded(
+                      child: _Destination(
+                        label: 'Transactions',
+                        icon: Icons.format_list_bulleted_rounded,
+                        selected: place == _Place.transactions,
+                        onTap: () => onChanged(_Place.transactions),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Semantics(
+              button: true,
+              label: busy ? 'AI is working' : 'Ask your money',
+              child: Material(
+                color: z.accent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onAsk,
+                  child: SizedBox(
+                    width: 62,
+                    height: 62,
+                    child: busy
+                        ? Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: z.onAccent,
+                            ),
+                          )
+                        : Icon(
+                            Icons.arrow_outward_rounded,
+                            color: z.onAccent,
+                            size: 25,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Destination extends StatelessWidget {
+  const _Destination({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: selected ? z.accent : z.faint),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: selected ? z.text : z.faint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Rail extends StatelessWidget {
+  const _Rail({
+    required this.place,
+    required this.onChanged,
+    required this.onAsk,
+  });
+  final _Place place;
+  final ValueChanged<_Place> onChanged;
+  final VoidCallback onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return Container(
+      width: 92,
+      decoration: BoxDecoration(
+        color: z.surface,
+        border: Border(right: BorderSide(color: z.line)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            Text('F', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 32),
+            _RailButton(
+              icon: Icons.space_dashboard_outlined,
+              label: 'Overview',
+              selected: place == _Place.overview,
+              onTap: () => onChanged(_Place.overview),
+            ),
+            _RailButton(
+              icon: Icons.format_list_bulleted_rounded,
+              label: 'Records',
+              selected: place == _Place.transactions,
+              onTap: () => onChanged(_Place.transactions),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: IconButton.filled(
+                tooltip: 'Ask your money',
+                onPressed: onAsk,
+                icon: const Icon(Icons.arrow_outward_rounded),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RailButton extends StatelessWidget {
+  const _RailButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 76,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: selected ? z.accent : z.faint),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: selected ? z.text : z.faint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ZeroOverview extends ConsumerWidget {
+  const ZeroOverview({
+    super.key,
+    required this.onTransactions,
+    required this.onAsk,
+    required this.onSettings,
+    required this.onReview,
+  });
+  final VoidCallback onTransactions;
+  final ValueChanged<String?> onAsk;
+  final VoidCallback onSettings;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    final now = DateTime.now();
+    final month = app.transactions
+        .where(
+          (t) =>
+              t.occurredAt.year == now.year && t.occurredAt.month == now.month,
+        )
+        .toList();
+    final currency = _currency(month, app.preferences.currency);
+    final outgoing = _sum(month, TransactionDirection.outgoing, currency);
+    final incoming = _sum(month, TransactionDirection.incoming, currency);
+    final review = app.transactions
+        .where((t) => t.reviewState == ReviewState.needsReview)
+        .length;
+    final insights = InsightEngine.insights(app.transactions, now, limit: 2);
+    final recent = [...app.transactions]
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final hidden = app.preferences.hideAmounts;
+    final previous = _previousComparable(app.transactions, now, currency);
+    final change = previous == 0 ? null : (outgoing - previous) / previous;
+    final z = context.zero;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 22, 16, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        DateFormat('MMMM yyyy').format(now),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: hidden ? 'Show amounts' : 'Hide amounts',
+                      onPressed: () => ref
+                          .read(appControllerProvider.notifier)
+                          .updatePreferences(
+                            app.preferences.copyWith(hideAmounts: !hidden),
+                          ),
+                      icon: Icon(
+                        hidden
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Settings',
+                      onPressed: onSettings,
+                      icon: const Icon(Icons.person_outline_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Spent',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: z.muted),
+                    ),
+                    const SizedBox(height: 7),
+                    _Money(
+                      minor: outgoing,
+                      currency: currency,
+                      hidden: hidden,
+                      style: Theme.of(context).textTheme.displayLarge,
+                    ),
+                    const SizedBox(height: 13),
+                    if (change != null)
+                      Text(
+                        '${change > 0 ? '↑' : '↓'} ${(change.abs() * 100).round()}% '
+                        '${change > 0 ? 'more' : 'less'} than this point last month',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: change > 0 ? z.warning : z.positive,
+                        ),
+                      )
+                    else
+                      Text(
+                        '${month.length} automatically captured transactions',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: z.muted),
+                      ),
+                    const SizedBox(height: 28),
+                    _MiniTrend(values: _daily(month, currency)),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _QuietMetric(
+                            label: 'Money in',
+                            value: hidden
+                                ? '••••'
+                                : formatMoney(incoming, currency),
+                          ),
+                        ),
+                        Container(width: 1, height: 38, color: z.line),
+                        Expanded(
+                          child: _QuietMetric(
+                            label: 'Net',
+                            value: hidden
+                                ? '••••'
+                                : formatMoney(incoming - outgoing, currency),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
+                child: _Briefing(
+                  insights: insights,
+                  change: change,
+                  onAsk: onAsk,
+                ),
+              ),
+            ),
+            if (review > 0)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
+                  child: _Attention(count: review, onTap: onReview),
+                ),
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 44, 24, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Recent',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: onTransactions,
+                      child: const Text('View all'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (recent.isEmpty)
+              SliverToBoxAdapter(
+                child: _EmptyLedger(
+                  onImport: () =>
+                      ref.read(appControllerProvider.notifier).importMessages(),
+                  onAdd: () => showTransactionEditor(context),
+                ),
+              )
+            else
+              SliverList.builder(
+                itemCount: recent.take(6).length,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _TransactionLine(
+                    item: recent[index],
+                    hidden: hidden,
+                    onTap: () => _openDetail(context, recent[index]),
+                  ),
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuietMetric extends StatelessWidget {
+  const _QuietMetric({required this.label, required this.value});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: context.zero.muted),
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _Briefing extends StatelessWidget {
+  const _Briefing({
+    required this.insights,
+    required this.change,
+    required this.onAsk,
+  });
+  final List<Insight> insights;
+  final double? change;
+  final ValueChanged<String?> onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    final text = insights.isNotEmpty
+        ? '${insights.first.title}. ${insights.first.detail}'
+        : change == null
+        ? 'Your record is up to date. I’ll surface meaningful changes here as they emerge.'
+        : change! > 0
+        ? 'Spending is running ahead of last month. Ask for a breakdown to see what changed.'
+        : 'Spending remains below the same point last month.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Briefing', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        Text(text, style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: () => onAsk(
+            insights.isEmpty
+                ? 'What changed this month?'
+                : insights.first.question,
+          ),
+          icon: const Icon(Icons.arrow_outward_rounded, size: 17),
+          label: const Text('Understand this'),
+          style: TextButton.styleFrom(foregroundColor: z.accent),
+        ),
+      ],
+    );
+  }
+}
+
+class _Attention extends StatelessWidget {
+  const _Attention({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return Semantics(
+      button: true,
+      label: '$count transactions need confirmation',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+          color: z.subtle,
+          child: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: z.warning),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  '$count ${count == 1 ? 'record needs' : 'records need'} confirmation',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded, size: 19),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniTrend extends StatelessWidget {
+  const _MiniTrend({required this.values});
+  final List<int> values;
+  @override
+  Widget build(BuildContext context) {
+    if (values.length < 2) return const SizedBox(height: 2);
+    return SizedBox(
+      height: 58,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _TrendPainter(
+          values: values,
+          color: context.zero.accent,
+          line: context.zero.line,
+        ),
+      ),
+    );
+  }
+}
+
+class _TrendPainter extends CustomPainter {
+  const _TrendPainter({
+    required this.values,
+    required this.color,
+    required this.line,
+  });
+  final List<int> values;
+  final Color color;
+  final Color line;
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawLine(
+      Offset(0, size.height - 1),
+      Offset(size.width, size.height - 1),
+      Paint()..color = line,
+    );
+    final max = values.reduce((a, b) => a > b ? a : b);
+    if (max <= 0) return;
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final point = Offset(
+        size.width * i / (values.length - 1),
+        size.height - 4 - (size.height - 10) * values[i] / max,
+      );
+      i == 0
+          ? path.moveTo(point.dx, point.dy)
+          : path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrendPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.color != color;
+}
+
+class ZeroTransactions extends ConsumerStatefulWidget {
+  const ZeroTransactions({
+    super.key,
+    required this.onAsk,
+    required this.onSettings,
+  });
+  final ValueChanged<String?> onAsk;
+  final VoidCallback onSettings;
+  @override
+  ConsumerState<ZeroTransactions> createState() => _ZeroTransactionsState();
+}
+
+class _ZeroTransactionsState extends ConsumerState<ZeroTransactions> {
+  final _search = TextEditingController();
+  bool _searching = false;
+  TransactionDirection? _direction;
+  bool _reviewOnly = false;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    final hidden = app.preferences.hideAmounts;
+    final query = _search.text.trim().toLowerCase();
+    final items = app.transactions.where((t) {
+      if (_direction != null && t.direction != _direction) return false;
+      if (_reviewOnly && t.reviewState != ReviewState.needsReview) return false;
+      if (query.isNotEmpty &&
+          !'${t.merchant} ${t.category} ${t.note ?? ''}'.toLowerCase().contains(
+            query,
+          )) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    final groups = <DateTime, List<MoneyTransaction>>{};
+    for (final item in items) {
+      groups
+          .putIfAbsent(
+            DateTime(
+              item.occurredAt.year,
+              item.occurredAt.month,
+              item.occurredAt.day,
+            ),
+            () => [],
+          )
+          .add(item);
+    }
+    final z = context.zero;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 12, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Transactions',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Search',
+                    onPressed: () => setState(() => _searching = !_searching),
+                    icon: const Icon(Icons.search_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Filters',
+                    onPressed: _showFilters,
+                    icon: Badge(
+                      isLabelVisible: _direction != null || _reviewOnly,
+                      smallSize: 7,
+                      child: const Icon(Icons.tune_rounded),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Add transaction',
+                    onPressed: () => showTransactionEditor(context),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
+            ),
+            if (_searching)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+                child: TextField(
+                  controller: _search,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Merchant, category or note',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${items.length} ${items.length == 1 ? 'record' : 'records'}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: z.muted),
+                    ),
+                  ),
+                  if (_direction != null || _reviewOnly)
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _direction = null;
+                        _reviewOnly = false;
+                      }),
+                      child: const Text('Clear filters'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(
+                      child: Text(
+                        app.transactions.isEmpty
+                            ? 'No transactions yet'
+                            : 'No matching transactions',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+                      itemCount: groups.length,
+                      itemBuilder: (context, index) {
+                        final entry = groups.entries.elementAt(index);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(
+                                top: index == 0 ? 0 : 28,
+                                bottom: 6,
+                              ),
+                              child: Text(
+                                _dayLabel(entry.key),
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: z.muted),
+                              ),
+                            ),
+                            for (final item in entry.value)
+                              _TransactionLine(
+                                item: item,
+                                hidden: hidden,
+                                onTap: () => _openDetail(context, item),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilters() async {
+    var direction = _direction;
+    var review = _reviewOnly;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheet) => StatefulBuilder(
+        builder: (context, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Filter transactions',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 24),
+                SegmentedButton<TransactionDirection?>(
+                  segments: const [
+                    ButtonSegment(value: null, label: Text('All')),
+                    ButtonSegment(
+                      value: TransactionDirection.outgoing,
+                      label: Text('Money out'),
+                    ),
+                    ButtonSegment(
+                      value: TransactionDirection.incoming,
+                      label: Text('Money in'),
+                    ),
+                  ],
+                  selected: {direction},
+                  onSelectionChanged: (value) =>
+                      setSheet(() => direction = value.first),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Needs confirmation'),
+                  value: review,
+                  onChanged: (value) => setSheet(() => review = value),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _direction = direction;
+                      _reviewOnly = review;
+                    });
+                    Navigator.pop(sheet);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TransactionLine extends StatelessWidget {
+  const _TransactionLine({
+    required this.item,
+    required this.hidden,
+    required this.onTap,
+  });
+  final MoneyTransaction item;
+  final bool hidden;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    final incoming = item.direction == TransactionDirection.incoming;
+    return Semantics(
+      button: true,
+      label:
+          '${item.merchant}, ${item.category}, ${item.amountMinor} ${item.currency}',
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 68),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: z.line.withValues(alpha: .75)),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: item.reviewState == ReviewState.needsReview
+                      ? z.warning
+                      : z.faint,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _readableMerchant(item.merchant),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${item.category} · ${DateFormat.jm().format(item.occurredAt)}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: z.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                hidden
+                    ? '••••'
+                    : '${incoming ? '+' : '−'}${formatMoney(item.amountMinor, item.currency)}',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: incoming ? z.positive : z.text,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyLedger extends StatelessWidget {
+  const _EmptyLedger({required this.onImport, required this.onAdd});
+  final VoidCallback onImport;
+  final VoidCallback onAdd;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your record starts here',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fund Flow can read transaction messages and organize them automatically.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: onImport,
+            child: const Text('Check messages'),
+          ),
+          TextButton(onPressed: onAdd, child: const Text('Add one manually')),
+        ],
+      ),
+    );
+  }
+}
+
+class ZeroReview extends ConsumerStatefulWidget {
+  const ZeroReview({super.key});
+  @override
+  ConsumerState<ZeroReview> createState() => _ZeroReviewState();
+}
+
+class _ZeroReviewState extends ConsumerState<ZeroReview> {
+  final Set<int?> _skipped = {};
+  @override
+  Widget build(BuildContext context) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    final pending = app.transactions
+        .where(
+          (t) =>
+              t.reviewState == ReviewState.needsReview &&
+              !_skipped.contains(t.id),
+        )
+        .toList();
+    if (pending.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_rounded, size: 38),
+              const SizedBox(height: 16),
+              Text(
+                'Everything is clear',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'There is nothing waiting for your attention.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final item = pending.first;
+    final z = context.zero;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${pending.length} to review'),
+        centerTitle: false,
+      ),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  item.reviewState == ReviewState.needsReview
+                      ? 'Please confirm this record'
+                      : 'Review this transaction',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'It was captured automatically, but one or more details are worth checking.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: z.muted),
+                ),
+                const SizedBox(height: 42),
+                _Money(
+                  minor: item.amountMinor,
+                  currency: item.currency,
+                  hidden: app.preferences.hideAmounts,
+                  style: Theme.of(context).textTheme.displayLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _readableMerchant(item.merchant),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 28),
+                _Fact(label: 'Category', value: item.category),
+                _Fact(
+                  label: 'Date',
+                  value: DateFormat('d MMMM, h:mm a').format(item.occurredAt),
+                ),
+                _Fact(
+                  label: 'Direction',
+                  value: item.direction == TransactionDirection.incoming
+                      ? 'Money in'
+                      : 'Money out',
+                ),
+                if ((item.account ?? '').isNotEmpty)
+                  _Fact(label: 'Account', value: item.account!),
+                if ((item.sourceText ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 30),
+                  Text(
+                    'Original message',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: z.muted),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    item.sourceText!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: z.muted),
+                  ),
+                ],
+                const SizedBox(height: 34),
+                OutlinedButton(
+                  onPressed: () =>
+                      showTransactionEditor(context, transaction: item),
+                  child: const Text('Correct details'),
+                ),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: () => ref
+                      .read(appControllerProvider.notifier)
+                      .confirmTransaction(
+                        item.copyWith(reviewState: ReviewState.confirmed),
+                      ),
+                  child: const Text('Confirm'),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _skipped.add(item.id)),
+                  child: const Text('Skip for now'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ZeroDetail extends ConsumerWidget {
+  const ZeroDetail({super.key, required this.id});
+  final int id;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    final item = app.transactions.where((t) => t.id == id).firstOrNull;
+    if (item == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('This transaction no longer exists.')),
+      );
+    }
+    final z = context.zero;
+    return Scaffold(
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Edit',
+            onPressed: () => showTransactionEditor(context, transaction: item),
+            icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            tooltip: 'Delete',
+            onPressed: () async {
+              await ref
+                  .read(appControllerProvider.notifier)
+                  .deleteTransaction(id);
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+            children: [
+              Text(
+                item.direction == TransactionDirection.incoming
+                    ? 'Money in'
+                    : 'Money out',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: z.muted),
+              ),
+              const SizedBox(height: 10),
+              _Money(
+                minor: item.amountMinor,
+                currency: item.currency,
+                hidden: app.preferences.hideAmounts,
+                style: Theme.of(context).textTheme.displayLarge,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _readableMerchant(item.merchant),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 40),
+              _Fact(
+                label: 'Date',
+                value: DateFormat(
+                  'd MMMM yyyy, h:mm a',
+                ).format(item.occurredAt),
+              ),
+              _Fact(label: 'Category', value: item.category),
+              if ((item.account ?? '').isNotEmpty)
+                _Fact(label: 'Account', value: item.account!),
+              _Fact(
+                label: 'Source',
+                value: switch (item.source) {
+                  TransactionSource.message => 'Transaction message',
+                  TransactionSource.notification => 'Payment notification',
+                  TransactionSource.manual => 'Added manually',
+                },
+              ),
+              if ((item.note ?? '').isNotEmpty)
+                _Fact(label: 'Note', value: item.note!),
+              if ((item.sourceText ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 34),
+                Text(
+                  'Source and reasoning',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Automatically extracted from the message below. '
+                  '${item.confidence >= .9 ? 'The extraction was high confidence.' : 'The extraction may need confirmation.'}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: z.muted),
+                ),
+                const SizedBox(height: 16),
+                SelectableText(
+                  item.sourceText!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: z.muted),
+                ),
+              ],
+              const SizedBox(height: 34),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ZeroAsk(
+                      seed:
+                          'Tell me about the ${item.merchant} transaction for ${formatMoney(item.amountMinor, item.currency)}.',
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_outward_rounded),
+                label: const Text('Ask about this transaction'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.value});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: z.line)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: z.muted),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ZeroAsk extends ConsumerStatefulWidget {
+  const ZeroAsk({super.key, this.seed});
+  final String? seed;
+  @override
+  ConsumerState<ZeroAsk> createState() => _ZeroAskState();
+}
+
+class _ZeroAskState extends ConsumerState<ZeroAsk> {
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  bool _seedSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if ((widget.seed ?? '').isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ask(widget.seed!));
+    }
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ask(String value) async {
+    if (value.trim().isEmpty || _seedSent && value == widget.seed) return;
+    if (value == widget.seed) _seedSent = true;
+    _input.clear();
+    await ref.read(appControllerProvider.notifier).ask(value.trim());
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          _scroll.animateTo(
+            _scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    final connected = app.aiConnection == AiConnection.connected;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ask your money'),
+        actions: [
+          if (app.conversation.isNotEmpty)
+            IconButton(
+              tooltip: 'New question',
+              onPressed: () =>
+                  ref.read(appControllerProvider.notifier).startNewChat(),
+              icon: const Icon(Icons.add_rounded),
+            ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              children: [
+                Expanded(
+                  child: app.conversation.isEmpty && !app.asking
+                      ? _AskStart(onAsk: _ask)
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                          itemCount:
+                              app.conversation.length +
+                              (app.asking || app.error != null ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index < app.conversation.length) {
+                              return _AnswerTurn(
+                                message: app.conversation[index],
+                                transactions: app.transactions,
+                                onAsk: _ask,
+                              );
+                            }
+                            return _Working(app: app);
+                          },
+                        ),
+                ),
+                if (app.pendingAgentProposal case final proposal?)
+                  _ProposalDecision(proposal: proposal),
+                if (!connected)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                    child: OutlinedButton(
+                      onPressed: () => showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => const ConnectIntelligenceSheet(),
+                      ),
+                      child: const Text('Connect intelligence'),
+                    ),
+                  ),
+                _AskComposer(
+                  controller: _input,
+                  enabled: connected && !app.asking,
+                  busy: app.asking,
+                  onSend: () => _ask(_input.text),
+                  onStop: () =>
+                      ref.read(appControllerProvider.notifier).stopAgent(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProposalDecision extends ConsumerWidget {
+  const _ProposalDecision({required this.proposal});
+  final AgentProposal proposal;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final z = context.zero;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: z.surface,
+        border: Border.all(color: z.line),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(proposal.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 5),
+          Text(
+            proposal.explanation,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: z.muted),
+          ),
+          for (final detail in proposal.details.take(3))
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Text('• $detail'),
+            ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => ref
+                    .read(appControllerProvider.notifier)
+                    .rejectAgentProposal(),
+                child: const Text('Not now'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: () => ref
+                    .read(appControllerProvider.notifier)
+                    .approveAgentProposal(),
+                child: const Text('Approve change'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AskStart extends StatelessWidget {
+  const _AskStart({required this.onAsk});
+  final ValueChanged<String> onAsk;
+  @override
+  Widget build(BuildContext context) {
+    final questions = [
+      'What changed this month?',
+      'Where did I overspend?',
+      'Find unusual transactions',
+      'Show subscriptions',
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+      children: [
+        Text(
+          'What would you like\nto understand?',
+          style: Theme.of(context).textTheme.headlineLarge,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Answers come from your own records and cite the transactions they rest on.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: context.zero.muted),
+        ),
+        const SizedBox(height: 36),
+        for (final question in questions)
+          InkWell(
+            onTap: () => onAsk(question),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 17),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: context.zero.line)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      question,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnswerTurn extends StatelessWidget {
+  const _AnswerTurn({
+    required this.message,
+    required this.transactions,
+    required this.onAsk,
+  });
+  final ConversationMessage message;
+  final List<MoneyTransaction> transactions;
+  final ValueChanged<String> onAsk;
+  @override
+  Widget build(BuildContext context) {
+    if (message.author == MessageAuthor.person) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 26),
+        child: Text(
+          message.text,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 36),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message.parts.isEmpty)
+            Text(message.text, style: Theme.of(context).textTheme.bodyLarge)
+          else
+            for (final part in message.parts)
+              _AgentDocumentPart(
+                part: part,
+                transactions: transactions,
+                onAsk: onAsk,
+              ),
+          if (message.verified)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Verified against your local records',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: context.zero.positive),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentDocumentPart extends StatelessWidget {
+  const _AgentDocumentPart({
+    required this.part,
+    required this.transactions,
+    required this.onAsk,
+  });
+  final AgentPart part;
+  final List<MoneyTransaction> transactions;
+  final ValueChanged<String> onAsk;
+  @override
+  Widget build(BuildContext context) {
+    final data = part.data;
+    final text = data['text']?.toString();
+    if (part.kind == AgentPartKind.followUps) {
+      final values = data['questions'];
+      final questions = values is List
+          ? values.map((e) => '$e').toList()
+          : const <String>[];
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final q in questions)
+              ActionChip(label: Text(q), onPressed: () => onAsk(q)),
+          ],
+        ),
+      );
+    }
+    if (part.kind == AgentPartKind.transactionList) {
+      final raw = data['transactionIds'];
+      final ids = raw is List
+          ? raw.whereType<num>().map((e) => e.toInt()).toSet()
+          : <int>{};
+      final rows = transactions.where((t) => ids.contains(t.id)).toList();
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(
+          children: [
+            for (final item in rows)
+              _TransactionLine(
+                item: item,
+                hidden: false,
+                onTap: () => _openDetail(context, item),
+              ),
+          ],
+        ),
+      );
+    }
+    if (part.kind == AgentPartKind.breakdown ||
+        part.kind == AgentPartKind.metricRow) {
+      final raw = data['rows'] ?? data['metrics'] ?? data['values'];
+      final rows = raw is List ? raw : const [];
+      return Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (data['title'] != null)
+              Text(
+                '${data['title']}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            const SizedBox(height: 8),
+            for (final row in rows)
+              if (row is Map)
+                _Fact(
+                  label: '${row['label'] ?? row['title'] ?? ''}',
+                  value: row['amountMinor'] is num
+                      ? formatMoney(
+                          (row['amountMinor'] as num).toInt(),
+                          '${row['currency'] ?? 'INR'}',
+                        )
+                      : '${row['value'] ?? ''}',
+                ),
+          ],
+        ),
+      );
+    }
+    if (text == null || text.trim().isEmpty) return const SizedBox.shrink();
+    final conclusion = part.kind == AgentPartKind.conclusion;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        text,
+        style: conclusion
+            ? Theme.of(context).textTheme.titleLarge
+            : Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: part.kind == AgentPartKind.sourceNote
+                    ? context.zero.muted
+                    : context.zero.text,
+              ),
+      ),
+    );
+  }
+}
+
+class _Working extends StatelessWidget {
+  const _Working({required this.app});
+  final AppState app;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Row(
+        children: [
+          if (app.error == null)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(Icons.error_outline_rounded, color: context.zero.negative),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              app.error ?? app.askStage ?? 'Working with your records…',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AskComposer extends StatelessWidget {
+  const _AskComposer({
+    required this.controller,
+    required this.enabled,
+    required this.busy,
+    required this.onSend,
+    required this.onStop,
+  });
+  final TextEditingController controller;
+  final bool enabled;
+  final bool busy;
+  final VoidCallback onSend;
+  final VoidCallback onStop;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        12 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              minLines: 1,
+              maxLines: 4,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: enabled
+                    ? 'Ask about your money'
+                    : 'Connect intelligence to ask',
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filled(
+            tooltip: busy ? 'Stop' : 'Send',
+            onPressed: busy
+                ? onStop
+                : enabled
+                ? onSend
+                : null,
+            icon: Icon(busy ? Icons.stop_rounded : Icons.arrow_upward_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ZeroSettings extends ConsumerWidget {
+  const ZeroSettings({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final app = ref.watch(appControllerProvider).requireValue;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+            children: [
+              _SettingsLink(
+                title: 'Automation',
+                detail: 'Messages and notifications',
+                icon: Icons.bolt_outlined,
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const MessageIntelligenceSheet(),
+                ),
+              ),
+              _SettingsLink(
+                title: 'Intelligence',
+                detail: switch (app.aiConnection) {
+                  AiConnection.connected =>
+                    'Connected to ${app.preferences.aiProvider.name}',
+                  AiConnection.checking => 'Checking connection',
+                  AiConnection.rejected => 'Connection needs attention',
+                  _ => 'Not connected',
+                },
+                icon: Icons.memory_outlined,
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const ConnectIntelligenceSheet(),
+                ),
+              ),
+              _SettingsLink(
+                title: 'Privacy',
+                detail: 'App lock, hidden amounts and data sharing',
+                icon: Icons.shield_outlined,
+                onTap: () => _privacy(context, ref, app),
+              ),
+              _SettingsLink(
+                title: 'Preferences',
+                detail:
+                    '${app.preferences.currency} · ${app.preferences.appearance.name}',
+                icon: Icons.tune_rounded,
+                onTap: () => _preferences(context, ref, app),
+              ),
+              _SettingsLink(
+                title: 'Data',
+                detail: 'Conversations and local records',
+                icon: Icons.storage_outlined,
+                onTap: () => _data(context, ref),
+              ),
+              const _SettingsLink(
+                title: 'About',
+                detail: 'Fund Flow · private by design',
+                icon: Icons.info_outline_rounded,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _privacy(
+    BuildContext context,
+    WidgetRef ref,
+    AppState app,
+  ) => showModalBottomSheet<void>(
+    context: context,
+    builder: (sheet) => _SimpleSettingsSheet(
+      title: 'Privacy',
+      children: [
+        SwitchListTile.adaptive(
+          title: const Text('Hide amounts'),
+          subtitle: const Text('Conceal figures throughout the app'),
+          value: app.preferences.hideAmounts,
+          onChanged: (value) => ref
+              .read(appControllerProvider.notifier)
+              .updatePreferences(app.preferences.copyWith(hideAmounts: value)),
+        ),
+        SwitchListTile.adaptive(
+          title: const Text('App lock'),
+          subtitle: const Text('Require device authentication'),
+          value: app.preferences.lockApp,
+          onChanged: ref.read(appControllerProvider.notifier).setAppLock,
+        ),
+        ListTile(
+          title: const Text('Data boundary'),
+          subtitle: const Text(
+            'Transactions stay local. Questions and opted-in message text go to your AI provider.',
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _preferences(
+    BuildContext context,
+    WidgetRef ref,
+    AppState app,
+  ) => showModalBottomSheet<void>(
+    context: context,
+    builder: (sheet) => _SimpleSettingsSheet(
+      title: 'Preferences',
+      children: [
+        ListTile(
+          title: const Text('Appearance'),
+          subtitle: Text(app.preferences.appearance.name),
+          onTap: () async {
+            final value = await showDialog<AppearancePreference>(
+              context: sheet,
+              builder: (dialog) => SimpleDialog(
+                title: const Text('Appearance'),
+                children: [
+                  for (final option in AppearancePreference.values)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(dialog, option),
+                      child: Text(option.name),
+                    ),
+                ],
+              ),
+            );
+            if (value != null) {
+              await ref
+                  .read(appControllerProvider.notifier)
+                  .updatePreferences(
+                    app.preferences.copyWith(appearance: value),
+                  );
+            }
+          },
+        ),
+        ListTile(
+          title: const Text('Primary currency'),
+          subtitle: Text(app.preferences.currency),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _data(BuildContext context, WidgetRef ref) =>
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (sheet) => _SimpleSettingsSheet(
+          title: 'Data',
+          children: [
+            ListTile(
+              title: const Text('Clear conversations'),
+              subtitle: const Text('Transactions are not removed'),
+              onTap: () =>
+                  ref.read(appControllerProvider.notifier).clearConversation(),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SettingsLink extends StatelessWidget {
+  const _SettingsLink({
+    required this.title,
+    required this.detail,
+    required this.icon,
+    this.onTap,
+  });
+  final String title;
+  final String detail;
+  final IconData icon;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final z = context.zero;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 21),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: z.line)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: z.muted, size: 22),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(
+                    detail,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: z.muted),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              const Icon(Icons.arrow_forward_ios_rounded, size: 15),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SimpleSettingsSheet extends StatelessWidget {
+  const _SimpleSettingsSheet({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    ),
+  );
+}
+
+class _Money extends StatelessWidget {
+  const _Money({
+    required this.minor,
+    required this.currency,
+    required this.hidden,
+    this.style,
+  });
+  final int minor;
+  final String currency;
+  final bool hidden;
+  final TextStyle? style;
+  @override
+  Widget build(BuildContext context) => Text(
+    hidden ? '••••••' : formatMoney(minor, currency),
+    style: style?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+  );
+}
+
+String _currency(List<MoneyTransaction> values, String fallback) {
+  if (values.isEmpty) return fallback;
+  final counts = <String, int>{};
+  for (final value in values) {
+    counts[value.currency] = (counts[value.currency] ?? 0) + 1;
+  }
+  return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+}
+
+int _sum(
+  Iterable<MoneyTransaction> values,
+  TransactionDirection direction,
+  String currency,
+) => values
+    .where((t) => t.direction == direction && t.currency == currency)
+    .fold(0, (sum, t) => sum + t.amountMinor);
+
+int _previousComparable(
+  Iterable<MoneyTransaction> values,
+  DateTime now,
+  String currency,
+) {
+  final previousStart = DateTime(now.year, now.month - 1);
+  final previousEnd = previousStart.add(
+    now.difference(DateTime(now.year, now.month)),
+  );
+  return values
+      .where(
+        (t) =>
+            t.currency == currency &&
+            t.direction == TransactionDirection.outgoing &&
+            !t.occurredAt.isBefore(previousStart) &&
+            t.occurredAt.isBefore(previousEnd),
+      )
+      .fold(0, (sum, t) => sum + t.amountMinor);
+}
+
+List<int> _daily(List<MoneyTransaction> values, String currency) {
+  if (values.isEmpty) return const [];
+  final maxDay = values
+      .map((t) => t.occurredAt.day)
+      .reduce((a, b) => a > b ? a : b);
+  return List.generate(
+    maxDay,
+    (i) => values
+        .where(
+          (t) =>
+              t.currency == currency &&
+              t.direction == TransactionDirection.outgoing &&
+              t.occurredAt.day == i + 1,
+        )
+        .fold(0, (sum, t) => sum + t.amountMinor),
+  );
+}
+
+String _dayLabel(DateTime day) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  if (day == today) return 'Today';
+  if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
+  return DateFormat('EEEE, d MMMM').format(day);
+}
+
+String _readableMerchant(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return 'Unknown merchant';
+  if (trimmed != trimmed.toUpperCase()) return trimmed;
+  return trimmed
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .map(
+        (part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
+
+void _openDetail(BuildContext context, MoneyTransaction item) {
+  if (item.id == null) return;
+  Navigator.push(
+    context,
+    MaterialPageRoute<void>(builder: (_) => ZeroDetail(id: item.id!)),
+  );
+}
