@@ -7,6 +7,7 @@ import '../shell/flow_nav.dart';
 import '../components/flow_sheet_inset.dart';
 import '../shell/flow_shell.dart';
 import 'activity_screen.dart';
+import 'analytics_screen.dart';
 import 'chat_screen.dart';
 import 'review_screen.dart';
 import 'settings_screen.dart';
@@ -44,6 +45,7 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       today: TodayScreen(
         onReview: () => setState(() => _destination = FlowDestination.review),
         onOpenSettings: _openSettings,
+        onOpenAnalytics: _openAnalytics,
         onAsk: _askInChat,
       ),
       activity: const ActivityScreen(),
@@ -62,6 +64,22 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
     await chat;
   }
 
+  Future<void> _openAnalytics() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheet) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .92,
+      minChildSize: .5,
+      maxChildSize: .96,
+      builder: (context, controller) => PrimaryScrollController(
+        controller: controller,
+        child: const AnalyticsScreen(),
+      ),
+    ),
+  );
+
   /// Chat opens over whatever is on screen and returns to it. Conversation is
   /// something brought to the current context rather than a place navigated
   /// to and back from.
@@ -74,9 +92,6 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       initialChildSize: .94,
       minChildSize: .5,
       maxChildSize: .96,
-      // Without this the sheet keeps its full height when the keyboard opens
-      // and the composer — the whole point of the screen — sits underneath it,
-      // so you cannot see what you are typing.
       builder: (context, controller) =>
           const FlowSheetInset(child: ChatScreen()),
     ),

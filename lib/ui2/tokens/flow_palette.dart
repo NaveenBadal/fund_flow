@@ -28,71 +28,57 @@ abstract final class FlowPalette {
   // other way round. Near-black rather than true black: #000 smears on OLED
   // during scroll and reads cheap, while a blue-cast charcoal lets a raised
   // surface look lit rather than merely lighter.
-  static const darkCanvas = Color(0xFF0B0C11);
-  static const darkSunken = Color(0xFF07080B);
-  static const darkRaised = Color(0xFF16181F);
-  static const darkLine = Color(0xFF262A33);
+  // ---------------------------------------------------------------- surfaces
+  // Dark mode is a rich velvet slate with blue undertones for OLED depth.
+  static const darkCanvas = Color(0xFF07090E);
+  static const darkSunken = Color(0xFF0B0E15);
+  static const darkRaised = Color(0xFF111520);
+  static const darkLine = Color(0xFF1E2538);
 
-  // Cool rather than warm. The previous ground was paper-coloured, which
-  // signals archive and record — the wrong register for something opened
-  // every day and hoped to be liked.
-  static const lightCanvas = Color(0xFFF7F8FA);
-  static const lightSunken = Color(0xFFEDEFF3);
+  // Light mode is a pure silk ceramic with crisp cool neutrals.
+  static const lightCanvas = Color(0xFFF8FAFC);
+  static const lightSunken = Color(0xFFF1F5F9);
   static const lightRaised = Color(0xFFFFFFFF);
-  static const lightLine = Color(0xFFE2E5EB);
+  static const lightLine = Color(0xFFE2E8F0);
 
   // -------------------------------------------------------------------- ink
-  static const lightInk = Color(0xFF0B0C11);
-  static const lightInkSoft = Color(0xFF5A6172);
-  static const lightInkFaint = Color(0xFF8B92A3);
+  static const lightInk = Color(0xFF0F172A);
+  static const lightInkSoft = Color(0xFF475569);
+  static const lightInkFaint = Color(0xFF94A3B8);
 
-  static const darkInk = Color(0xFFF4F5F7);
-  static const darkInkSoft = Color(0xFFA8ADBA);
-  static const darkInkFaint = Color(0xFF6B7180);
+  static const darkInk = Color(0xFFF8FAFC);
+  static const darkInkSoft = Color(0xFF94A3B8);
+  static const darkInkFaint = Color(0xFF64748B);
 
   // ------------------------------------------------------------ categorical
-  /// Fixed order. A ninth series is never a generated hue: it folds into
-  /// "Other" or the chart becomes small multiples.
-  ///
-  /// Hues are spaced around the wheel rather than shaded from one family, so
-  /// neighbouring slices stay separable for a red-green colour blind reader.
-  /// Even so, a chart never relies on hue alone: every slice carries a label
-  /// and a figure.
   static const darkSeries = <Color>[
-    Color(0xFF6C5CE7), // indigo, the signal
-    Color(0xFF22D3EE), // cyan
-    Color(0xFF34D399), // emerald
-    Color(0xFFFBBF24), // amber
-    Color(0xFFFB7185), // rose
-    Color(0xFF94A3B8), // slate
+    Color(0xFF6366F1), // indigo electric
+    Color(0xFF06B6D4), // cyan
+    Color(0xFF10B981), // emerald
+    Color(0xFFF59E0B), // amber
+    Color(0xFFF43F5E), // rose
+    Color(0xFF8B5CF6), // violet
   ];
 
   static const lightSeries = <Color>[
-    Color(0xFF5B4BD6),
+    Color(0xFF4F46E5),
     Color(0xFF0891B2),
     Color(0xFF059669),
     Color(0xFFD97706),
     Color(0xFFE11D48),
-    Color(0xFF64748B),
+    Color(0xFF7C3AED),
   ];
 
   // --------------------------------------------------------------- semantic
-  // Direction is never the brand colour: green and red mean money in and
-  // money out and nothing else, so the signal hue stays free to mean
-  // "the app is talking to you". Direction also always carries a sign or an
-  // arrow — colour is reinforcement, never the only cue.
-  static const darkIncome = Color(0xFF34D399);
-  static const darkExpense = Color(0xFFFB7185);
-  static const darkAttention = Color(0xFFFBBF24);
-
-  /// The one hue the interface spends. Used sparingly, against a great deal
-  /// of restraint, which is the only reason it lands.
-  static const darkAccent = Color(0xFF6C5CE7);
+  static const darkIncome = Color(0xFF10B981);
+  static const darkExpense = Color(0xFFF43F5E);
+  static const darkAttention = Color(0xFFF59E0B);
+  static const darkAccent = Color(0xFF6366F1);
 
   static const lightIncome = Color(0xFF059669);
   static const lightExpense = Color(0xFFE11D48);
   static const lightAttention = Color(0xFFD97706);
-  static const lightAccent = Color(0xFF5B4BD6);
+  static const lightAccent = Color(0xFF4F46E5);
 }
 
 /// Resolved colours for the active brightness.

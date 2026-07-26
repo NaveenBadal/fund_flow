@@ -518,8 +518,12 @@ class _Group extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: flow.raised,
-        borderRadius: FlowRadius.md,
-        border: Border.all(color: flow.line),
+        borderRadius: FlowRadius.lg,
+        border: Border.all(
+          color: flow.line,
+          width: 1,
+        ),
+        boxShadow: FlowElevation.low(Theme.of(context).brightness),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -531,7 +535,7 @@ class _Group extends StatelessWidget {
                 height: 1,
                 indent: FlowSpace.lg,
                 endIndent: FlowSpace.lg,
-                color: flow.line,
+                color: flow.line.withValues(alpha: 0.5),
               ),
           ],
         ],

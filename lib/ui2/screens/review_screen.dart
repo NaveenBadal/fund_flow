@@ -200,33 +200,87 @@ class _ReviewCard extends StatelessWidget {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(FlowSpace.lg),
+          padding: const EdgeInsets.all(FlowSpace.xl),
           decoration: BoxDecoration(
             color: flow.raised,
-            borderRadius: FlowRadius.md,
-            border: Border.all(color: flow.line),
+            borderRadius: FlowRadius.xl,
+            border: Border.all(
+              color: flow.accent.withValues(alpha: 0.15),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: flow.accent.withValues(alpha: 0.08),
+                blurRadius: 24,
+                spreadRadius: -4,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                incoming ? 'Money in' : 'Money out',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(color: flow.inkSoft),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: FlowSpace.sm,
+                      vertical: FlowSpace.xxs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (incoming ? flow.income : flow.expense).withValues(alpha: 0.12),
+                      borderRadius: FlowRadius.pill,
+                    ),
+                    child: Text(
+                      incoming ? 'MONEY IN' : 'MONEY OUT',
+                      style: FlowType.eyebrow.copyWith(
+                        fontSize: 9,
+                        color: incoming ? flow.income : flow.expense,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: FlowSpace.sm,
+                      vertical: FlowSpace.xxs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: flow.attention.withValues(alpha: 0.12),
+                      borderRadius: FlowRadius.pill,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 10, color: flow.attention),
+                        const SizedBox(width: 4),
+                        Text(
+                          'AI UNCERTAIN',
+                          style: FlowType.eyebrow.copyWith(
+                            fontSize: 9,
+                            color: flow.attention,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: FlowSpace.xs),
+              const SizedBox(height: FlowSpace.md),
               Text(
                 '${incoming ? '+' : '−'}'
                 '${formatMoney(item.amountMinor, item.currency)}',
                 style: FlowType.amountHero.copyWith(
                   color: incoming ? flow.income : flow.ink,
+                  fontSize: 44,
                 ),
               ),
               const SizedBox(height: FlowSpace.sm),
               Text(
                 item.merchant,
-                style: Theme.of(context).textTheme.titleLarge,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               Text(
                 _when(item.occurredAt),

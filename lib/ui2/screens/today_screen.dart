@@ -24,14 +24,13 @@ class TodayScreen extends ConsumerWidget {
     super.key,
     required this.onReview,
     required this.onOpenSettings,
+    this.onOpenAnalytics,
     required this.onAsk,
   });
 
   final VoidCallback onReview;
   final VoidCallback onOpenSettings;
-
-  /// Opens the conversation on a question, so a noticed thing can be
-  /// explained by the agent rather than dead-ending on the card.
+  final VoidCallback? onOpenAnalytics;
   final ValueChanged<String> onAsk;
 
   @override
@@ -43,9 +42,6 @@ class TodayScreen extends ConsumerWidget {
     final review = app.transactions
         .where((item) => item.reviewState == ReviewState.needsReview)
         .length;
-    // Deterministic, so this costs a pass over the ledger rather than a
-    // model round trip: the screen can say something useful in its first
-    // frame instead of waiting to be asked.
     final noticed = InsightEngine.insights(app.transactions, DateTime.now());
 
     return CustomScrollView(
@@ -66,6 +62,13 @@ class TodayScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                 ),
+                if (onOpenAnalytics != null)
+                  IconButton(
+                    onPressed: onOpenAnalytics,
+                    tooltip: 'Analytics',
+                    icon: const Icon(Icons.bar_chart_rounded),
+                    color: flow.accent,
+                  ),
                 IconButton(
                   onPressed: onOpenSettings,
                   tooltip: 'Settings',
@@ -96,23 +99,30 @@ class TodayScreen extends ConsumerWidget {
                 FlowSpace.xl,
                 0,
               ),
-              // The month's figure is what this screen is for, so it sits on
-              // its own raised surface rather than floating on the page with
-              // everything else. This is the one card allowed hero depth.
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(FlowSpace.xl),
                 decoration: BoxDecoration(
                   borderRadius: FlowRadius.xl,
-                  border: Border.all(color: flow.line),
-                  boxShadow: FlowElevation.hero(Theme.of(context).brightness),
+                  border: Border.all(
+                    color: flow.accent.withValues(alpha: 0.2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: flow.accent.withValues(alpha: 0.15),
+                      blurRadius: 32,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
                       flow.raised,
                       Color.alphaBlend(
-                        flow.accent.withValues(alpha: .05),
+                        flow.accent.withValues(alpha: 0.08),
                         flow.raised,
                       ),
                     ],
@@ -121,14 +131,38 @@ class TodayScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'SPENT THIS MONTH',
-                      style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'SPENT THIS MONTH',
+                            style: FlowType.eyebrow.copyWith(
+                              color: flow.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: FlowSpace.sm,
+                            vertical: FlowSpace.xxs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: flow.accent.withValues(alpha: 0.12),
+                            borderRadius: FlowRadius.pill,
+                          ),
+                          child: Text(
+                            'LIVE TRACKING',
+                            style: FlowType.eyebrow.copyWith(
+                              fontSize: 9,
+                              color: flow.accent,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: FlowSpace.md),
-                    // Scaled to the width rather than wrapped. A figure this
-                    // size will not fit every currency and every amount, and
-                    // a balance broken across two lines is unreadable.
                     SizedBox(
                       width: double.infinity,
                       child: FittedBox(
@@ -141,13 +175,13 @@ class TodayScreen extends ConsumerWidget {
                                   summary.spentMinor,
                                   summary.currency,
                                 ),
-                          style: FlowType.amountHero.copyWith(color: flow.ink),
+                          style: FlowType.amountHero.copyWith(
+                            color: flow.ink,
+                            fontSize: 48,
+                          ),
                         ),
                       ),
                     ),
-                    // The change sits under the figure rather than beside
-                    // it: alongside, it competes for the width the figure
-                    // needs and forces the number to shrink.
                     if (summary.change != null && !hidden) ...[
                       const SizedBox(height: FlowSpace.md),
                       FlowDelta(fraction: summary.change!),

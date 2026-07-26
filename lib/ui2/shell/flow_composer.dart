@@ -52,15 +52,30 @@ class FlowComposer extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           FlowSpace.lg,
-          FlowSpace.sm,
+          FlowSpace.xs,
           FlowSpace.lg,
-          FlowSpace.sm,
+          FlowSpace.xs,
         ),
-        child: DecoratedBox(
+        child: Container(
           decoration: BoxDecoration(
             borderRadius: FlowRadius.pill,
-            boxShadow: FlowElevation.card(Theme.of(context).brightness),
+            gradient: LinearGradient(
+              colors: [
+                flow.accent.withValues(alpha: 0.25),
+                flow.line,
+                flow.accent.withValues(alpha: 0.1),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: flow.accent.withValues(alpha: 0.12),
+                blurRadius: 16,
+                spreadRadius: -2,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
+          padding: const EdgeInsets.all(1),
           child: Material(
             color: flow.raised,
             borderRadius: FlowRadius.pill,
@@ -68,28 +83,31 @@ class FlowComposer extends StatelessWidget {
               onTap: enabled ? onOpen : null,
               borderRadius: FlowRadius.pill,
               child: Container(
-                height: 52,
+                height: 50,
                 padding: const EdgeInsets.symmetric(horizontal: FlowSpace.lg),
-                decoration: BoxDecoration(
-                  borderRadius: FlowRadius.pill,
-                  border: Border.all(color: flow.line),
-                ),
                 child: Row(
                   children: [
                     if (busy)
                       SizedBox(
-                        width: 15,
-                        height: 15,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: flow.accent,
                         ),
                       )
                     else
-                      Icon(
-                        Icons.auto_awesome_outlined,
-                        size: 17,
-                        color: flow.accent,
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: flow.accent.withValues(alpha: 0.12),
+                        ),
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 16,
+                          color: flow.accent,
+                        ),
                       ),
                     const SizedBox(width: FlowSpace.md),
                     Expanded(
@@ -99,13 +117,22 @@ class FlowComposer extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: enabled ? flow.inkSoft : flow.inkFaint,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 17,
-                      color: flow.inkFaint,
+                    const SizedBox(width: FlowSpace.sm),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: flow.sunken,
+                      ),
+                      child: Icon(
+                        Icons.arrow_upward_rounded,
+                        size: 16,
+                        color: flow.inkFaint,
+                      ),
                     ),
                   ],
                 ),
