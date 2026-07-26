@@ -1,68 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Fund Flow launcher mark.
-  Three ascending flow ribbons (money rising) in an electric-indigo gradient,
-  crowned by an AI signal-spark. Sits inside the adaptive safe zone (center 72dp).
+  One uninterrupted line: information enters, is understood, and becomes flow.
+  Its silhouette hints at F without turning the icon into a literal monogram.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-
-    <!-- Ribbon 1 (front, longest) -->
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
     <path
-        android:strokeWidth="7.5"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#AFC9B4"
+        android:strokeWidth="12"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:pathData="M27,67 C40,61 47,72 60,63 C68,57.5 74,58.5 81,53">
-        <aapt:attr name="android:strokeColor">
-            <gradient android:type="linear"
-                android:startX="27" android:startY="67"
-                android:endX="82" android:endY="41">
-                <item android:offset="0" android:color="#5A4BD6" />
-                <item android:offset="1" android:color="#9C8DFF" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Ribbon 2 (middle) -->
-    <path
-        android:strokeWidth="7.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M27,56 C40,50 47,61 60,52 C68,46.5 74,47.5 81,42">
-        <aapt:attr name="android:strokeColor">
-            <gradient android:type="linear"
-                android:startX="27" android:startY="56"
-                android:endX="82" android:endY="30">
-                <item android:offset="0" android:color="#6C5CE7" />
-                <item android:offset="1" android:color="#B4A8FF" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Ribbon 3 (top, short, leads the eye to the spark) -->
-    <path
-        android:strokeWidth="7.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M27,45 C38,40 45,49 55,42">
-        <aapt:attr name="android:strokeColor">
-            <gradient android:type="linear"
-                android:startX="27" android:startY="45"
-                android:endX="56" android:endY="34">
-                <item android:offset="0" android:color="#7C6DF0" />
-                <item android:offset="1" android:color="#C9BFFF" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- AI signal-spark at the crest -->
-    <path
-        android:fillColor="#EEEAFF"
-        android:pathData="M79,23 C79.9,28.4 82.6,31.1 88,32 C82.6,32.9 79.9,35.6 79,41 C78.1,35.6 75.4,32.9 70,32 C75.4,31.1 78.1,28.4 79,23 Z" />
-    <!-- small trailing spark -->
-    <path
-        android:fillColor="#B4A8FF"
-        android:pathData="M67,44 C67.4,46.2 68.8,47.6 71,48 C68.8,48.4 67.4,49.8 67,52 C66.6,49.8 65.2,48.4 63,48 C65.2,47.6 66.6,46.2 67,44 Z" />
+        android:pathData="M76,34 H51 C40,34 34,40 34,48 C34,57 42,62 54,62 H70 C64,62 58,64 53,68 C48,72 46,77 46,83" />
 </vector>
