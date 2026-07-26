@@ -63,12 +63,29 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         .toList();
 
     if (pending.isEmpty) {
-      return _AllClear(
-        cleared: _clearedThisSession,
-        skipped: _skipped.length,
-        onBringBackSkipped: _skipped.isEmpty
-            ? null
-            : () => setState(_skipped.clear),
+      return Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.all(FlowSpace.sm),
+              child: IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _AllClear(
+              cleared: _clearedThisSession,
+              skipped: _skipped.length,
+              onBringBackSkipped: _skipped.isEmpty
+                  ? null
+                  : () => setState(_skipped.clear),
+            ),
+          ),
+        ],
       );
     }
 
@@ -88,6 +105,12 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
           ),
           child: Row(
             children: [
+              IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: FlowSpace.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +252,9 @@ class _ReviewCard extends StatelessWidget {
                       vertical: FlowSpace.xxs,
                     ),
                     decoration: BoxDecoration(
-                      color: (incoming ? flow.income : flow.expense).withValues(alpha: 0.12),
+                      color: (incoming ? flow.income : flow.expense).withValues(
+                        alpha: 0.12,
+                      ),
                       borderRadius: FlowRadius.pill,
                     ),
                     child: Text(
@@ -252,7 +277,11 @@ class _ReviewCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.auto_awesome_rounded, size: 10, color: flow.attention),
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 10,
+                          color: flow.attention,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'AI UNCERTAIN',

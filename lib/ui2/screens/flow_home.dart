@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_controller.dart';
 import '../../domain/transaction.dart';
 import '../shell/flow_nav.dart';
-import '../components/flow_sheet_inset.dart';
 import '../shell/flow_shell.dart';
 import 'activity_screen.dart';
 import 'analytics_screen.dart';
@@ -22,7 +21,7 @@ class FlowHome extends ConsumerStatefulWidget {
 }
 
 class _FlowHomeState extends ConsumerState<FlowHome> {
-  FlowDestination _destination = FlowDestination.today;
+  FlowDestination _destination = FlowDestination.home;
 
   @override
   Widget build(BuildContext context) {
@@ -37,19 +36,19 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
       reviewCount: review,
       composerBusy: app.asking,
       composerHint: switch (_destination) {
-        FlowDestination.today => 'this month',
+        FlowDestination.home => 'this month',
         FlowDestination.activity => 'your activity',
-        FlowDestination.review => 'what needs review',
+        FlowDestination.ask => 'your money',
       },
-      onOpenChat: _openChat,
+      onOpenChat: () => setState(() => _destination = FlowDestination.ask),
       today: TodayScreen(
-        onReview: () => setState(() => _destination = FlowDestination.review),
+        onReview: _openReview,
         onOpenSettings: _openSettings,
         onOpenAnalytics: _openAnalytics,
         onAsk: _askInChat,
       ),
       activity: const ActivityScreen(),
-      review: const ReviewScreen(),
+      review: const ChatScreen(),
     );
   }
 
@@ -59,57 +58,25 @@ class _FlowHomeState extends ConsumerState<FlowHome> {
   /// nothing more — so the card hands straight to the agent for the why
   /// rather than making someone retype what they just tapped.
   Future<void> _askInChat(String question) async {
-    final chat = _openChat();
+    setState(() => _destination = FlowDestination.ask);
     await ref.read(appControllerProvider.notifier).ask(question);
-    await chat;
   }
 
-  Future<void> _openAnalytics() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (sheet) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .92,
-      minChildSize: .5,
-      maxChildSize: .96,
-      builder: (context, controller) => PrimaryScrollController(
-        controller: controller,
-        child: const AnalyticsScreen(),
-      ),
+  Future<void> _openAnalytics() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: SafeArea(child: AnalyticsScreen())),
     ),
   );
 
-  /// Chat opens over whatever is on screen and returns to it. Conversation is
-  /// something brought to the current context rather than a place navigated
-  /// to and back from.
-  Future<void> _openChat() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (sheet) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .94,
-      minChildSize: .5,
-      maxChildSize: .96,
-      builder: (context, controller) =>
-          const FlowSheetInset(child: ChatScreen()),
+  Future<void> _openReview() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: SafeArea(child: ReviewScreen())),
     ),
   );
 
-  Future<void> _openSettings() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (sheet) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .92,
-      minChildSize: .5,
-      maxChildSize: .96,
-      builder: (context, controller) => PrimaryScrollController(
-        controller: controller,
-        child: const SettingsScreen(),
-      ),
+  Future<void> _openSettings() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: SafeArea(child: SettingsScreen())),
     ),
   );
 }

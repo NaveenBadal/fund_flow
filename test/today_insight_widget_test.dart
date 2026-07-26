@@ -79,7 +79,7 @@ void main() {
 
     // The point of the section: this is on screen before anyone asks
     // anything, with no network involved.
-    expect(find.text('WHAT I NOTICED'), findsOneWidget);
+    expect(find.text('Worth your attention'), findsOneWidget);
     expect(find.textContaining('charged twice'), findsWidgets);
   });
 

@@ -30,55 +30,55 @@ abstract final class FlowPalette {
   // surface look lit rather than merely lighter.
   // ---------------------------------------------------------------- surfaces
   // Dark mode is a rich velvet slate with blue undertones for OLED depth.
-  static const darkCanvas = Color(0xFF07090E);
-  static const darkSunken = Color(0xFF0B0E15);
-  static const darkRaised = Color(0xFF111520);
-  static const darkLine = Color(0xFF1E2538);
+  static const darkCanvas = Color(0xFF10110F);
+  static const darkSunken = Color(0xFF0B0C0A);
+  static const darkRaised = Color(0xFF181A17);
+  static const darkLine = Color(0xFF292C27);
 
   // Light mode is a pure silk ceramic with crisp cool neutrals.
-  static const lightCanvas = Color(0xFFF8FAFC);
-  static const lightSunken = Color(0xFFF1F5F9);
-  static const lightRaised = Color(0xFFFFFFFF);
-  static const lightLine = Color(0xFFE2E8F0);
+  static const lightCanvas = Color(0xFFF5F4F0);
+  static const lightSunken = Color(0xFFEDEBE5);
+  static const lightRaised = Color(0xFFFBFAF7);
+  static const lightLine = Color(0xFFDDDAD1);
 
   // -------------------------------------------------------------------- ink
-  static const lightInk = Color(0xFF0F172A);
-  static const lightInkSoft = Color(0xFF475569);
-  static const lightInkFaint = Color(0xFF94A3B8);
+  static const lightInk = Color(0xFF171914);
+  static const lightInkSoft = Color(0xFF5E6258);
+  static const lightInkFaint = Color(0xFF92968B);
 
-  static const darkInk = Color(0xFFF8FAFC);
-  static const darkInkSoft = Color(0xFF94A3B8);
-  static const darkInkFaint = Color(0xFF64748B);
+  static const darkInk = Color(0xFFF4F3EE);
+  static const darkInkSoft = Color(0xFFA8ACA1);
+  static const darkInkFaint = Color(0xFF74796F);
 
   // ------------------------------------------------------------ categorical
   static const darkSeries = <Color>[
-    Color(0xFF6366F1), // indigo electric
-    Color(0xFF06B6D4), // cyan
-    Color(0xFF10B981), // emerald
-    Color(0xFFF59E0B), // amber
-    Color(0xFFF43F5E), // rose
-    Color(0xFF8B5CF6), // violet
+    Color(0xFF9CAB82),
+    Color(0xFF78A7A0),
+    Color(0xFFC5A56A),
+    Color(0xFFA58A9C),
+    Color(0xFF8A9BB5),
+    Color(0xFFB78373),
   ];
 
   static const lightSeries = <Color>[
-    Color(0xFF4F46E5),
-    Color(0xFF0891B2),
-    Color(0xFF059669),
-    Color(0xFFD97706),
-    Color(0xFFE11D48),
-    Color(0xFF7C3AED),
+    Color(0xFF657651),
+    Color(0xFF477B74),
+    Color(0xFF9A7136),
+    Color(0xFF806273),
+    Color(0xFF596F8D),
+    Color(0xFF955E50),
   ];
 
   // --------------------------------------------------------------- semantic
-  static const darkIncome = Color(0xFF10B981);
-  static const darkExpense = Color(0xFFF43F5E);
-  static const darkAttention = Color(0xFFF59E0B);
-  static const darkAccent = Color(0xFF6366F1);
+  static const darkIncome = Color(0xFF89B894);
+  static const darkExpense = Color(0xFFD28D83);
+  static const darkAttention = Color(0xFFD2AE69);
+  static const darkAccent = Color(0xFFA8B993);
 
-  static const lightIncome = Color(0xFF059669);
-  static const lightExpense = Color(0xFFE11D48);
-  static const lightAttention = Color(0xFFD97706);
-  static const lightAccent = Color(0xFF4F46E5);
+  static const lightIncome = Color(0xFF39744B);
+  static const lightExpense = Color(0xFF9D4F48);
+  static const lightAttention = Color(0xFF936B2E);
+  static const lightAccent = Color(0xFF52643F);
 }
 
 /// Resolved colours for the active brightness.
@@ -135,7 +135,7 @@ class FlowColors extends ThemeExtension<FlowColors> {
     expense: FlowPalette.lightExpense,
     attention: FlowPalette.lightAttention,
     accent: FlowPalette.lightAccent,
-    onAccent: Colors.white,
+    onAccent: Color(0xFFF8F8F3),
   );
 
   static const dark = FlowColors(
@@ -151,7 +151,7 @@ class FlowColors extends ThemeExtension<FlowColors> {
     expense: FlowPalette.darkExpense,
     attention: FlowPalette.darkAttention,
     accent: FlowPalette.darkAccent,
-    onAccent: Colors.white,
+    onAccent: Color(0xFF11130F),
   );
 
   @override

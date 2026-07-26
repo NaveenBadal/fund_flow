@@ -32,7 +32,6 @@ dependencies:
     sdk: flutter
 
   flutter_riverpod: ^3.3.1
-  riverpod_annotation: ^4.0.2
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   flutter_sms_inbox: ^1.0.4
@@ -41,7 +40,6 @@ dependencies:
   path: ^1.9.1
   sqflite: ^2.4.2
   local_auth: ^3.0.1
-  local_auth_android: ^2.0.8
   http: ^1.6.0
   package_info_plus: ^10.2.0
   crypto: ^3.0.7
@@ -59,7 +57,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  build_runner: ^2.13.1
   sqflite_common_ffi: ^2.4.2
 
 # For information on the generic Dart part of this file, see the
@@ -77,9 +74,6 @@ flutter:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter.ttf
-    - family: Space Grotesk
-      fonts:
-        - asset: assets/fonts/SpaceGrotesk.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -44,312 +44,292 @@ class TodayScreen extends ConsumerWidget {
         .length;
     final noticed = InsightEngine.insights(app.transactions, DateTime.now());
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              FlowSpace.xl,
-              FlowSpace.lg,
-              FlowSpace.lg,
-              0,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _greeting(DateTime.now()),
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  FlowSpace.xl,
+                  FlowSpace.lg,
+                  FlowSpace.lg,
+                  0,
                 ),
-                if (onOpenAnalytics != null)
-                  IconButton(
-                    onPressed: onOpenAnalytics,
-                    tooltip: 'Analytics',
-                    icon: const Icon(Icons.bar_chart_rounded),
-                    color: flow.accent,
-                  ),
-                IconButton(
-                  onPressed: onOpenSettings,
-                  tooltip: 'Settings',
-                  icon: const Icon(Icons.tune_rounded),
-                  color: flow.inkSoft,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        if (summary == null)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _NothingYet(
-              importing: app.importStatus.working,
-              onCheck: () =>
-                  ref.read(appControllerProvider.notifier).importMessages(),
-              onAddByHand: () => showTransactionEditor(context),
-            ),
-          )
-        else ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                FlowSpace.xl,
-                FlowSpace.lg,
-                FlowSpace.xl,
-                0,
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(FlowSpace.xl),
-                decoration: BoxDecoration(
-                  borderRadius: FlowRadius.xl,
-                  border: Border.all(
-                    color: flow.accent.withValues(alpha: 0.2),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: flow.accent.withValues(alpha: 0.15),
-                      blurRadius: 32,
-                      spreadRadius: -4,
-                      offset: const Offset(0, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _greeting(DateTime.now()),
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Your money, quietly kept up to date',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: flow.inkSoft),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onOpenAnalytics != null)
+                      IconButton(
+                        onPressed: onOpenAnalytics,
+                        tooltip: 'Analytics',
+                        icon: const Icon(Icons.bar_chart_rounded),
+                        color: flow.accent,
+                      ),
+                    IconButton(
+                      onPressed: onOpenSettings,
+                      tooltip: 'Settings',
+                      icon: const Icon(Icons.tune_rounded),
+                      color: flow.inkSoft,
                     ),
                   ],
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      flow.raised,
-                      Color.alphaBlend(
-                        flow.accent.withValues(alpha: 0.08),
-                        flow.raised,
-                      ),
-                    ],
-                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              ),
+            ),
+
+            if (summary == null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _NothingYet(
+                  importing: app.importStatus.working,
+                  onCheck: () =>
+                      ref.read(appControllerProvider.notifier).importMessages(),
+                  onAddByHand: () => showTransactionEditor(context),
+                ),
+              )
+            else ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    FlowSpace.xl,
+                    FlowSpace.lg,
+                    FlowSpace.xl,
+                    0,
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(
+                      FlowSpace.lg,
+                      FlowSpace.xl,
+                      FlowSpace.lg,
+                      FlowSpace.lg,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: FlowRadius.xl,
+                      color: flow.raised,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            'SPENT THIS MONTH',
-                            style: FlowType.eyebrow.copyWith(
-                              color: flow.accent,
-                              fontWeight: FontWeight.w700,
+                        Text(
+                          'Spent this month',
+                          style: FlowType.eyebrow.copyWith(color: flow.inkSoft),
+                        ),
+                        const SizedBox(height: FlowSpace.md),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: FlowAnimatedCount(
+                              text: hidden
+                                  ? '••••••'
+                                  : formatMoney(
+                                      summary.spentMinor,
+                                      summary.currency,
+                                    ),
+                              style: FlowType.amountHero.copyWith(
+                                color: flow.ink,
+                                fontSize: 46,
+                              ),
                             ),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: FlowSpace.sm,
-                            vertical: FlowSpace.xxs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: flow.accent.withValues(alpha: 0.12),
-                            borderRadius: FlowRadius.pill,
-                          ),
-                          child: Text(
-                            'LIVE TRACKING',
-                            style: FlowType.eyebrow.copyWith(
-                              fontSize: 9,
-                              color: flow.accent,
-                            ),
-                          ),
-                        ),
+                        if (summary.change != null && !hidden) ...[
+                          const SizedBox(height: FlowSpace.md),
+                          FlowDelta(fraction: summary.change!),
+                        ],
+                        if (!hidden && summary.daily.length > 1) ...[
+                          const SizedBox(height: FlowSpace.lg),
+                          FlowSpark(values: summary.daily),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: FlowSpace.md),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: FlowAnimatedCount(
-                          text: hidden
-                              ? '••••••'
-                              : formatMoney(
+                  ),
+                ),
+              ),
+
+              // Placed directly under the headline figure: a backlog is the only
+              // thing on this screen that asks something of the person, so it
+              // sits above the detail rather than after it.
+              if (review > 0)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      0,
+                    ),
+                    child: _ReviewCallout(count: review, onTap: onReview),
+                  ),
+                ),
+
+              // Below the review backlog, which asks something of the person, and
+              // above the breakdowns, which only describe. This is the screen
+              // speaking first rather than waiting for a question.
+              if (noticed.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      0,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Worth your attention',
+                          style: FlowType.eyebrow.copyWith(
+                            color: flow.inkFaint,
+                          ),
+                        ),
+                        const SizedBox(height: FlowSpace.sm),
+                        for (final insight in noticed)
+                          _InsightCard(
+                            insight: insight,
+                            hidden: hidden,
+                            onTap: () => onAsk(insight.question),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              if (summary.categories.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      0,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Where it went',
+                          style: FlowType.eyebrow.copyWith(
+                            color: flow.inkFaint,
+                          ),
+                        ),
+                        const SizedBox(height: FlowSpace.md),
+                        // The share of a whole is the question this section
+                        // answers, and a ring says it at a glance in a way a
+                        // column of bars cannot. Bars stay underneath because
+                        // they are what let you compare and read the figures.
+                        if (!hidden && summary.categories.length >= 2)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: FlowSpace.lg,
+                              ),
+                              child: FlowDonut(
+                                size: 148,
+                                centerLabel: 'Spent',
+                                centerValue: formatMoney(
                                   summary.spentMinor,
                                   summary.currency,
                                 ),
-                          style: FlowType.amountHero.copyWith(
-                            color: flow.ink,
-                            fontSize: 48,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (summary.change != null && !hidden) ...[
-                      const SizedBox(height: FlowSpace.md),
-                      FlowDelta(fraction: summary.change!),
-                    ],
-                    if (!hidden && summary.daily.length > 1) ...[
-                      const SizedBox(height: FlowSpace.lg),
-                      FlowSpark(values: summary.daily),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Placed directly under the headline figure: a backlog is the only
-          // thing on this screen that asks something of the person, so it
-          // sits above the detail rather than after it.
-          if (review > 0)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  0,
-                ),
-                child: _ReviewCallout(count: review, onTap: onReview),
-              ),
-            ),
-
-          // Below the review backlog, which asks something of the person, and
-          // above the breakdowns, which only describe. This is the screen
-          // speaking first rather than waiting for a question.
-          if (noticed.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'WHAT I NOTICED',
-                      style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
-                    ),
-                    const SizedBox(height: FlowSpace.sm),
-                    for (final insight in noticed)
-                      _InsightCard(
-                        insight: insight,
-                        hidden: hidden,
-                        onTap: () => onAsk(insight.question),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-          if (summary.categories.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'WHERE IT WENT',
-                      style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
-                    ),
-                    const SizedBox(height: FlowSpace.md),
-                    // The share of a whole is the question this section
-                    // answers, and a ring says it at a glance in a way a
-                    // column of bars cannot. Bars stay underneath because
-                    // they are what let you compare and read the figures.
-                    if (!hidden && summary.categories.length >= 2)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: FlowSpace.lg),
-                          child: FlowDonut(
-                            size: 148,
-                            centerLabel: 'Spent',
-                            centerValue: formatMoney(
-                              summary.spentMinor,
-                              summary.currency,
-                            ),
-                            segments: [
-                              for (
-                                var i = 0;
-                                i < summary.categories.length;
-                                i++
-                              )
-                                FlowDonutSegment(
-                                  value: summary.categories[i].amountMinor
-                                      .toDouble(),
-                                  color: flow.seriesAt(i),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    for (var i = 0; i < summary.categories.length; i++)
-                      FlowBarRow(
-                        label: summary.categories[i].label,
-                        // The dot keys each row to its donut arc; only shown
-                        // when the donut is on screen (amounts visible, 2+
-                        // categories) so it never dangles without a ring.
-                        swatch: !hidden && summary.categories.length >= 2,
-                        amount: hidden
-                            ? '••••'
-                            : formatMoney(
-                                summary.categories[i].amountMinor,
-                                summary.currency,
+                                segments: [
+                                  for (
+                                    var i = 0;
+                                    i < summary.categories.length;
+                                    i++
+                                  )
+                                    FlowDonutSegment(
+                                      value: summary.categories[i].amountMinor
+                                          .toDouble(),
+                                      color: flow.seriesAt(i),
+                                    ),
+                                ],
                               ),
-                        fraction:
-                            summary.categories[i].amountMinor /
-                            summary.categories.first.amountMinor,
-                        share: summary.spentMinor == 0
-                            ? null
-                            : summary.categories[i].amountMinor /
-                                  summary.spentMinor,
-                        color: flow.seriesAt(i),
-                      ),
-                  ],
+                            ),
+                          ),
+                        for (var i = 0; i < summary.categories.length; i++)
+                          FlowBarRow(
+                            label: summary.categories[i].label,
+                            // The dot keys each row to its donut arc; only shown
+                            // when the donut is on screen (amounts visible, 2+
+                            // categories) so it never dangles without a ring.
+                            swatch: !hidden && summary.categories.length >= 2,
+                            amount: hidden
+                                ? '••••'
+                                : formatMoney(
+                                    summary.categories[i].amountMinor,
+                                    summary.currency,
+                                  ),
+                            fraction:
+                                summary.categories[i].amountMinor /
+                                summary.categories.first.amountMinor,
+                            share: summary.spentMinor == 0
+                                ? null
+                                : summary.categories[i].amountMinor /
+                                      summary.spentMinor,
+                            color: flow.seriesAt(i),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
 
-          if (summary.recent.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  FlowSpace.xl,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'JUST CAPTURED',
-                      style: FlowType.eyebrow.copyWith(color: flow.inkFaint),
+              if (summary.recent.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      FlowSpace.xl,
+                      0,
                     ),
-                    const SizedBox(height: FlowSpace.xs),
-                    Text(
-                      'Read from your messages, no entry needed.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Recently captured',
+                          style: FlowType.eyebrow.copyWith(
+                            color: flow.inkFaint,
+                          ),
+                        ),
+                        const SizedBox(height: FlowSpace.xs),
+                        Text(
+                          'Read from your messages, no entry needed.',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+                        ),
+                        const SizedBox(height: FlowSpace.md),
+                        for (final item in summary.recent)
+                          _CaptureRow(item: item, hidden: hidden),
+                      ],
                     ),
-                    const SizedBox(height: FlowSpace.md),
-                    for (final item in summary.recent)
-                      _CaptureRow(item: item, hidden: hidden),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          const SliverToBoxAdapter(child: SizedBox(height: FlowSpace.xxl)),
-        ],
-      ],
+              const SliverToBoxAdapter(child: SizedBox(height: FlowSpace.xxl)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

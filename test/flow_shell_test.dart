@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fund_flow/ui2/shell/flow_composer.dart';
 import 'package:fund_flow/ui2/shell/flow_nav.dart';
 import 'package:fund_flow/ui2/shell/flow_shell.dart';
 import 'package:fund_flow/ui2/tokens/flow_theme.dart';
@@ -15,7 +14,7 @@ void _usePhone(WidgetTester tester) {
 }
 
 Widget _host({
-  FlowDestination destination = FlowDestination.today,
+  FlowDestination destination = FlowDestination.home,
   int reviewCount = 0,
   String? hint,
   bool busy = false,
@@ -27,9 +26,9 @@ Widget _host({
   home: FlowShell(
     destination: destination,
     onDestinationChanged: onChanged ?? (_) {},
-    today: const Text('TODAY'),
+    today: const Text('HOME'),
     activity: const Text('ACTIVITY'),
-    review: const Text('REVIEW'),
+    review: const Text('ASK'),
     onOpenChat: onOpenChat ?? () {},
     reviewCount: reviewCount,
     composerHint: hint,
@@ -38,16 +37,14 @@ Widget _host({
 );
 
 void main() {
-  testWidgets('the composer is present on every destination', (tester) async {
+  testWidgets('Home, Activity and Ask are first-class destinations', (
+    tester,
+  ) async {
     _usePhone(tester);
-    for (final destination in FlowDestination.values) {
-      await tester.pumpWidget(_host(destination: destination));
-      expect(
-        find.byType(FlowComposer),
-        findsOneWidget,
-        reason: 'chat must be reachable from $destination',
-      );
-    }
+    await tester.pumpWidget(_host());
+    expect(find.bySemanticsLabel('Home'), findsOneWidget);
+    expect(find.bySemanticsLabel('Activity'), findsOneWidget);
+    expect(find.bySemanticsLabel('Ask'), findsOneWidget);
   });
 
   testWidgets('destinations stay alive across switches', (tester) async {
@@ -55,69 +52,28 @@ void main() {
     await tester.pumpWidget(_host());
     // All three stay in the tree, offstage rather than disposed, so Activity
     // does not lose its place among hundreds of rows when Today is checked.
-    expect(find.text('TODAY'), findsOneWidget);
+    expect(find.text('HOME'), findsOneWidget);
     expect(find.text('ACTIVITY', skipOffstage: false), findsOneWidget);
-    expect(find.text('REVIEW', skipOffstage: false), findsOneWidget);
+    expect(find.text('ASK', skipOffstage: false), findsOneWidget);
     // Only the active one is actually shown.
     expect(find.text('ACTIVITY'), findsNothing);
   });
 
-  testWidgets('a backlog is visible from every screen', (tester) async {
-    _usePhone(tester);
-    await tester.pumpWidget(_host(reviewCount: 352));
-    expect(find.text('352'), findsOneWidget);
-
-    await tester.pumpWidget(
-      _host(destination: FlowDestination.activity, reviewCount: 352),
-    );
-    expect(find.text('352'), findsOneWidget);
-  });
-
-  testWidgets('a large backlog still shows its real size', (tester) async {
-    _usePhone(tester);
-    // The count is the job. Rounding 352 down to "99+" hides whether this is
-    // an evening of work or a minute.
-    await tester.pumpWidget(_host(reviewCount: 352));
-    expect(find.text('352'), findsOneWidget);
-
-    await tester.pumpWidget(_host(reviewCount: 1284));
-    expect(find.text('999+'), findsOneWidget);
-  });
-
-  testWidgets('no badge when there is nothing to review', (tester) async {
-    _usePhone(tester);
-    await tester.pumpWidget(_host(reviewCount: 0));
-    expect(find.text('0'), findsNothing);
-  });
-
-  testWidgets('the composer names what the screen is about', (tester) async {
-    _usePhone(tester);
-    await tester.pumpWidget(_host(hint: 'groceries in July'));
-    expect(find.text('Ask about groceries in July'), findsOneWidget);
-  });
-
-  testWidgets('tapping the composer hands off rather than taking text', (
+  testWidgets('review work does not masquerade as an Ask badge', (
     tester,
   ) async {
     _usePhone(tester);
-    var opened = 0;
-    await tester.pumpWidget(_host(onOpenChat: () => opened++));
-    // No TextField: text is never typed somewhere that cannot answer it.
-    expect(find.byType(TextField), findsNothing);
-    await tester.tap(find.byType(FlowComposer));
-    await tester.pump();
-    expect(opened, 1);
+    await tester.pumpWidget(_host(reviewCount: 352));
+    expect(find.text('352'), findsNothing);
   });
 
   testWidgets('switching destinations reports the choice', (tester) async {
     _usePhone(tester);
     FlowDestination? chosen;
     await tester.pumpWidget(_host(onChanged: (value) => chosen = value));
-    // Only the selected item carries a text label; the rest are icon only,
-    // so an unselected destination is reached by its semantics.
-    await tester.tap(find.bySemanticsLabel('Review'));
+    await tester.tap(find.bySemanticsLabel('Ask'));
     await tester.pump();
-    expect(chosen, FlowDestination.review);
+    expect(chosen, FlowDestination.ask);
   });
 
   testWidgets('bounded at 200 percent text', (tester) async {
@@ -134,7 +90,7 @@ void main() {
             textScaler: TextScaler.linear(2),
           ),
           child: FlowShell(
-            destination: FlowDestination.today,
+            destination: FlowDestination.home,
             onDestinationChanged: (_) {},
             today: const SizedBox(),
             activity: const SizedBox(),
@@ -157,6 +113,6 @@ void main() {
     expect(tester.takeException(), isNull);
     // The bottom bar is replaced rather than duplicated alongside the rail.
     expect(find.byType(FlowNav), findsNothing);
-    expect(find.byType(FlowComposer), findsOneWidget);
+    expect(find.bySemanticsLabel('Home'), findsOneWidget);
   });
 }

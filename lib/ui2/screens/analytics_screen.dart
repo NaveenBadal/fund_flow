@@ -38,7 +38,9 @@ class AnalyticsScreen extends ConsumerWidget {
               Text(
                 'Sync your messages to see spending insights, top merchants, and recurring bills.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: flow.inkSoft),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: flow.inkSoft),
               ),
             ],
           ),
@@ -58,6 +60,12 @@ class AnalyticsScreen extends ConsumerWidget {
             ),
             child: Row(
               children: [
+                IconButton(
+                  tooltip: 'Back',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
+                const SizedBox(width: FlowSpace.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,8 +76,10 @@ class AnalyticsScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Monthly breakdown & spending intelligence',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
+                        'Monthly patterns and meaningful changes',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: flow.inkSoft),
                       ),
                     ],
                   ),
@@ -195,9 +205,14 @@ class AnalyticsScreen extends ConsumerWidget {
                             analytics.currency,
                           ),
                           segments: [
-                            for (var i = 0; i < analytics.categories.length; i++)
+                            for (
+                              var i = 0;
+                              i < analytics.categories.length;
+                              i++
+                            )
                               FlowDonutSegment(
-                                value: analytics.categories[i].amountMinor.toDouble(),
+                                value: analytics.categories[i].amountMinor
+                                    .toDouble(),
                                 color: flow.seriesAt(i),
                               ),
                           ],
@@ -214,11 +229,13 @@ class AnalyticsScreen extends ConsumerWidget {
                               analytics.categories[i].amountMinor,
                               analytics.currency,
                             ),
-                      fraction: analytics.categories[i].amountMinor /
+                      fraction:
+                          analytics.categories[i].amountMinor /
                           analytics.categories.first.amountMinor,
                       share: analytics.totalExpenseMinor == 0
                           ? null
-                          : analytics.categories[i].amountMinor / analytics.totalExpenseMinor,
+                          : analytics.categories[i].amountMinor /
+                                analytics.totalExpenseMinor,
                       color: flow.seriesAt(i),
                     ),
                 ],
@@ -262,9 +279,9 @@ class _CashflowMetric extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.flow.inkSoft,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.flow.inkSoft),
               ),
             ],
           ),
@@ -295,7 +312,9 @@ class _MerchantRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final flow = context.flow;
-    final share = totalExpense == 0 ? 0.0 : (merchant.amountMinor / totalExpense).clamp(0.0, 1.0);
+    final share = totalExpense == 0
+        ? 0.0
+        : (merchant.amountMinor / totalExpense).clamp(0.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: FlowSpace.md),
@@ -364,18 +383,25 @@ class AnalyticsSummary {
   final List<MerchantTotal> topMerchants;
   final List<CategoryTotal> categories;
 
-  static AnalyticsSummary? of(List<MoneyTransaction> transactions, DateTime now) {
+  static AnalyticsSummary? of(
+    List<MoneyTransaction> transactions,
+    DateTime now,
+  ) {
     if (transactions.isEmpty) return null;
 
     final monthStart = DateTime(now.year, now.month);
-    final monthItems = transactions.where((item) => !item.occurredAt.isBefore(monthStart));
+    final monthItems = transactions.where(
+      (item) => !item.occurredAt.isBefore(monthStart),
+    );
     if (monthItems.isEmpty) return null;
 
     final counts = <String, int>{};
     for (final item in monthItems) {
       counts[item.currency] = (counts[item.currency] ?? 0) + 1;
     }
-    final currency = counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    final currency = counts.entries
+        .reduce((a, b) => a.value >= b.value ? a : b)
+        .key;
 
     var income = 0;
     var expense = 0;
@@ -387,20 +413,24 @@ class AnalyticsSummary {
         income += item.amountMinor;
       } else {
         expense += item.amountMinor;
-        merchantMap[item.merchant] = (merchantMap[item.merchant] ?? 0) + item.amountMinor;
-        categoryMap[item.category] = (categoryMap[item.category] ?? 0) + item.amountMinor;
+        merchantMap[item.merchant] =
+            (merchantMap[item.merchant] ?? 0) + item.amountMinor;
+        categoryMap[item.category] =
+            (categoryMap[item.category] ?? 0) + item.amountMinor;
       }
     }
 
-    final topMerchants = merchantMap.entries
-        .map((e) => MerchantTotal(name: e.key, amountMinor: e.value))
-        .toList()
-      ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
+    final topMerchants =
+        merchantMap.entries
+            .map((e) => MerchantTotal(name: e.key, amountMinor: e.value))
+            .toList()
+          ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
-    final categories = categoryMap.entries
-        .map((e) => CategoryTotal(label: e.key, amountMinor: e.value))
-        .toList()
-      ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
+    final categories =
+        categoryMap.entries
+            .map((e) => CategoryTotal(label: e.key, amountMinor: e.value))
+            .toList()
+          ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
     return AnalyticsSummary(
       totalIncomeMinor: income,

@@ -11,8 +11,9 @@ import 'package:flutter/material.dart';
 /// Every numeric style carries tabular figures so columns align and a
 /// changing amount does not reflow the text around it.
 abstract final class FlowType {
-  /// Headings and the wordmark. Personality belongs here.
-  static const String display = 'Space Grotesk';
+  /// One family keeps the product visually quieter and avoids shipping a
+  /// second font solely for headings.
+  static const String display = 'sans-serif';
 
   /// Body, labels, controls.
   static const String text = 'Inter';
@@ -29,10 +30,10 @@ abstract final class FlowType {
   /// 40pt against 12pt body there was no ratio and nothing led.
   static const TextStyle amountHero = TextStyle(
     fontFamily: text,
-    fontSize: 56,
+    fontSize: 48,
     height: 1.0,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -2.2,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -1.8,
     fontFeatures: _tabular,
   );
 
@@ -43,10 +44,10 @@ abstract final class FlowType {
   /// rather than merely big.
   static const TextStyle eyebrow = TextStyle(
     fontFamily: text,
-    fontSize: 11,
+    fontSize: 12,
     height: 1.2,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 1.1,
+    fontWeight: FontWeight.w500,
+    letterSpacing: .1,
   );
 
   /// Section totals and card headline figures.
@@ -81,17 +82,17 @@ abstract final class FlowType {
   static TextTheme theme(Color ink) => TextTheme(
     displayLarge: TextStyle(
       fontFamily: display,
-      fontSize: 40,
+      fontSize: 36,
       height: 1.04,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -1.4,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -1.1,
       color: ink,
     ),
     headlineLarge: TextStyle(
       fontFamily: display,
-      fontSize: 28,
+      fontSize: 27,
       height: 1.1,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: -.8,
       color: ink,
     ),
@@ -99,7 +100,7 @@ abstract final class FlowType {
       fontFamily: display,
       fontSize: 22,
       height: 1.15,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: -.5,
       color: ink,
     ),
@@ -107,7 +108,7 @@ abstract final class FlowType {
       fontFamily: text,
       fontSize: 17,
       height: 1.25,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: -.2,
       color: ink,
     ),

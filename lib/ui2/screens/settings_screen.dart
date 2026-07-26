@@ -32,14 +32,6 @@ class SettingsScreen extends ConsumerWidget {
     return Column(
       children: [
         const SizedBox(height: FlowSpace.sm),
-        Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: flow.line,
-            borderRadius: FlowRadius.pill,
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             FlowSpace.xl,
@@ -49,6 +41,12 @@ class SettingsScreen extends ConsumerWidget {
           ),
           child: Row(
             children: [
+              IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: FlowSpace.sm),
               Expanded(
                 child: Text(
                   'Settings',
@@ -519,10 +517,7 @@ class _Group extends StatelessWidget {
       decoration: BoxDecoration(
         color: flow.raised,
         borderRadius: FlowRadius.lg,
-        border: Border.all(
-          color: flow.line,
-          width: 1,
-        ),
+        border: Border.all(color: flow.line, width: 1),
         boxShadow: FlowElevation.low(Theme.of(context).brightness),
       ),
       clipBehavior: Clip.antiAlias,

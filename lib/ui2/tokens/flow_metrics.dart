@@ -14,13 +14,13 @@ abstract final class FlowRadius {
   static const BorderRadius sm = BorderRadius.all(Radius.circular(10));
 
   /// Cards.
-  static const BorderRadius md = BorderRadius.all(Radius.circular(18));
+  static const BorderRadius md = BorderRadius.all(Radius.circular(14));
 
   /// Sheets and containers that hold cards.
-  static const BorderRadius lg = BorderRadius.all(Radius.circular(24));
+  static const BorderRadius lg = BorderRadius.all(Radius.circular(18));
 
   /// The hero surface a screen is built around.
-  static const BorderRadius xl = BorderRadius.all(Radius.circular(30));
+  static const BorderRadius xl = BorderRadius.all(Radius.circular(22));
 
   /// Pills, where the shape itself carries the meaning.
   static const BorderRadius pill = BorderRadius.all(Radius.circular(999));

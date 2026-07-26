@@ -2,6 +2,26 @@
 
 Living document. Update the phase table as phases land.
 
+## Ground-zero refinement — July 2026
+
+The second visual pass replaces the earlier destination model and bright
+fintech treatment with a quieter AI-first product:
+
+- permanent destinations are **Home · Activity · Ask**
+- Review is contextual work, opened only when transactions need attention
+- Analytics, Review, Settings and transaction detail are full routes
+- the palette is mineral and low-saturation in light and dark modes
+- headings use sentence case; amount typography stays tabular and precise
+- phone navigation is a compact dock; wide layouts use a restrained rail and
+  a bounded 900px reading measure
+- AI answers remain native financial documents rather than chat decoration
+
+The shipped-size pass removed unused direct dependencies
+(`riverpod_annotation`, `local_auth_android`, `build_runner`) and the unused
+Space Grotesk asset. Android release builds retain code shrinking, resource
+shrinking and Material icon tree shaking. The measured arm64 production APK
+is 21,264,993 bytes; most of it is the Flutter/native runtime.
+
 ## Why
 
 Fund Flow is AI-first: the person never enters data, so the interface exists

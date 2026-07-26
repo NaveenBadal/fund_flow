@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../motion/flow_motion_widgets.dart';
 import '../tokens/flow_palette.dart';
-import 'flow_composer.dart';
 import 'flow_nav.dart';
 
 /// Assembles the destinations, the composer and the navigation bar.
@@ -46,9 +45,9 @@ class FlowShell extends StatelessWidget {
   static const double wideBreakpoint = 760;
 
   int get _index => switch (destination) {
-    FlowDestination.today => 0,
+    FlowDestination.home => 0,
     FlowDestination.activity => 1,
-    FlowDestination.review => 2,
+    FlowDestination.ask => 2,
   };
 
   @override
@@ -59,13 +58,6 @@ class FlowShell extends StatelessWidget {
       index: _index,
       child: IndexedStack(index: _index, children: [today, activity, review]),
     );
-    final composer = FlowComposer(
-      onOpen: onOpenChat,
-      contextHint: composerHint,
-      busy: composerBusy,
-      enabled: composerEnabled,
-    );
-
     return LayoutBuilder(
       builder: (context, box) {
         if (box.maxWidth >= wideBreakpoint) {
@@ -81,7 +73,6 @@ class FlowShell extends StatelessWidget {
                   child: Column(
                     children: [
                       Expanded(child: SafeArea(bottom: false, child: stack)),
-                      composer,
                       SizedBox(height: MediaQuery.paddingOf(context).bottom),
                     ],
                   ),
@@ -94,7 +85,6 @@ class FlowShell extends StatelessWidget {
           body: Column(
             children: [
               Expanded(child: SafeArea(bottom: false, child: stack)),
-              composer,
               FlowNav(
                 destination: destination,
                 onChanged: onDestinationChanged,
@@ -133,19 +123,18 @@ class _SideNav extends StatelessWidget {
           children: [
             const SizedBox(height: 20),
             for (final entry in const [
-              (FlowDestination.today, Icons.today_rounded, 'Today'),
+              (FlowDestination.home, Icons.home_rounded, 'Home'),
               (
                 FlowDestination.activity,
                 Icons.receipt_long_rounded,
                 'Activity',
               ),
-              (FlowDestination.review, Icons.rule_rounded, 'Review'),
+              (FlowDestination.ask, Icons.auto_awesome_rounded, 'Ask'),
             ])
               _SideItem(
                 icon: entry.$2,
                 label: entry.$3,
                 selected: destination == entry.$1,
-                badge: entry.$1 == FlowDestination.review ? reviewCount : 0,
                 onTap: () => onChanged(entry.$1),
               ),
           ],
@@ -161,14 +150,12 @@ class _SideItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge = 0,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +163,7 @@ class _SideItem extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: badge > 0 ? '$label, $badge needing review' : label,
+      label: label,
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
@@ -191,8 +178,8 @@ class _SideItem extends StatelessWidget {
                 color: selected ? flow.accent : flow.inkFaint,
               ),
               const SizedBox(height: 4),
-              FlowAnimatedCount(
-                text: badge > 0 ? '$label ($badge)' : label,
+              Text(
+                label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: selected ? flow.ink : flow.inkFaint,
                 ),

@@ -103,14 +103,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Column(
       children: [
         const SizedBox(height: FlowSpace.sm),
-        Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: flow.line,
-            borderRadius: FlowRadius.pill,
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             FlowSpace.xl,
