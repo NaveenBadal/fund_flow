@@ -5,30 +5,29 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('fresh journey reaches the three calm destinations', (
-    tester,
-  ) async {
+  testWidgets('fresh journey reaches the Zero mobile product', (tester) async {
     app.main();
     await tester.pumpAndSettle();
 
-    if (find.text('Get started').evaluate().isNotEmpty) {
-      await tester.tap(find.text('Get started'));
+    if (find.text('Continue').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Connect or continue later'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Check messages or skip'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Open Fund Flow'));
+      await tester.tap(find.text('Enter Fund Flow'));
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('Ask'), findsWidgets);
-    await tester.tap(find.bySemanticsLabel('Activity'));
+    expect(find.text('Overview'), findsWidgets);
+    expect(find.bySemanticsLabel('Ask your money'), findsOneWidget);
+    await tester.tap(find.text('Transactions').last);
     await tester.pumpAndSettle();
-    expect(find.text('Activity'), findsWidgets);
-    await tester.tap(find.bySemanticsLabel('You'));
+    expect(find.text('Transactions'), findsWidgets);
+    await tester.tap(find.text('Overview').last);
     await tester.pumpAndSettle();
-    expect(find.text('Privacy'), findsOneWidget);
+    expect(find.text('Spent'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

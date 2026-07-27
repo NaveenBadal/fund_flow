@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../app/app_controller.dart';
 import '../domain/transaction.dart';
-import '../ui2/flow_categories.dart';
+import '../domain/category_catalog.dart';
 import 'zero_theme.dart';
 
 Future<void> showZeroTransactionEditor(

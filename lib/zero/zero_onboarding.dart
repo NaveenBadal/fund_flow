@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/app_controller.dart';
 import '../app/app_state.dart';
-import '../ui2/sheets/connect_intelligence_sheet.dart';
+import 'zero_intelligence.dart';
 import 'zero_theme.dart';
 
 class ZeroOnboarding extends ConsumerStatefulWidget {
@@ -79,12 +79,7 @@ class _ZeroOnboardingState extends ConsumerState<ZeroOnboarding> {
               if (step == 2) ...[
                 const SizedBox(height: 24),
                 TextButton.icon(
-                  onPressed: () => showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    builder: (_) => const ConnectIntelligenceSheet(),
-                  ),
+                  onPressed: () => showZeroIntelligence(context),
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Connect intelligence'),
                 ),

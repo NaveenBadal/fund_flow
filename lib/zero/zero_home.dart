@@ -13,10 +13,10 @@ import '../domain/insight_engine.dart';
 import '../domain/money_format.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
-import '../ui2/sheets/connect_intelligence_sheet.dart';
-import '../ui2/sheets/message_intelligence_sheet.dart';
 import 'zero_editor.dart';
 import 'zero_analysis.dart';
+import 'zero_automation.dart';
+import 'zero_intelligence.dart';
 import 'zero_theme.dart';
 
 enum _Place { overview, transactions }
@@ -1511,11 +1511,7 @@ class _ZeroAskState extends ConsumerState<ZeroAsk> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                     child: OutlinedButton(
-                      onPressed: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (_) => const ConnectIntelligenceSheet(),
-                      ),
+                      onPressed: () => showZeroIntelligence(context),
                       child: const Text('Connect intelligence'),
                     ),
                   ),
@@ -2077,11 +2073,7 @@ class ZeroSettings extends ConsumerWidget {
                 title: 'Automation',
                 detail: 'Messages and notifications',
                 icon: Icons.bolt_outlined,
-                onTap: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const MessageIntelligenceSheet(),
-                ),
+                onTap: () => showZeroAutomation(context),
               ),
               _SettingsLink(
                 title: 'Intelligence',
@@ -2093,11 +2085,7 @@ class ZeroSettings extends ConsumerWidget {
                   _ => 'Not connected',
                 },
                 icon: Icons.memory_outlined,
-                onTap: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const ConnectIntelligenceSheet(),
-                ),
+                onTap: () => showZeroIntelligence(context),
               ),
               _SettingsLink(
                 title: 'Privacy',

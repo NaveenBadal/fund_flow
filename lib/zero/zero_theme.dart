@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../ui2/tokens/flow_palette.dart';
-
 @immutable
 class ZeroColors extends ThemeExtension<ZeroColors> {
   const ZeroColors({
@@ -238,31 +236,7 @@ abstract final class ZeroTheme {
           TargetPlatform.iOS: _ZeroTransitionBuilder(),
         },
       ),
-      extensions: [
-        z,
-        FlowColors(
-          canvas: z.bg,
-          sunken: z.subtle,
-          raised: z.surface,
-          line: z.line,
-          ink: z.text,
-          inkSoft: z.muted,
-          inkFaint: z.faint,
-          series: const [
-            Color(0xff5f7666),
-            Color(0xff6d7d83),
-            Color(0xff927346),
-            Color(0xff7d6875),
-            Color(0xff61728a),
-            Color(0xff8c6558),
-          ],
-          income: z.positive,
-          expense: z.negative,
-          attention: z.warning,
-          accent: z.accent,
-          onAccent: z.onAccent,
-        ),
-      ],
+      extensions: [z],
     );
   }
 }
