@@ -140,17 +140,22 @@ class _ZeroAutomationSheetState extends ConsumerState<ZeroAutomationSheet> {
                         : 'Check recent messages',
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 26),
+                Text(
+                  'Automatic capture',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
                 _CaptureRow(
                   value: app.preferences.captureNotifications,
                   onChanged: controller.setNotificationCapture,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 30),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'What Fund Flow decided',
+                        'Decision history',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -158,7 +163,7 @@ class _ZeroAutomationSheetState extends ConsumerState<ZeroAutomationSheet> {
                       onPressed: runs.isEmpty
                           ? null
                           : () => setState(() => auditOpen = !auditOpen),
-                      child: Text(auditOpen ? 'Hide audit' : 'Open audit'),
+                      child: Text(auditOpen ? 'Close' : 'Inspect'),
                     ),
                   ],
                 ),

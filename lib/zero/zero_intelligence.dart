@@ -119,25 +119,30 @@ class _ZeroIntelligenceSheetState extends ConsumerState<ZeroIntelligenceSheet> {
                 ).textTheme.bodyMedium?.copyWith(color: z.muted),
               ),
               const SizedBox(height: 28),
-              Text(
-                'Choose a provider',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-              const SizedBox(height: 10),
-              Column(
-                children: [
+              DropdownButtonFormField<AiProvider>(
+                initialValue: provider,
+                decoration: const InputDecoration(
+                  labelText: 'AI provider',
+                  prefixIcon: Icon(Icons.memory_outlined),
+                ),
+                items: [
                   for (final value in AiProvider.values)
-                    _ProviderRow(
-                      label: providerInfo(value).label,
-                      selected: provider == value,
-                      onTap: () => setState(() {
-                        provider = value;
-                        _apply(value);
-                      }),
+                    DropdownMenuItem(
+                      value: value,
+                      child: Text(providerInfo(value).label),
                     ),
                 ],
+                onChanged: checking
+                    ? null
+                    : (value) {
+                        if (value == null || value == provider) return;
+                        setState(() {
+                          provider = value;
+                          _apply(value);
+                        });
+                      },
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
               TextField(
                 controller: key,
                 obscureText: !keyVisible,
@@ -327,47 +332,6 @@ class _ZeroIntelligenceSheetState extends ConsumerState<ZeroIntelligenceSheet> {
         );
     if (success && mounted) Navigator.pop(context);
   }
-}
-
-class _ProviderRow extends StatelessWidget {
-  const _ProviderRow({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    child: InkWell(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 54),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.zero.line)),
-        ),
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
-              child: selected
-                  ? Icon(
-                      Icons.check_circle_rounded,
-                      key: const ValueKey(true),
-                      color: context.zero.positive,
-                    )
-                  : const SizedBox.square(key: ValueKey(false), dimension: 24),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _ModelField extends StatelessWidget {

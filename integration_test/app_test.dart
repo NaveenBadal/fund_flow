@@ -21,11 +21,11 @@ void main() {
     }
 
     expect(find.text('Overview'), findsWidgets);
-    expect(find.bySemanticsLabel('Ask your money'), findsOneWidget);
-    await tester.tap(find.text('Transactions').last);
+    expect(find.bySemanticsLabel('Ask'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Records'));
     await tester.pumpAndSettle();
     expect(find.text('Transactions'), findsWidgets);
-    await tester.tap(find.text('Overview').last);
+    await tester.tap(find.bySemanticsLabel('Overview'));
     await tester.pumpAndSettle();
     expect(find.text('Spent'), findsOneWidget);
     expect(tester.takeException(), isNull);

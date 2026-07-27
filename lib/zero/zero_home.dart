@@ -109,70 +109,39 @@ class _Dock extends StatelessWidget {
     final z = context.zero;
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-      child: SizedBox(
-        height: 66,
-        child: Stack(
-          alignment: Alignment.center,
+      minimum: const EdgeInsets.fromLTRB(24, 4, 24, 10),
+      child: Container(
+        height: 58,
+        decoration: BoxDecoration(
+          color: z.surface,
+          border: Border.all(color: z.line),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
           children: [
-            Positioned.fill(
-              top: 8,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: z.surface,
-                  border: Border.all(color: z.line),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _Destination(
-                        label: 'Overview',
-                        icon: Icons.space_dashboard_outlined,
-                        selected: place == _Place.overview,
-                        onTap: () => onChanged(_Place.overview),
-                      ),
-                    ),
-                    const SizedBox(width: 78),
-                    Expanded(
-                      child: _Destination(
-                        label: 'Transactions',
-                        icon: Icons.format_list_bulleted_rounded,
-                        selected: place == _Place.transactions,
-                        onTap: () => onChanged(_Place.transactions),
-                      ),
-                    ),
-                  ],
-                ),
+            Expanded(
+              child: _Destination(
+                label: 'Overview',
+                icon: Icons.space_dashboard_outlined,
+                selected: place == _Place.overview,
+                onTap: () => onChanged(_Place.overview),
               ),
             ),
-            Semantics(
-              button: true,
-              label: busy ? 'AI is working' : 'Ask your money',
-              child: Material(
-                color: z.accent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onAsk,
-                  child: SizedBox(
-                    width: 62,
-                    height: 62,
-                    child: busy
-                        ? Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: z.onAccent,
-                            ),
-                          )
-                        : Icon(
-                            Icons.arrow_outward_rounded,
-                            color: z.onAccent,
-                            size: 25,
-                          ),
-                  ),
-                ),
+            Expanded(
+              child: _Destination(
+                label: busy ? 'Working' : 'Ask',
+                icon: Icons.auto_awesome_outlined,
+                selected: false,
+                emphasized: true,
+                onTap: onAsk,
+              ),
+            ),
+            Expanded(
+              child: _Destination(
+                label: 'Records',
+                icon: Icons.format_list_bulleted_rounded,
+                selected: place == _Place.transactions,
+                onTap: () => onChanged(_Place.transactions),
               ),
             ),
           ],
@@ -188,11 +157,13 @@ class _Destination extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.emphasized = false,
   });
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -201,19 +172,24 @@ class _Destination extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: selected ? z.accent : z.faint),
+            Icon(
+              icon,
+              size: 20,
+              color: selected || emphasized ? z.accent : z.faint,
+            ),
             const SizedBox(height: 3),
             Text(
               label,
               maxLines: 1,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: selected ? z.text : z.faint,
+                color: selected || emphasized ? z.text : z.faint,
               ),
             ),
           ],
@@ -423,7 +399,7 @@ class _ZeroOverviewState extends ConsumerState<ZeroOverview> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
+                padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -492,16 +468,17 @@ class _ZeroOverviewState extends ConsumerState<ZeroOverview> {
                 ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
-                child: _Briefing(
-                  insights: insights,
-                  change: change,
-                  onAsk: widget.onAsk,
+            if (insights.isNotEmpty || change != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
+                  child: _Briefing(
+                    insights: insights,
+                    change: change,
+                    onAsk: widget.onAsk,
+                  ),
                 ),
               ),
-            ),
             if (review > 0)
               SliverToBoxAdapter(
                 child: Padding(
@@ -511,19 +488,20 @@ class _ZeroOverviewState extends ConsumerState<ZeroOverview> {
               ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 44, 24, 8),
+                padding: const EdgeInsets.fromLTRB(24, 36, 24, 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Recent',
+                        recent.isEmpty ? 'Start your record' : 'Recent',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
-                    TextButton(
-                      onPressed: widget.onTransactions,
-                      child: const Text('View all'),
-                    ),
+                    if (recent.isNotEmpty)
+                      TextButton(
+                        onPressed: widget.onTransactions,
+                        child: const Text('View all'),
+                      ),
                   ],
                 ),
               ),
@@ -1057,22 +1035,21 @@ class _EmptyLedger extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Your record starts here',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Fund Flow can read transaction messages and organize them automatically.',
+            'Turn payment messages into a useful record automatically.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           FilledButton(
             onPressed: onImport,
-            child: const Text('Check messages'),
+            child: const Text('Import payment messages'),
           ),
-          TextButton(onPressed: onAdd, child: const Text('Add one manually')),
+          const SizedBox(height: 2),
+          TextButton(
+            onPressed: onAdd,
+            child: const Text('Or add a transaction manually'),
+          ),
         ],
       ),
     );
@@ -2069,10 +2046,15 @@ class ZeroSettings extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
             children: [
+              const _SettingsSection(
+                title: 'Core',
+                detail: 'How Fund Flow reads and understands money activity',
+              ),
               _SettingsLink(
                 title: 'Automation',
                 detail: 'Messages and notifications',
                 icon: Icons.bolt_outlined,
+                highlighted: true,
                 onTap: () => showZeroAutomation(context),
               ),
               _SettingsLink(
@@ -2085,7 +2067,13 @@ class ZeroSettings extends ConsumerWidget {
                   _ => 'Not connected',
                 },
                 icon: Icons.memory_outlined,
+                highlighted: true,
                 onTap: () => showZeroIntelligence(context),
+              ),
+              const SizedBox(height: 26),
+              const _SettingsSection(
+                title: 'Your experience',
+                detail: 'Only the controls you are likely to revisit',
               ),
               _SettingsLink(
                 title: 'Privacy',
@@ -2100,12 +2088,18 @@ class ZeroSettings extends ConsumerWidget {
                 icon: Icons.tune_rounded,
                 onTap: () => _preferences(context, ref, app),
               ),
+              const SizedBox(height: 26),
+              const _SettingsSection(
+                title: 'Ownership',
+                detail: 'Your records stay under your control',
+              ),
               _SettingsLink(
                 title: 'Data',
                 detail: 'Conversations and local records',
                 icon: Icons.storage_outlined,
                 onTap: () => _data(context, ref),
               ),
+              const SizedBox(height: 26),
               _SettingsLink(
                 title: 'About',
                 detail: 'Fund Flow · private by design',
@@ -2128,25 +2122,25 @@ class ZeroSettings extends ConsumerWidget {
     builder: (sheet) => _SimpleSettingsSheet(
       title: 'Privacy',
       children: [
-        SwitchListTile.adaptive(
-          title: const Text('Hide amounts'),
-          subtitle: const Text('Conceal figures throughout the app'),
+        _SettingToggle(
+          title: 'Hide amounts',
+          detail: 'Conceal figures throughout the app',
           value: app.preferences.hideAmounts,
           onChanged: (value) => ref
               .read(appControllerProvider.notifier)
               .updatePreferences(app.preferences.copyWith(hideAmounts: value)),
         ),
-        SwitchListTile.adaptive(
-          title: const Text('App lock'),
-          subtitle: const Text('Require device authentication'),
+        _SettingToggle(
+          title: 'App lock',
+          detail: 'Require device authentication',
           value: app.preferences.lockApp,
           onChanged: ref.read(appControllerProvider.notifier).setAppLock,
         ),
-        ListTile(
-          title: const Text('Data boundary'),
-          subtitle: const Text(
-            'Transactions stay local. Questions and opted-in message text go to your AI provider.',
-          ),
+        const _SettingNote(
+          icon: Icons.shield_outlined,
+          title: 'Data boundary',
+          detail:
+              'Transactions stay local. Questions and opted-in message text go to your AI provider.',
         ),
       ],
     ),
@@ -2161,9 +2155,9 @@ class ZeroSettings extends ConsumerWidget {
     builder: (sheet) => _SimpleSettingsSheet(
       title: 'Preferences',
       children: [
-        ListTile(
-          title: const Text('Appearance'),
-          subtitle: Text(app.preferences.appearance.name),
+        _SheetRow(
+          title: 'Appearance',
+          detail: app.preferences.appearance.name,
           onTap: () async {
             final value = await showModalBottomSheet<AppearancePreference>(
               context: sheet,
@@ -2186,9 +2180,9 @@ class ZeroSettings extends ConsumerWidget {
             }
           },
         ),
-        ListTile(
-          title: const Text('Primary currency'),
-          subtitle: Text(app.preferences.currency),
+        _SheetRow(
+          title: 'Primary currency',
+          detail: app.preferences.currency,
           onTap: () async {
             final value = await showModalBottomSheet<String>(
               context: sheet,
@@ -2214,10 +2208,10 @@ class ZeroSettings extends ConsumerWidget {
     builder: (sheet) => _SimpleSettingsSheet(
       title: 'Data',
       children: [
-        ListTile(
-          title: const Text('Delete current conversation'),
-          subtitle: const Text('Questions and answers only; transactions stay'),
-          textColor: context.zero.negative,
+        _SheetRow(
+          title: 'Delete current conversation',
+          detail: 'Questions and answers only; transactions stay',
+          destructive: true,
           onTap: () async {
             final approved = await _confirm(
               sheet,
@@ -2243,21 +2237,169 @@ class ZeroSettings extends ConsumerWidget {
     builder: (_) => _SimpleSettingsSheet(
       title: 'About Fund Flow',
       children: [
-        const ListTile(
-          title: Text('AI-first, local-first'),
-          subtitle: Text(
-            'Fund Flow turns payment messages into a private financial record, then lets you ask questions grounded in that record.',
-          ),
+        const _SettingNote(
+          icon: Icons.auto_awesome_outlined,
+          title: 'AI-first, local-first',
+          detail:
+              'Fund Flow turns payment messages into a private financial record, then lets you ask questions grounded in that record.',
         ),
-        ListTile(
-          title: const Text('Data boundary'),
-          subtitle: const Text(
-            'Transactions stay on this device. Only questions and message text you explicitly analyze are sent to your chosen provider.',
-          ),
-          leading: Icon(Icons.shield_outlined, color: context.zero.positive),
+        const _SettingNote(
+          icon: Icons.shield_outlined,
+          title: 'Data boundary',
+          detail:
+              'Transactions stay on this device. Only questions and message text you explicitly analyze are sent to your chosen provider.',
         ),
-        const ListTile(title: Text('Version'), trailing: Text('0.0.1-dev.1')),
+        const _SheetRow(
+          title: 'Version',
+          detail: '0.0.1-dev.1',
+          showArrow: false,
+        ),
       ],
+    ),
+  );
+}
+
+class _SettingToggle extends StatelessWidget {
+  const _SettingToggle({
+    required this.title,
+    required this.detail,
+    required this.value,
+    required this.onChanged,
+  });
+  final String title;
+  final String detail;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    toggled: value,
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 74),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.zero.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: context.zero.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Switch.adaptive(value: value, onChanged: onChanged),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SettingNote extends StatelessWidget {
+  const _SettingNote({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 14),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: context.zero.subtle,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: context.zero.positive),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 5),
+              Text(
+                detail,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.zero.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _SheetRow extends StatelessWidget {
+  const _SheetRow({
+    required this.title,
+    required this.detail,
+    this.onTap,
+    this.destructive = false,
+    this.showArrow = true,
+  });
+  final String title;
+  final String detail;
+  final VoidCallback? onTap;
+  final bool destructive;
+  final bool showArrow;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 70),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.zero.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: destructive ? context.zero.negative : null,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: context.zero.muted),
+                ),
+              ],
+            ),
+          ),
+          if (showArrow && onTap != null)
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: context.zero.faint,
+            ),
+        ],
+      ),
     ),
   );
 }
@@ -2399,20 +2541,31 @@ class _SettingsLink extends StatelessWidget {
     required this.detail,
     required this.icon,
     this.onTap,
+    this.highlighted = false,
   });
   final String title;
   final String detail;
   final IconData icon;
   final VoidCallback? onTap;
+  final bool highlighted;
   @override
   Widget build(BuildContext context) {
     final z = context.zero;
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 21),
+        margin: EdgeInsets.only(bottom: highlighted ? 10 : 0),
+        padding: EdgeInsets.symmetric(
+          horizontal: highlighted ? 16 : 0,
+          vertical: highlighted ? 17 : 20,
+        ),
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: z.line)),
+          color: highlighted ? z.subtle : null,
+          border: highlighted
+              ? null
+              : Border(bottom: BorderSide(color: z.line)),
+          borderRadius: highlighted ? BorderRadius.circular(18) : null,
         ),
         child: Row(
           children: [
@@ -2440,6 +2593,30 @@ class _SettingsLink extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, required this.detail});
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          detail,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: context.zero.muted),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SimpleSettingsSheet extends StatelessWidget {
