@@ -136,6 +136,7 @@ abstract final class ZeroTheme {
       ),
       textTheme: text,
       fontFamily: 'Inter',
+      visualDensity: VisualDensity.standard,
       splashFactory: NoSplash.splashFactory,
       highlightColor: z.subtle,
       dividerColor: z.line,
@@ -172,6 +173,71 @@ abstract final class ZeroTheme {
           borderSide: BorderSide(color: z.accent),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 50),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: text.labelLarge,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 50),
+          side: BorderSide(color: z.line),
+          foregroundColor: z.text,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: text.labelLarge,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          foregroundColor: z.accent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size.square(48),
+          foregroundColor: z.muted,
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: z.subtle,
+        selectedColor: z.accent,
+        disabledColor: z.subtle,
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: text.labelMedium,
+        secondaryLabelStyle: text.labelMedium?.copyWith(color: z.onAccent),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected) ? z.accent : z.line,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? z.onAccent : z.surface,
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: z.accent,
+        linearTrackColor: z.subtle,
+        circularTrackColor: z.subtle,
+      ),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _ZeroTransitionBuilder(),
+          TargetPlatform.iOS: _ZeroTransitionBuilder(),
+        },
+      ),
       extensions: [
         z,
         FlowColors(
@@ -197,6 +263,32 @@ abstract final class ZeroTheme {
           onAccent: z.onAccent,
         ),
       ],
+    );
+  }
+}
+
+class _ZeroTransitionBuilder extends PageTransitionsBuilder {
+  const _ZeroTransitionBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (route.isFirst) return child;
+    final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduced) return child;
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, .018), end: Offset.zero).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        ),
+        child: child,
+      ),
     );
   }
 }

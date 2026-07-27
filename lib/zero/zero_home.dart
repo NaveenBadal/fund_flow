@@ -15,7 +15,8 @@ import '../domain/preferences.dart';
 import '../domain/transaction.dart';
 import '../ui2/sheets/connect_intelligence_sheet.dart';
 import '../ui2/sheets/message_intelligence_sheet.dart';
-import '../ui2/sheets/transaction_editor_sheet.dart';
+import 'zero_editor.dart';
+import 'zero_analysis.dart';
 import 'zero_theme.dart';
 
 enum _Place { overview, transactions }
@@ -312,7 +313,7 @@ class _RailButton extends StatelessWidget {
   }
 }
 
-class ZeroOverview extends ConsumerWidget {
+class ZeroOverview extends ConsumerStatefulWidget {
   const ZeroOverview({
     super.key,
     required this.onTransactions,
@@ -326,9 +327,26 @@ class ZeroOverview extends ConsumerWidget {
   final VoidCallback onReview;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ZeroOverview> createState() => _ZeroOverviewState();
+}
+
+class _ZeroOverviewState extends ConsumerState<ZeroOverview> {
+  int monthOffset = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final app = ref.watch(appControllerProvider).requireValue;
-    final now = DateTime.now();
+    final today = DateTime.now();
+    final target = DateTime(today.year, today.month + monthOffset);
+    final now = DateTime(
+      target.year,
+      target.month,
+      monthOffset == 0
+          ? today.day
+          : DateUtils.getDaysInMonth(target.year, target.month),
+      today.hour,
+      today.minute,
+    );
     final month = app.transactions
         .where(
           (t) =>
@@ -359,11 +377,27 @@ class ZeroOverview extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(24, 22, 16, 0),
                 child: Row(
                   children: [
+                    IconButton(
+                      tooltip: 'Previous month',
+                      onPressed: () => setState(() => monthOffset--),
+                      icon: const Icon(Icons.chevron_left_rounded),
+                    ),
                     Expanded(
-                      child: Text(
-                        DateFormat('MMMM yyyy').format(now),
-                        style: Theme.of(context).textTheme.titleLarge,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          DateFormat('MMMM yyyy').format(now),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Next month',
+                      onPressed: monthOffset >= 0
+                          ? null
+                          : () => setState(() => monthOffset++),
+                      icon: const Icon(Icons.chevron_right_rounded),
                     ),
                     IconButton(
                       tooltip: hidden ? 'Show amounts' : 'Hide amounts',
@@ -380,8 +414,8 @@ class ZeroOverview extends ConsumerWidget {
                     ),
                     IconButton(
                       tooltip: 'Settings',
-                      onPressed: onSettings,
-                      icon: const Icon(Icons.person_outline_rounded),
+                      onPressed: widget.onSettings,
+                      icon: const Icon(Icons.tune_rounded),
                     ),
                   ],
                 ),
@@ -423,7 +457,15 @@ class ZeroOverview extends ConsumerWidget {
                         ).textTheme.bodyMedium?.copyWith(color: z.muted),
                       ),
                     const SizedBox(height: 28),
-                    _MiniTrend(values: _daily(month, currency)),
+                    _MiniTrend(
+                      values: _daily(month, currency),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ZeroAnalysis(period: now),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 22),
                     Row(
                       children: [
@@ -456,7 +498,7 @@ class ZeroOverview extends ConsumerWidget {
                 child: _Briefing(
                   insights: insights,
                   change: change,
-                  onAsk: onAsk,
+                  onAsk: widget.onAsk,
                 ),
               ),
             ),
@@ -464,7 +506,7 @@ class ZeroOverview extends ConsumerWidget {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
-                  child: _Attention(count: review, onTap: onReview),
+                  child: _Attention(count: review, onTap: widget.onReview),
                 ),
               ),
             SliverToBoxAdapter(
@@ -479,7 +521,7 @@ class ZeroOverview extends ConsumerWidget {
                       ),
                     ),
                     TextButton(
-                      onPressed: onTransactions,
+                      onPressed: widget.onTransactions,
                       child: const Text('View all'),
                     ),
                   ],
@@ -491,7 +533,7 @@ class ZeroOverview extends ConsumerWidget {
                 child: _EmptyLedger(
                   onImport: () =>
                       ref.read(appControllerProvider.notifier).importMessages(),
-                  onAdd: () => showTransactionEditor(context),
+                  onAdd: () => showZeroTransactionEditor(context),
                 ),
               )
             else
@@ -617,19 +659,27 @@ class _Attention extends StatelessWidget {
 }
 
 class _MiniTrend extends StatelessWidget {
-  const _MiniTrend({required this.values});
+  const _MiniTrend({required this.values, required this.onTap});
   final List<int> values;
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
     if (values.length < 2) return const SizedBox(height: 2);
-    return SizedBox(
-      height: 58,
-      width: double.infinity,
-      child: CustomPaint(
-        painter: _TrendPainter(
-          values: values,
-          color: context.zero.accent,
-          line: context.zero.line,
+    return Semantics(
+      button: true,
+      label: 'Open detailed spending analysis',
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 66,
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _TrendPainter(
+              values: values,
+              color: context.zero.accent,
+              line: context.zero.line,
+            ),
+          ),
         ),
       ),
     );
@@ -764,7 +814,7 @@ class _ZeroTransactionsState extends ConsumerState<ZeroTransactions> {
                   ),
                   IconButton(
                     tooltip: 'Add transaction',
-                    onPressed: () => showTransactionEditor(context),
+                    onPressed: () => showZeroTransactionEditor(context),
                     icon: const Icon(Icons.add_rounded),
                   ),
                 ],
@@ -965,10 +1015,14 @@ class _TransactionLine extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${item.category} · ${DateFormat.jm().format(item.occurredAt)}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: z.muted),
+                      item.reviewState == ReviewState.needsReview
+                          ? '${item.category} · Review'
+                          : '${item.category} · ${DateFormat.jm().format(item.occurredAt)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: item.reviewState == ReviewState.needsReview
+                            ? z.warning
+                            : z.muted,
+                      ),
                     ),
                   ],
                 ),
@@ -1063,6 +1117,11 @@ class _ZeroReviewState extends ConsumerState<ZeroReview> {
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
               ),
+              const SizedBox(height: 22),
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Return to overview'),
+              ),
             ],
           ),
         ),
@@ -1072,7 +1131,7 @@ class _ZeroReviewState extends ConsumerState<ZeroReview> {
     final z = context.zero;
     return Scaffold(
       appBar: AppBar(
-        title: Text('${pending.length} to review'),
+        title: Text('${pending.length} remaining'),
         centerTitle: false,
       ),
       body: SafeArea(
@@ -1083,6 +1142,14 @@ class _ZeroReviewState extends ConsumerState<ZeroReview> {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                LinearProgressIndicator(
+                  value: _skipped.isEmpty
+                      ? 0
+                      : _skipped.length / (_skipped.length + pending.length),
+                  minHeight: 3,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                const SizedBox(height: 30),
                 Text(
                   item.reviewState == ReviewState.needsReview
                       ? 'Please confirm this record'
@@ -1141,7 +1208,7 @@ class _ZeroReviewState extends ConsumerState<ZeroReview> {
                 const SizedBox(height: 34),
                 OutlinedButton(
                   onPressed: () =>
-                      showTransactionEditor(context, transaction: item),
+                      showZeroTransactionEditor(context, transaction: item),
                   child: const Text('Correct details'),
                 ),
                 const SizedBox(height: 8),
@@ -1185,12 +1252,21 @@ class ZeroDetail extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: 'Edit',
-            onPressed: () => showTransactionEditor(context, transaction: item),
+            onPressed: () =>
+                showZeroTransactionEditor(context, transaction: item),
             icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
             tooltip: 'Delete',
             onPressed: () async {
+              final approved = await _confirm(
+                context,
+                title: 'Delete this transaction?',
+                body:
+                    'This record will be removed from totals, analysis and AI answers. This cannot be undone.',
+                destructiveLabel: 'Delete transaction',
+              );
+              if (!approved) return;
               await ref
                   .read(appControllerProvider.notifier)
                   .deleteTransaction(id);
@@ -1376,6 +1452,12 @@ class _ZeroAskState extends ConsumerState<ZeroAsk> {
       appBar: AppBar(
         title: const Text('Ask your money'),
         actions: [
+          if (app.threads.isNotEmpty)
+            IconButton(
+              tooltip: 'Conversation history',
+              onPressed: () => _showHistory(context, app),
+              icon: const Icon(Icons.history_rounded),
+            ),
           if (app.conversation.isNotEmpty)
             IconButton(
               tooltip: 'New question',
@@ -1409,12 +1491,22 @@ class _ZeroAskState extends ConsumerState<ZeroAsk> {
                                 onAsk: _ask,
                               );
                             }
-                            return _Working(app: app);
+                            return _Working(
+                              app: app,
+                              onRetry: app.retryQuestion == null
+                                  ? null
+                                  : () => _ask(app.retryQuestion!),
+                            );
                           },
                         ),
                 ),
                 if (app.pendingAgentProposal case final proposal?)
                   _ProposalDecision(proposal: proposal),
+                if (app.lastAgentAction case final action?)
+                  _ActionResult(
+                    message: action,
+                    canUndo: app.lastAgentUndoId != null,
+                  ),
                 if (!connected)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
@@ -1442,6 +1534,129 @@ class _ZeroAskState extends ConsumerState<ZeroAsk> {
       ),
     );
   }
+
+  Future<void> _showHistory(BuildContext context, AppState app) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _ConversationHistory(
+          threads: app.threads,
+          activeId: app.activeThreadId,
+        ),
+      );
+}
+
+class _ConversationHistory extends ConsumerWidget {
+  const _ConversationHistory({required this.threads, required this.activeId});
+  final List<ConversationThread> threads;
+  final int? activeId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
+    height: MediaQuery.sizeOf(context).height * .72,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Conversations',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+              ),
+              IconButton(
+                tooltip: 'New conversation',
+                onPressed: () async {
+                  await ref.read(appControllerProvider.notifier).startNewChat();
+                  if (context.mounted) Navigator.pop(context);
+                },
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+            itemCount: threads.length,
+            itemBuilder: (context, index) {
+              final thread = threads[index];
+              return Dismissible(
+                key: ValueKey(thread.id),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _confirm(
+                  context,
+                  title: 'Delete this conversation?',
+                  body:
+                      'Its questions and answers will be removed. Transactions are unaffected.',
+                  destructiveLabel: 'Delete',
+                ),
+                onDismissed: (_) => ref
+                    .read(appControllerProvider.notifier)
+                    .deleteConversationThread(thread.id),
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  color: context.zero.negative,
+                  child: const Icon(Icons.delete_outline, color: Colors.white),
+                ),
+                child: InkWell(
+                  onTap: () async {
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .openConversationThread(thread.id);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 76),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: context.zero.line),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                thread.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${thread.messageCount} messages · ${DateFormat.MMMd().format(thread.updatedAt)}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: context.zero.muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (thread.id == activeId)
+                          Icon(
+                            Icons.check_rounded,
+                            color: context.zero.positive,
+                            size: 19,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ProposalDecision extends ConsumerWidget {
@@ -1451,19 +1666,33 @@ class _ProposalDecision extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final z = context.zero;
+    final destructive =
+        proposal.kind == AgentProposalKind.deleteTransaction ||
+        proposal.kind == AgentProposalKind.clearConversation ||
+        proposal.kind == AgentProposalKind.deleteMemory;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: z.surface,
-        border: Border.all(color: z.line),
+        border: Border.all(color: destructive ? z.negative : z.line),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(proposal.title, style: Theme.of(context).textTheme.titleMedium),
+          if (destructive)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'This removes data',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: z.negative),
+              ),
+            ),
           const SizedBox(height: 5),
           Text(
             proposal.explanation,
@@ -1490,7 +1719,10 @@ class _ProposalDecision extends ConsumerWidget {
                 onPressed: () => ref
                     .read(appControllerProvider.notifier)
                     .approveAgentProposal(),
-                child: const Text('Approve change'),
+                style: destructive
+                    ? FilledButton.styleFrom(backgroundColor: z.negative)
+                    : null,
+                child: Text(destructive ? 'Approve removal' : 'Approve change'),
               ),
             ],
           ),
@@ -1498,6 +1730,35 @@ class _ProposalDecision extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _ActionResult extends ConsumerWidget {
+  const _ActionResult({required this.message, required this.canUndo});
+  final String message;
+  final bool canUndo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Container(
+    margin: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+    padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+    decoration: BoxDecoration(
+      color: context.zero.subtle,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.check_circle_outline_rounded, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message)),
+        if (canUndo)
+          TextButton(
+            onPressed: () =>
+                ref.read(appControllerProvider.notifier).undoLastAgentAction(),
+            child: const Text('Undo'),
+          ),
+      ],
+    ),
+  );
 }
 
 class _AskStart extends StatelessWidget {
@@ -1701,8 +1962,9 @@ class _AgentDocumentPart extends StatelessWidget {
 }
 
 class _Working extends StatelessWidget {
-  const _Working({required this.app});
+  const _Working({required this.app, required this.onRetry});
   final AppState app;
+  final VoidCallback? onRetry;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1719,11 +1981,22 @@ class _Working extends StatelessWidget {
             Icon(Icons.error_outline_rounded, color: context.zero.negative),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              app.error ?? app.askStage ?? 'Working with your records…',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  app.error ?? app.askStage ?? 'Working with your records…',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: context.zero.muted),
+                ),
+                if (onRetry != null)
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('Try the same question again'),
+                  ),
+              ],
             ),
           ),
         ],
@@ -1845,10 +2118,11 @@ class ZeroSettings extends ConsumerWidget {
                 icon: Icons.storage_outlined,
                 onTap: () => _data(context, ref),
               ),
-              const _SettingsLink(
+              _SettingsLink(
                 title: 'About',
                 detail: 'Fund Flow · private by design',
                 icon: Icons.info_outline_rounded,
+                onTap: () => _about(context),
               ),
             ],
           ),
@@ -1903,16 +2177,15 @@ class ZeroSettings extends ConsumerWidget {
           title: const Text('Appearance'),
           subtitle: Text(app.preferences.appearance.name),
           onTap: () async {
-            final value = await showDialog<AppearancePreference>(
+            final value = await showModalBottomSheet<AppearancePreference>(
               context: sheet,
-              builder: (dialog) => SimpleDialog(
-                title: const Text('Appearance'),
-                children: [
-                  for (final option in AppearancePreference.values)
-                    SimpleDialogOption(
-                      onPressed: () => Navigator.pop(dialog, option),
-                      child: Text(option.name),
-                    ),
+              builder: (_) => _ChoiceSheet<AppearancePreference>(
+                title: 'Appearance',
+                current: app.preferences.appearance,
+                choices: const [
+                  (AppearancePreference.system, 'Follow this device'),
+                  (AppearancePreference.light, 'Light'),
+                  (AppearancePreference.dark, 'Dark'),
                 ],
               ),
             );
@@ -1928,26 +2201,208 @@ class ZeroSettings extends ConsumerWidget {
         ListTile(
           title: const Text('Primary currency'),
           subtitle: Text(app.preferences.currency),
+          onTap: () async {
+            final value = await showModalBottomSheet<String>(
+              context: sheet,
+              isScrollControlled: true,
+              builder: (_) => _CurrencySheet(current: app.preferences.currency),
+            );
+            if (value != null) {
+              await ref
+                  .read(appControllerProvider.notifier)
+                  .updatePreferences(app.preferences.copyWith(currency: value));
+            }
+          },
         ),
       ],
     ),
   );
 
-  Future<void> _data(BuildContext context, WidgetRef ref) =>
-      showModalBottomSheet<void>(
-        context: context,
-        builder: (sheet) => _SimpleSettingsSheet(
-          title: 'Data',
+  Future<void> _data(
+    BuildContext context,
+    WidgetRef ref,
+  ) => showModalBottomSheet<void>(
+    context: context,
+    builder: (sheet) => _SimpleSettingsSheet(
+      title: 'Data',
+      children: [
+        ListTile(
+          title: const Text('Delete current conversation'),
+          subtitle: const Text('Questions and answers only; transactions stay'),
+          textColor: context.zero.negative,
+          onTap: () async {
+            final approved = await _confirm(
+              sheet,
+              title: 'Delete this conversation?',
+              body:
+                  'The current questions and answers will be removed. Your transactions and other conversations remain.',
+              destructiveLabel: 'Delete conversation',
+            );
+            if (approved) {
+              await ref
+                  .read(appControllerProvider.notifier)
+                  .clearConversation();
+              if (sheet.mounted) Navigator.pop(sheet);
+            }
+          },
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _about(BuildContext context) => showModalBottomSheet<void>(
+    context: context,
+    builder: (_) => _SimpleSettingsSheet(
+      title: 'About Fund Flow',
+      children: [
+        const ListTile(
+          title: Text('AI-first, local-first'),
+          subtitle: Text(
+            'Fund Flow turns payment messages into a private financial record, then lets you ask questions grounded in that record.',
+          ),
+        ),
+        ListTile(
+          title: const Text('Data boundary'),
+          subtitle: const Text(
+            'Transactions stay on this device. Only questions and message text you explicitly analyze are sent to your chosen provider.',
+          ),
+          leading: Icon(Icons.shield_outlined, color: context.zero.positive),
+        ),
+        const ListTile(title: Text('Version'), trailing: Text('0.0.1-dev.1')),
+      ],
+    ),
+  );
+}
+
+class _ChoiceSheet<T> extends StatelessWidget {
+  const _ChoiceSheet({
+    required this.title,
+    required this.current,
+    required this.choices,
+  });
+  final String title;
+  final T current;
+  final List<(T, String)> choices;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 16),
+          for (final choice in choices)
+            InkWell(
+              onTap: () => Navigator.pop(context, choice.$1),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 58),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: context.zero.line)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(choice.$2)),
+                    if (choice.$1 == current)
+                      Icon(Icons.check_rounded, color: context.zero.positive),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CurrencySheet extends StatefulWidget {
+  const _CurrencySheet({required this.current});
+  final String current;
+  @override
+  State<_CurrencySheet> createState() => _CurrencySheetState();
+}
+
+class _CurrencySheetState extends State<_CurrencySheet> {
+  final search = TextEditingController();
+  static const currencies = [
+    ('INR', 'Indian rupee'),
+    ('USD', 'US dollar'),
+    ('EUR', 'Euro'),
+    ('GBP', 'British pound'),
+    ('AED', 'UAE dirham'),
+    ('SGD', 'Singapore dollar'),
+    ('AUD', 'Australian dollar'),
+    ('CAD', 'Canadian dollar'),
+    ('JPY', 'Japanese yen'),
+    ('CHF', 'Swiss franc'),
+  ];
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = search.text.toLowerCase().trim();
+    final visible = currencies
+        .where(
+          (value) =>
+              value.$1.toLowerCase().contains(query) ||
+              value.$2.toLowerCase().contains(query),
+        )
+        .toList();
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .72,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              title: const Text('Clear conversations'),
-              subtitle: const Text('Transactions are not removed'),
-              onTap: () =>
-                  ref.read(appControllerProvider.notifier).clearConversation(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 14),
+              child: Text(
+                'Primary currency',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: TextField(
+                controller: search,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: 'Search currency',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: visible.length,
+                itemBuilder: (context, index) {
+                  final value = visible[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(value.$1),
+                    subtitle: Text(value.$2),
+                    trailing: value.$1 == widget.current
+                        ? const Icon(Icons.check_rounded)
+                        : null,
+                    onTap: () => Navigator.pop(context, value.$1),
+                  );
+                },
+              ),
             ),
           ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _SettingsLink extends StatelessWidget {
@@ -2035,10 +2490,26 @@ class _Money extends StatelessWidget {
   final bool hidden;
   final TextStyle? style;
   @override
-  Widget build(BuildContext context) => Text(
-    hidden ? '••••••' : formatMoney(minor, currency),
-    style: style?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-  );
+  Widget build(BuildContext context) {
+    final value = hidden ? 'Amount hidden' : formatMoney(minor, currency);
+    return Semantics(
+      label: value,
+      excludeSemantics: true,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            hidden ? '••••••' : value,
+            maxLines: 1,
+            style: style?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String _currency(List<MoneyTransaction> values, String fallback) {
@@ -2126,3 +2597,54 @@ void _openDetail(BuildContext context, MoneyTransaction item) {
     MaterialPageRoute<void>(builder: (_) => ZeroDetail(id: item.id!)),
   );
 }
+
+Future<bool> _confirm(
+  BuildContext context, {
+  required String title,
+  required String body,
+  required String destructiveLabel,
+}) async =>
+    await showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheet) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.delete_outline_rounded,
+              color: sheet.zero.negative,
+              size: 28,
+            ),
+            const SizedBox(height: 18),
+            Text(title, style: Theme.of(sheet).textTheme.headlineMedium),
+            const SizedBox(height: 10),
+            Text(
+              body,
+              style: Theme.of(
+                sheet,
+              ).textTheme.bodyMedium?.copyWith(color: sheet.zero.muted),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => Navigator.pop(sheet, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: sheet.zero.negative,
+                minimumSize: const Size.fromHeight(52),
+              ),
+              child: Text(destructiveLabel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(sheet, false),
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              child: const Center(child: Text('Keep it')),
+            ),
+          ],
+        ),
+      ),
+    ) ??
+    false;

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_controller.dart';
 import '../../domain/import_audit.dart';
+import '../../domain/ai_provider.dart';
 import '../components/flow_field.dart';
 import '../tokens/flow_metrics.dart';
 import '../tokens/flow_palette.dart';
@@ -131,8 +132,8 @@ class _State extends ConsumerState<MessageIntelligenceSheet> {
                         app.importStatus.working
                             ? '${app.importStatus.checked} analyzed · '
                                   '${app.importStatus.imported} added'
-                            : 'Every local message decision and Ollama '
-                                  'exchange',
+                            : 'Every local message decision and '
+                                  '${providerInfo(app.preferences.aiProvider).label} exchange',
                         style: text.bodySmall?.copyWith(color: flow.inkSoft),
                       ),
                     ],

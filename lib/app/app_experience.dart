@@ -47,19 +47,73 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final async = ref.watch(appControllerProvider);
     return async.when(
-      loading: () => const Scaffold(
+      loading: () => Scaffold(
         body: Center(
-          child: SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          child: Semantics(
+            label: 'Opening Fund Flow',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('F', style: Theme.of(context).textTheme.headlineLarge),
+                const SizedBox(height: 18),
+                const SizedBox(
+                  width: 22,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+              ],
+            ),
           ),
         ),
       ),
       error: (e, _) => Scaffold(
-        body: Center(
-          child: Text(
-            'Fund Flow could not open.\n$e',
-            textAlign: TextAlign.center,
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.error_outline_rounded,
+                      color: context.zero.negative,
+                      size: 32,
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      'Fund Flow could not open',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Your local records have not been changed. Try opening the app again.',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: context.zero.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: () => ref.invalidate(appControllerProvider),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Try again'),
+                    ),
+                    const SizedBox(height: 12),
+                    ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      title: const Text('Technical details'),
+                      children: [
+                        SelectableText(
+                          '$e',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
