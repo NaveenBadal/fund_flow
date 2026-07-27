@@ -18,6 +18,7 @@ import 'zero_analysis.dart';
 import 'zero_automation.dart';
 import 'zero_intelligence.dart';
 import 'zero_theme.dart';
+import 'zero_update.dart';
 
 enum _Place { overview, transactions }
 
@@ -2100,6 +2101,16 @@ class ZeroSettings extends ConsumerWidget {
                 onTap: () => _data(context, ref),
               ),
               const SizedBox(height: 26),
+              const _SettingsSection(
+                title: 'Fund Flow',
+                detail: 'Release channel and product information',
+              ),
+              _SettingsLink(
+                title: 'App updates',
+                detail: 'Check, verify and install development releases',
+                icon: Icons.system_update_alt_rounded,
+                onTap: () => showZeroUpdates(context),
+              ),
               _SettingsLink(
                 title: 'About',
                 detail: 'Fund Flow · private by design',
