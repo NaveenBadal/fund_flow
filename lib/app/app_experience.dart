@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../zero/zero_home.dart';
-import '../zero/zero_onboarding.dart';
-import '../zero/zero_theme.dart';
+import '../ui/screens/onboarding.dart';
+import '../ui/screens/shell.dart';
+import '../ui/theme/ff_theme.dart';
+import '../ui/widgets/ff_controls.dart';
+import '../ui/widgets/ff_group.dart';
+import '../ui/widgets/ff_notice.dart';
 import 'app_controller.dart';
 
+/// What is on screen before the app proper is.
+///
+/// Four states, and only four: opening, refusing to open, locked, and ready.
+/// Each is a whole screen rather than a spinner over a half-built one, because
+/// a half-built screen invites tapping things that are not there yet.
 class AppExperience extends ConsumerStatefulWidget {
   const AppExperience({super.key});
+
   @override
-  ConsumerState<AppExperience> createState() => _State();
+  ConsumerState<AppExperience> createState() => _AppExperienceState();
 }
 
-class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
+class _AppExperienceState extends ConsumerState<AppExperience>
+    with WidgetsBindingObserver {
   bool _unlockScheduled = false;
 
   @override
@@ -47,79 +57,14 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final async = ref.watch(appControllerProvider);
     return async.when(
-      loading: () => Scaffold(
-        body: Center(
-          child: Semantics(
-            label: 'Opening Fund Flow',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('F', style: Theme.of(context).textTheme.headlineLarge),
-                const SizedBox(height: 18),
-                const SizedBox(
-                  width: 22,
-                  child: LinearProgressIndicator(minHeight: 2),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      error: (e, _) => Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.error_outline_rounded,
-                      color: context.zero.negative,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      'Fund Flow could not open',
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Your local records have not been changed. Try opening the app again.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: context.zero.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () => ref.invalidate(appControllerProvider),
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Try again'),
-                    ),
-                    const SizedBox(height: 12),
-                    ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: const Text('Technical details'),
-                      children: [
-                        SelectableText(
-                          '$e',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+      loading: () => const _Opening(),
+      error: (error, _) => _Failed(
+        error: error,
+        onRetry: () => ref.invalidate(appControllerProvider),
       ),
       data: (app) {
         if (!app.preferences.onboardingComplete) {
-          return const ZeroOnboarding();
+          return const OnboardingScreen();
         }
         if (app.locked) {
           if (!_unlockScheduled) {
@@ -129,63 +74,104 @@ class _State extends ConsumerState<AppExperience> with WidgetsBindingObserver {
               _unlockScheduled = false;
             });
           }
-          return _LockedView(
+          return _Locked(
             onUnlock: () => ref.read(appControllerProvider.notifier).unlock(),
           );
         }
-        return const ZeroHome();
+        return const FFShell();
       },
     );
   }
 }
 
-class _LockedView extends StatelessWidget {
-  const _LockedView({required this.onUnlock});
+class _Opening extends StatelessWidget {
+  const _Opening();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: context.ff.background,
+    body: Center(
+      child: Semantics(
+        label: 'Opening Fund Flow',
+        child: Icon(Icons.waves_rounded, size: 42, color: context.ff.tint),
+      ),
+    ),
+  );
+}
+
+class _Locked extends StatelessWidget {
+  const _Locked({required this.onUnlock});
   final VoidCallback onUnlock;
 
   @override
   Widget build(BuildContext context) {
-    final z = context.zero;
+    final c = context.ff;
     return Scaffold(
+      backgroundColor: c.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(FFSpace.xl),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('F', style: Theme.of(context).textTheme.headlineMedium),
               const Spacer(),
-              Icon(Icons.lock_outline_rounded, size: 34, color: z.accent),
-              const SizedBox(height: 24),
+              Icon(Icons.lock_rounded, size: 40, color: c.tint),
+              const SizedBox(height: FFSpace.xl),
+              Text('Fund Flow is locked', style: FFText.title2),
+              const SizedBox(height: FFSpace.sm),
               Text(
-                'Your money is locked.',
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Authenticate with this device to open Fund Flow.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: z.muted),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: onUnlock,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  backgroundColor: z.accent,
-                  foregroundColor: z.onAccent,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(14)),
-                  ),
-                ),
-                child: const Text('Unlock Fund Flow'),
+                'Authenticate with this device to open your records.',
+                textAlign: TextAlign.center,
+                style: FFText.subhead.copyWith(color: c.secondaryLabel),
               ),
               const Spacer(),
+              FFButton('Unlock', icon: Icons.lock_open_rounded, onTap: onUnlock),
+              const SizedBox(height: FFSpace.xl),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+class _Failed extends StatelessWidget {
+  const _Failed({required this.error, required this.onRetry});
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: context.ff.groupedBackground,
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: FFSpace.huge),
+        children: [
+          FFEmpty(
+            icon: Icons.error_rounded,
+            title: 'Fund Flow could not open',
+            message:
+                'Your records have not been changed. Try opening the app '
+                'again.',
+            action: 'Try again',
+            onAction: onRetry,
+          ),
+          FFGroup(
+            header: 'Technical detail',
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(FFSpace.lg),
+                child: SelectableText(
+                  '$error',
+                  style: FFText.footnote.copyWith(
+                    color: context.ff.secondaryLabel,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }

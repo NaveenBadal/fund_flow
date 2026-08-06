@@ -160,7 +160,9 @@ abstract final class InsightEngine {
           title: '${duplicate.later.merchant} charged twice',
           detail: duplicate.apart.inHours < 24
               ? 'Two charges the same size within a day of each other.'
-              : 'Two charges the same size ${duplicate.apart.inDays} days apart.',
+              : 'Two charges the same size '
+                    '${duplicate.apart.inDays} '
+                    '${duplicate.apart.inDays == 1 ? 'day' : 'days'} apart.',
           question:
               'Are the ${duplicate.later.merchant} charges around '
               '${_day(duplicate.later.occurredAt)} duplicates?',
@@ -216,7 +218,16 @@ abstract final class InsightEngine {
     // A duplicate is money possibly taken twice, so it outranks an unusual
     // amount, which in turn outranks a trend that is merely interesting.
     found.sort((a, b) => a.kind.index.compareTo(b.kind.index));
-    return found.take(limit).toList();
+
+    // Three overlapping charges at one merchant produce two duplicate pairs,
+    // and both render as the same sentence. Saying "Adobe charged twice"
+    // twice reads as a bug in the app rather than a fact about the merchant,
+    // so only the first finding of each kind per merchant is surfaced.
+    final seen = <String>{};
+    return found
+        .where((insight) => seen.add('${insight.kind.name}|${insight.title}'))
+        .take(limit)
+        .toList();
   }
 
   /// "13 Jun" rather than "13/6", which reads as either date depending on

@@ -38,10 +38,10 @@ const Set<String> retiredChatModels = {
 class AppPreferences {
   const AppPreferences({
     this.onboardingComplete = false,
-    // Dark is what this interface was designed in, not a variant of it, so
-    // it is what someone sees before they have expressed a preference.
-    // Choosing "system" or "light" in settings still does exactly that.
-    this.appearance = AppearancePreference.dark,
+    // Light and dark are one design expressed twice, so neither is the
+    // "real" one and there is nothing to prefer on someone's behalf. The
+    // device already knows which they want.
+    this.appearance = AppearancePreference.system,
     this.currency = 'INR',
     this.hideAmounts = false,
     this.lockApp = false,
