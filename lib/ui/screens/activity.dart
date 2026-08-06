@@ -1,184 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../tokens/precision_tokens.dart';
+import '../widgets/precision_components.dart';
 
-import '../../app/app_controller.dart';
-import '../../domain/transaction.dart';
-import '../ff_format.dart';
-import '../theme/ff_theme.dart';
-import '../widgets/ff_controls.dart';
-import '../widgets/ff_group.dart';
-import '../widgets/ff_notice.dart';
-import '../widgets/ff_screen.dart';
-import '../widgets/ff_transaction_row.dart';
-import 'transaction_detail.dart';
-import 'transaction_editor.dart';
-
-enum _Lens { all, spending, income, review }
-
-/// The ledger.
-///
-/// Grouped by day and nothing else. Filters exist, but they sit above the list
-/// where they can be seen rather than behind an icon that hides what state the
-/// list is in.
-class ActivityScreen extends ConsumerStatefulWidget {
+class ActivityScreen extends StatelessWidget {
   const ActivityScreen({super.key});
 
   @override
-  ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
-}
-
-class _ActivityScreenState extends ConsumerState<ActivityScreen> {
-  final _search = TextEditingController();
-  _Lens _lens = _Lens.all;
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final app = ref.watch(appControllerProvider).requireValue;
-    final hidden = app.preferences.hideAmounts;
-    final query = _search.text.trim().toLowerCase();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final matching =
-        app.transactions.where((t) {
-            switch (_lens) {
-              case _Lens.spending:
-                if (t.direction != TransactionDirection.outgoing) return false;
-              case _Lens.income:
-                if (t.direction != TransactionDirection.incoming) return false;
-              case _Lens.review:
-                if (t.reviewState != ReviewState.needsReview) return false;
-              case _Lens.all:
-                break;
-            }
-            if (query.isEmpty) return true;
-            return '${t.merchant} ${t.category} ${t.note ?? ''}'
-                .toLowerCase()
-                .contains(query);
-          }).toList()
-          ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    // Dummy data for the preview
+    final transactions = [
+      {'merchant': 'Apple Store', 'amount': '- \$99.00', 'date': 'Today, 2:45 PM', 'in': false},
+      {'merchant': 'Whole Foods', 'amount': '- \$45.20', 'date': 'Today, 10:12 AM', 'in': false},
+      {'merchant': 'Salary Deposit', 'amount': '+ \$3,200.00', 'date': 'Yesterday', 'in': true},
+      {'merchant': 'Uber', 'amount': '- \$12.50', 'date': 'Yesterday', 'in': false},
+      {'merchant': 'Netflix', 'amount': '- \$15.99', 'date': 'Aug 4', 'in': false},
+      {'merchant': 'Coffee Shop', 'amount': '- \$4.50', 'date': 'Aug 4', 'in': false},
+    ];
 
-    final groups = byDay(matching);
-    final total = matching.length;
-
-    return FFScreen(
-      title: 'Activity',
-      trailing: [
-        FFBarButton(
-          icon: Icons.add_rounded,
-          tooltip: 'Add a transaction',
-          onTap: () => showTransactionEditor(context),
-        ),
-      ],
-      belowTitle: Column(
-        children: [
-          FFSearchField(
-            controller: _search,
-            placeholder: 'Merchant, category or note',
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: FFSpace.md),
-          FFSegmented<_Lens>(
-            value: _lens,
-            segments: const [
-              (_Lens.all, 'All'),
-              (_Lens.spending, 'Spending'),
-              (_Lens.income, 'Income'),
-              (_Lens.review, 'To review'),
-            ],
-            onChanged: (value) => setState(() => _lens = value),
-          ),
-        ],
-      ),
-      slivers: [
-        if (groups.isEmpty)
-          SliverToBoxAdapter(
-            child: app.transactions.isEmpty
-                ? FFEmpty(
-                    icon: Icons.receipt_long_rounded,
-                    title: 'Nothing recorded yet',
-                    message:
-                        'Payment messages become transactions here once you '
-                        'run a check.',
-                    action: 'Check my messages',
-                    onAction: ref
-                        .read(appControllerProvider.notifier)
-                        .importMessages,
-                    secondaryAction: 'Add one manually',
-                    onSecondaryAction: () => showTransactionEditor(context),
-                  )
-                : FFEmpty(
-                    icon: Icons.search_off_rounded,
-                    title: 'No matches',
-                    message: query.isEmpty
-                        ? 'Nothing in this view yet.'
-                        : 'Nothing matches “${_search.text.trim()}”.',
-                    action: query.isEmpty ? null : 'Clear search',
-                    onAction: () {
-                      _search.clear();
-                      setState(() {});
-                    },
-                  ),
-          )
-        else ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                FFSpace.lg + FFSpace.gutter,
-                0,
-                FFSpace.gutter,
-                FFSpace.md,
-              ),
-              child: Text(
-                '$total ${total == 1 ? 'transaction' : 'transactions'}',
-                style: FFText.footnote.copyWith(
-                  color: context.ff.secondaryLabel,
-                ),
+    return Scaffold(
+      backgroundColor: isDark ? PrecisionTokens.backgroundDark : PrecisionTokens.backgroundLight,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(PrecisionTokens.space24),
+              child: PrecisionHeader(title: 'Activity', subtitle: 'Ledger'),
+            ),
+            const PrecisionDivider(),
+            Expanded(
+              child: ListView.separated(
+                itemCount: transactions.length,
+                separatorBuilder: (context, index) => const PrecisionDivider(),
+                itemBuilder: (context, index) {
+                  final tx = transactions[index];
+                  final isMoneyIn = tx['in'] as bool;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: PrecisionTokens.space24, 
+                      vertical: PrecisionTokens.space16,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tx['merchant'] as String,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: PrecisionTokens.space4),
+                            Text(
+                              tx['date'] as String,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                        Text(
+                          tx['amount'] as String,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontFamily: 'monospace', // Tabular figures
+                            fontWeight: FontWeight.w600,
+                            color: isMoneyIn 
+                                ? PrecisionTokens.accentMoneyIn 
+                                : (isDark ? PrecisionTokens.textPrimaryDark : PrecisionTokens.textPrimaryLight),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-          ),
-          SliverList.builder(
-            itemCount: groups.length,
-            itemBuilder: (context, index) {
-              final (day, items) = groups[index];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      FFSpace.lg + FFSpace.gutter,
-                      0,
-                      FFSpace.gutter,
-                      FFSpace.sm,
-                    ),
-                    child: Text(
-                      dayLabel(day),
-                      style: FFText.footnote.copyWith(
-                        color: context.ff.secondaryLabel,
-                      ),
-                    ),
-                  ),
-                  FFGroup(
-                    separatorIndent: 64,
-                    children: [
-                      for (final item in items)
-                        FFTransactionRow(
-                          item: item,
-                          hidden: hidden,
-                          onTap: () => openTransaction(context, item),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 }

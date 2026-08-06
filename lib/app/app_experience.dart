@@ -3,17 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../ui/screens/onboarding.dart';
 import '../ui/screens/shell.dart';
-import '../ui/theme/ff_theme.dart';
-import '../ui/widgets/ff_controls.dart';
-import '../ui/widgets/ff_group.dart';
-import '../ui/widgets/ff_notice.dart';
+import '../ui/widgets/precision_components.dart';
+import '../ui/tokens/precision_tokens.dart';
 import 'app_controller.dart';
 
-/// What is on screen before the app proper is.
-///
-/// Four states, and only four: opening, refusing to open, locked, and ready.
-/// Each is a whole screen rather than a spinner over a half-built one, because
-/// a half-built screen invites tapping things that are not there yet.
 class AppExperience extends ConsumerStatefulWidget {
   const AppExperience({super.key});
 
@@ -78,7 +71,7 @@ class _AppExperienceState extends ConsumerState<AppExperience>
             onUnlock: () => ref.read(appControllerProvider.notifier).unlock(),
           );
         }
-        return const FFShell();
+        return const PrecisionShell();
       },
     );
   }
@@ -88,15 +81,23 @@ class _Opening extends StatelessWidget {
   const _Opening();
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: context.ff.background,
-    body: Center(
-      child: Semantics(
-        label: 'Opening Fund Flow',
-        child: Icon(Icons.waves_rounded, size: 42, color: context.ff.tint),
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: isDark ? PrecisionTokens.backgroundDark : PrecisionTokens.backgroundLight,
+      body: Center(
+        child: Semantics(
+          label: 'Opening Fund Flow',
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? PrecisionTokens.textPrimaryDark : PrecisionTokens.textPrimaryLight,
+            ),
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Locked extends StatelessWidget {
@@ -105,28 +106,29 @@ class _Locked extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.ff;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: c.background,
+      backgroundColor: isDark ? PrecisionTokens.backgroundDark : PrecisionTokens.backgroundLight,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(FFSpace.xl),
+          padding: const EdgeInsets.all(PrecisionTokens.space24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Spacer(),
-              Icon(Icons.lock_rounded, size: 40, color: c.tint),
-              const SizedBox(height: FFSpace.xl),
-              Text('Fund Flow is locked', style: FFText.title2),
-              const SizedBox(height: FFSpace.sm),
-              Text(
-                'Authenticate with this device to open your records.',
-                textAlign: TextAlign.center,
-                style: FFText.subhead.copyWith(color: c.secondaryLabel),
+              const PrecisionHeader(
+                title: 'Locked',
+                subtitle: 'Authenticate with this device to open your records.',
               ),
               const Spacer(),
-              FFButton('Unlock', icon: Icons.lock_open_rounded, onTap: onUnlock),
-              const SizedBox(height: FFSpace.xl),
+              PrecisionButton(
+                label: 'Unlock',
+                onPressed: onUnlock,
+              ),
+              const SizedBox(height: PrecisionTokens.space24),
             ],
           ),
         ),
@@ -141,37 +143,44 @@ class _Failed extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: context.ff.groupedBackground,
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: FFSpace.huge),
-        children: [
-          FFEmpty(
-            icon: Icons.error_rounded,
-            title: 'Fund Flow could not open',
-            message:
-                'Your records have not been changed. Try opening the app '
-                'again.',
-            action: 'Try again',
-            onAction: onRetry,
-          ),
-          FFGroup(
-            header: 'Technical detail',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(FFSpace.lg),
-                child: SelectableText(
-                  '$error',
-                  style: FFText.footnote.copyWith(
-                    color: context.ff.secondaryLabel,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? PrecisionTokens.surfaceDark : PrecisionTokens.surfaceLight,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(PrecisionTokens.space24),
+          children: [
+            const SizedBox(height: PrecisionTokens.space64),
+            const PrecisionHeader(
+              title: 'Could not open',
+              subtitle: 'Your records have not been changed. Try opening the app again.',
+            ),
+            const SizedBox(height: PrecisionTokens.space32),
+            PrecisionButton(
+              label: 'Try again',
+              onPressed: onRetry,
+            ),
+            const SizedBox(height: PrecisionTokens.space48),
+            PrecisionSurface(
+              elevated: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Technical detail', style: theme.textTheme.labelMedium),
+                  const SizedBox(height: PrecisionTokens.space12),
+                  SelectableText(
+                    '$error',
+                    style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
