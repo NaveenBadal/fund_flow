@@ -6,9 +6,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../data/fund_flow_store.dart';
+import '../agent/agent_presentation.dart';
 import '../agent/agent_proposal.dart';
 import '../agent/agent_runner.dart';
+import '../agent/local_answers.dart';
 import '../agent/local_mcp_server.dart';
+import '../agent/scope_guard.dart';
 import '../data/secure_preferences.dart';
 import '../domain/conversation.dart';
 import '../domain/import_audit.dart';
@@ -1061,6 +1064,47 @@ class AppController extends AsyncNotifier<AppState> {
         clearRetryQuestion: true,
       ),
     );
+    // Out of scope, and provably so: refused here rather than sent to a
+    // provider to be refused there. The system contract still covers everything
+    // this guard is not certain about; this only catches the unambiguous cases,
+    // instantly and for free.
+    final refusal = ScopeGuard.refuse(trimmed);
+    if (refusal != null) {
+      await _deliverLocally(
+        AgentPresentation(
+          parts: [
+            AgentPart(kind: AgentPartKind.redirect, data: {'text': refusal}),
+            AgentPart(
+              kind: AgentPartKind.followUps,
+              data: {
+                'questions': [
+                  'Where did my money go this month?',
+                  'What was my biggest expense?',
+                ],
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Questions that are arithmetic get answered from the ledger, with no
+    // network call and no provider key. This is both the fastest path and the
+    // most trustworthy one — the figures come from the same functions Home
+    // draws, so the two cannot disagree.
+    final local = LocalAnswers.attempt(
+      question: trimmed,
+      transactions: _value.transactions,
+      budgets: await ref.read(storeProvider).budgets(),
+      now: DateTime.now(),
+      fallbackCurrency: _value.preferences.currency,
+    );
+    if (local != null) {
+      await _deliverLocally(local.presentation, evidenceIds: local.evidenceIds);
+      return;
+    }
+
     try {
       final key = await ref.read(securePreferencesProvider).apiKey();
       if (key.isEmpty) throw const AiRequestFailure(401);
@@ -1269,6 +1313,39 @@ class AppController extends AsyncNotifier<AppState> {
         ),
       );
     }
+  }
+
+  /// Writes an answer this device produced into the thread.
+  ///
+  /// Marked verified, because it is: nothing about it was generated. It takes
+  /// the same path as a model answer so history, replay and the transcript all
+  /// behave identically.
+  Future<void> _deliverLocally(
+    AgentPresentation presentation, {
+    List<int> evidenceIds = const [],
+  }) async {
+    final store = ref.read(storeProvider);
+    await store.addMessage(
+      ConversationMessage(
+        author: MessageAuthor.assistant,
+        text: presentation.plainText,
+        createdAt: DateTime.now(),
+        verified: true,
+        supportingTransactionIds: evidenceIds,
+        parts: presentation.parts,
+      ),
+      threadId: _value.activeThreadId,
+    );
+    state = AsyncData(
+      _value.copyWith(
+        conversation: await store.conversation(threadId: _value.activeThreadId),
+        threads: await store.conversationThreads(),
+        asking: false,
+        askStage: null,
+        clearAskDraft: true,
+        clearError: true,
+      ),
+    );
   }
 
   void stopAgent() => _activeRun?.cancel();

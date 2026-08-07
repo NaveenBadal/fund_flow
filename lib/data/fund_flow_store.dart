@@ -338,6 +338,48 @@ class FundFlowStore {
     });
   }
 
+  /// The capability calls one answer made, in order.
+  ///
+  /// These have been recorded since the agent existed and nothing ever read
+  /// them back, so every answer's "show working" was a claim rather than a
+  /// record. Ordered by id rather than timestamp: several calls in one turn
+  /// share a second, and the order they ran in is the interesting part.
+  Future<List<Map<String, Object?>>> toolEventsFor(int conversationId) async {
+    final rows = await (await database).query(
+      'tool_calls',
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+      orderBy: 'id ASC',
+    );
+    return [
+      for (final row in rows)
+        {
+          'tool': row['tool'],
+          'summary': row['summary'],
+          'isError': row['is_error'] == 1,
+        },
+    ];
+  }
+
+  /// Latency and turn counts for one answer, if it came from a provider.
+  Future<Map<String, Object?>?> agentRunFor(int conversationId) async {
+    final rows = await (await database).query(
+      'agent_runs',
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return {
+      'elapsedMs': row['elapsed_ms'],
+      'turns': row['turns'],
+      'calls': row['calls'],
+      'model': row['model'],
+      'outputTokens': row['output_tokens'],
+    };
+  }
+
   Future<List<Map<String, Object?>>> recentAgentRuns({int limit = 20}) async {
     final rows = await (await database).query(
       'agent_runs',

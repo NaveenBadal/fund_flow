@@ -15,6 +15,7 @@ import 'composer.dart';
 import 'proposal_card.dart';
 import 'suggestions.dart';
 import 'threads_page.dart';
+import 'trace.dart';
 
 /// Ask: the agent, its thread, and the one composer.
 class AskPage extends ConsumerStatefulWidget {
@@ -55,6 +56,20 @@ class _AskPageState extends ConsumerState<AskPage> {
     final palette = context.flux;
     final app = ref.watch(appControllerProvider).value;
     final snapshot = ref.watch(homeSnapshotProvider);
+
+    // Follow the conversation as it grows. Scrolling in `_send` fires before the
+    // answer exists, so an instant local answer landed below the fold and looked
+    // like nothing had happened.
+    ref.listen<int>(
+      appControllerProvider.select(
+        (value) => value.value?.conversation.length ?? 0,
+      ),
+      (previous, next) {
+        if (next > (previous ?? 0)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
+        }
+      },
+    );
 
     // A question handed over from somewhere else in the app — an insight card, a
     // merchant page — is asked immediately. The person already tapped "ask
@@ -101,8 +116,9 @@ class _AskPageState extends ConsumerState<AskPage> {
                       tone: FluxBannerTone.ai,
                       title: 'No provider connected',
                       message:
-                          'Questions need a model to answer them. Your records '
-                          'stay on the device either way.',
+                          'Everyday questions — totals, categories, comparisons '
+                          '— are answered on this device without one. Connect a '
+                          'provider for anything more open-ended.',
                       icon: Icons.link_off_rounded,
                       actionLabel: 'Connect',
                       onAction: () => fluxPush(
@@ -262,7 +278,7 @@ class _MessageView extends StatelessWidget {
           AnswerPartView(part: parts[index], onFollowUp: onFollowUp),
         ],
         const SizedBox(height: FluxSpace.x3),
-        _TraceRow(message: message),
+        AnswerTraceRow(message: message),
       ],
     );
   }
@@ -274,48 +290,4 @@ class _MessageView extends StatelessWidget {
     AgentPartKind.conclusion || AgentPartKind.redirect => FluxSpace.x4,
     _ => FluxSpace.x4,
   };
-}
-
-/// What the answer was built from.
-///
-/// Every answer carries this line. It is the difference between a figure someone
-/// has to take on faith and one they can see the working for — and the
-/// unverified marker is how a fallback answer that skipped the structured path
-/// announces itself instead of passing as a checked result.
-class _TraceRow extends StatelessWidget {
-  const _TraceRow({required this.message});
-  final ConversationMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.flux;
-    final count = message.supportingTransactionIds.length;
-    final verified = message.verified;
-
-    return Row(
-      children: [
-        Icon(
-          verified ? Icons.verified_outlined : Icons.help_outline_rounded,
-          size: 13,
-          color: verified ? palette.textFaint : palette.attention,
-        ),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            verified
-                ? (count == 0
-                      ? 'Answered from your local records'
-                      : 'Checked against $count '
-                            '${count == 1 ? 'record' : 'records'} on this device')
-                : 'Unverified — this answer did not come back in the '
-                      'app\'s checked format',
-            style: FluxType.caption.copyWith(
-              color: verified ? palette.textFaint : palette.attention,
-              fontSize: 11,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }

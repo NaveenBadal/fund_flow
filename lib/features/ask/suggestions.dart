@@ -67,10 +67,10 @@ class AskEmptyState extends ConsumerWidget {
             snapshot.empty
                 ? 'Once your messages are imported, everything here becomes '
                       'answerable.'
-                : 'Answers are calculated from the '
-                      '${snapshot.month.transactionCount} records on this '
-                      'device this month, never estimated. This agent only '
-                      'works on your money.',
+                : 'Totals, categories and comparisons are worked out on this '
+                      'device from the ${snapshot.month.transactionCount} '
+                      'records in it this month — instantly, and never '
+                      'estimated. This agent only works on your money.',
             style: FluxType.body.copyWith(color: palette.textMuted),
           ),
           const SizedBox(height: FluxSpace.x6),

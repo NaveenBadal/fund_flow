@@ -476,6 +476,48 @@ six are fixed:
 | Pushed pages showed dark text on a black window | Only the shell painted a background; routes above it painted none |
 | Sparkline flat across future dates, bars washed out, donut figure through the ring | Series ran to month end; "today" highlighted a bar with no value; centre text unbounded |
 
+## 8b. Agent, second pass (2026-08-07)
+
+The agent was the weakest part of the first pass: every question cost a provider
+round trip, scope was enforced only by a system-prompt rule plus one repair turn,
+and the "checked against N records" line was a claim rather than a record. Three
+layers now sit in front of the model, in this order:
+
+1. **`ScopeGuard`** (`lib/agent/scope_guard.dart`) — deterministic refusal for
+   unambiguously out-of-scope questions: code, investment or product advice,
+   general knowledge, finance-as-a-subject. Fires *before* the network, so
+   "write me a Python program" costs nothing and returns instantly. Anything it
+   is not certain about falls through to the model, where the contract still
+   applies; code and investment rules do not yield to ledger phrasing, the
+   softer ones do.
+2. **`LocalAnswers`** (`lib/agent/local_answers.dart`) — ten matchers covering
+   review queue, duplicates, recurring charges, budget status, per-merchant,
+   per-category, largest charge, breakdown, period comparison and the monthly
+   overview, with period parsing (this month, last month, 7/30/90 days). Answers
+   come back instantly, offline, **with no provider key at all**, and are built
+   from the same `Analytics` functions Home draws — so a figure in the chat can
+   never disagree with the same figure on Home. Every one carries a source note
+   saying no model was involved. It matches conservatively and returns null to
+   the model whenever it is unsure.
+3. **The model**, with `merchant_profile` and `forecast_month` added to the
+   capability set.
+
+The trace line under each answer now expands into the capability calls the run
+actually made, read from the `tool_calls` rows that had been written since the
+agent existed and never read back, plus elapsed time, model turns and model id
+from `agent_runs`.
+
+Verified on the emulator with **no provider key configured**: the Python request
+returns the redirect card; "how much did I spend on food this month" returns
+₹1,571.80, matching Home's donut exactly; "how am I doing this month" returns the
+full briefing; "what was my biggest expense" cites five transactions, tappable
+through to the originating SMS. Four more defects were found by looking:
+cited transactions rendered in ledger order rather than the order the answer
+ranked them, the thread did not scroll to a new answer, stat tiles came out at
+two heights when only one carried a delta badge, and the "no provider" banner
+claimed questions could not be answered without one — which had just stopped
+being true.
+
 **Deferred, with reasons:**
 
 - **The `app_controller.dart` split.** It is 1628 lines and still is. Budgets went
@@ -485,16 +527,15 @@ six are fixed:
 - **Ledger paging.** The store loads every transaction into memory and Activity
   filters that list. Correct at this app's scale (a 30-day lookback), wrong at
   ten years of data.
-- **`merchant_profile`, `forecast_month`, `transactions_categorize_rule` and
-  `ui_navigate` agent tools.** `budgets_get`, `budgets_set`, `budgets_clear`,
-  `review_queue` and `subscriptions_list` shipped; the rest are additive.
-- **The deterministic fast path** for canonical questions. The suggestion chips
-  still go through the model, so the first tap costs a round trip.
+- **`transactions_categorize_rule` and `ui_navigate` agent tools.** Everything
+  else in the planned set shipped. `ui_navigate` needs a new part kind and a
+  navigation intent threaded out of the agent result; the honest version of it
+  offers a destination as a chip rather than moving someone without asking.
 - **Monthly report** as its own surface — the breakdown page covers most of it.
-- **Runtime verification of the agent** (the redirect card, proposals, typed
-  parts against a live model). Every path is built and compiles, but it needs a
-  provider key to exercise, so it is verified by construction and not by
-  screenshot. This is the largest untested area.
+- **The model path itself.** The local layers are now verified end to end on the
+  emulator, but proposals, the approval card, the repair turn and the model's own
+  typed answers still need a provider key to exercise. That is the remaining
+  untested area, and it is now a much smaller one.
 
 ## 9. Decisions (settled 2026-08-06)
 

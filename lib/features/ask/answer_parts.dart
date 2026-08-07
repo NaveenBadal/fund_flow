@@ -136,6 +136,13 @@ class _MetricRow extends StatelessWidget {
     final raw = part.data['metrics'] ?? part.data['values'];
     if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
 
+    // If any tile carries a delta badge, every tile reserves room for one.
+    // Otherwise a row of stat tiles comes out at two different heights, which
+    // reads as a layout fault rather than as extra information on one of them.
+    final anyChange = raw.whereType<Map>().any(
+      (item) => item['changeFraction'] is num,
+    );
+
     return Wrap(
       spacing: FluxSpace.x3,
       runSpacing: FluxSpace.x3,
@@ -174,7 +181,8 @@ class _MetricRow extends StatelessWidget {
                   if (change is num) ...[
                     const SizedBox(height: FluxSpace.x2),
                     FluxDelta(fraction: change.toDouble(), compact: true),
-                  ],
+                  ] else if (anyChange)
+                    const SizedBox(height: FluxSpace.x2 + 18),
                 ],
               ),
             );
@@ -328,11 +336,19 @@ class _TransactionList extends ConsumerWidget {
     final ids = part.data['transactionIds'];
     if (ids is! List || ids.isEmpty) return const SizedBox.shrink();
 
-    final wanted = ids.whereType<int>().toSet();
+    final wanted = ids.whereType<int>().toList();
     final all =
         ref.watch(appControllerProvider).value?.transactions ??
         const <MoneyTransaction>[];
-    final items = all.where((item) => wanted.contains(item.id)).toList();
+    // Kept in the order the answer supplied, not the ledger's. An answer about
+    // the largest charges has already ranked them, and re-sorting by date here
+    // silently contradicts the sentence above the list.
+    final byId = <int, MoneyTransaction>{};
+    for (final item in all) {
+      final id = item.id;
+      if (id != null) byId[id] = item;
+    }
+    final items = [for (final id in wanted) ?byId[id]];
     if (items.isEmpty) {
       return Text(
         'The transactions behind this answer have since been removed.',

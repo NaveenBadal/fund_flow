@@ -206,6 +206,29 @@ class LocalMcpServer {
       McpRisk.read,
     ),
     _tool(
+      'merchant_profile',
+      'Read everything about one merchant: total, count, typical charge, how '
+          'often they charge, and first and last dates. Prefer this over paging '
+          'transactions_search when the question is about one place.',
+      McpSchema.object(
+        properties: {
+          'merchant': McpSchema.string(),
+          'from': McpSchema.string(),
+          'to': McpSchema.string(),
+        },
+        required: ['merchant'],
+      ),
+      McpRisk.read,
+    ),
+    _tool(
+      'forecast_month',
+      'Project this calendar month to its end at the current rate, in total and '
+          'per category. A straight-line run rate over days elapsed, not a '
+          'prediction of behaviour — say so when you use it.',
+      McpSchema.object(),
+      McpRisk.read,
+    ),
+    _tool(
       'budgets_get',
       'Read the monthly category limits this person set, with what has been '
           'spent against each one this calendar month and a straight-line '
@@ -377,6 +400,8 @@ class LocalMcpServer {
         'app_update_status' => await _update(call),
         'conversation_search' => _conversationSearch(call),
         'memory_list' => await _memoryList(call),
+        'merchant_profile' => _merchantProfile(call),
+        'forecast_month' => _forecastMonth(call),
         'budgets_get' => await _budgetsGet(call),
         'review_queue' => _reviewQueue(call),
         'subscriptions_list' => _subscriptions(call),
@@ -1049,6 +1074,130 @@ class LocalMcpServer {
         if (field('category') case final value?) 'Remove the limit on $value',
       ],
     };
+  }
+
+  McpExecution _merchantProfile(McpToolCall call) {
+    final wanted = call.arguments['merchant']?.toString().trim().toLowerCase();
+    if (wanted == null || wanted.isEmpty) {
+      throw const McpProtocolException('A merchant name is required.');
+    }
+    // Substring rather than exact: a bank writes the same merchant a dozen
+    // ways, and a model asking about "Swiggy" should not miss "SWIGGY LTD".
+    final matched =
+        _transactions()
+            .where(
+              (item) => item.merchant.trim().toLowerCase().contains(wanted),
+            )
+            .toList()
+          ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+    if (matched.isEmpty) {
+      return _ok(call, {
+        'merchant': wanted,
+        'found': false,
+        'note':
+            'No transaction mentions that merchant. Do not guess at a figure; '
+            'say the ledger has nothing for them.',
+      });
+    }
+    final byCurrency = <String, List<MoneyTransaction>>{};
+    for (final item in matched) {
+      byCurrency.putIfAbsent(item.currency, () => []).add(item);
+    }
+    return _ok(call, {
+      'merchant': matched.last.merchant,
+      'found': true,
+      'names': matched.map((item) => item.merchant).toSet().toList(),
+      'firstCharged': _date(matched.first.occurredAt),
+      'lastCharged': _date(matched.last.occurredAt),
+      'currencies': [
+        for (final entry in byCurrency.entries)
+          () {
+            final rows = entry.value;
+            final spent = rows
+                .where(
+                  (item) => item.direction == TransactionDirection.outgoing,
+                )
+                .fold<int>(0, (sum, item) => sum + item.amountMinor);
+            final gaps = <int>[];
+            for (var index = 1; index < rows.length; index++) {
+              gaps.add(
+                rows[index].occurredAt
+                    .difference(rows[index - 1].occurredAt)
+                    .inDays,
+              );
+            }
+            return {
+              'currency': entry.key,
+              'count': rows.length,
+              'spentMinor': spent,
+              'spentDisplay': formatMoney(spent, entry.key),
+              'typicalMinor': rows.isEmpty ? 0 : spent ~/ rows.length,
+              'typicalDisplay': formatMoney(
+                rows.isEmpty ? 0 : spent ~/ rows.length,
+                entry.key,
+              ),
+              'averageGapDays': gaps.isEmpty
+                  ? null
+                  : (gaps.reduce((a, b) => a + b) / gaps.length).round(),
+              'categories': {
+                for (final category
+                    in rows.map((item) => item.category).toSet())
+                  category: rows
+                      .where((item) => item.category == category)
+                      .length,
+              },
+            };
+          }(),
+      ],
+    });
+  }
+
+  McpExecution _forecastMonth(McpToolCall call) {
+    final now = DateTime.now();
+    final (from, to) = Analytics.monthOf(now);
+    final currency =
+        Analytics.dominantCurrency(_transactions()) ?? _preferences().currency;
+    final elapsedDays = now.day;
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final overview = Analytics.overview(
+      transactions: _transactions(),
+      from: from,
+      to: to,
+      currency: currency,
+    );
+    int project(int minor) =>
+        elapsedDays <= 0 ? minor : (minor / elapsedDays * daysInMonth).round();
+
+    final categories = Analytics.byCategory(
+      transactions: _transactions(),
+      from: from,
+      to: to,
+      currency: currency,
+    );
+    return _ok(call, {
+      'method':
+          'Straight-line run rate: spent so far divided by days elapsed, times '
+          'days in the month. Not a prediction of behaviour.',
+      'currency': currency,
+      'daysElapsed': elapsedDays,
+      'daysInMonth': daysInMonth,
+      'spentSoFarMinor': overview.outgoingMinor,
+      'spentSoFarDisplay': formatMoney(overview.outgoingMinor, currency),
+      'projectedMinor': project(overview.outgoingMinor),
+      'projectedDisplay': formatMoney(
+        project(overview.outgoingMinor),
+        currency,
+      ),
+      'byCategory': [
+        for (final row in categories.take(8))
+          {
+            'label': row.category,
+            'spentMinor': row.amountMinor,
+            'projectedMinor': project(row.amountMinor),
+            'projectedDisplay': formatMoney(project(row.amountMinor), currency),
+          },
+      ],
+    });
   }
 
   Future<McpExecution> _budgetsGet(McpToolCall call) async {
