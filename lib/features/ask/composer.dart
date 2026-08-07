@@ -21,12 +21,17 @@ class AskComposer extends StatefulWidget {
     required this.onSend,
     required this.onStop,
     required this.busy,
+    this.safeArea = true,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onSend;
   final VoidCallback onStop;
   final bool busy;
+
+  /// Whether to pad past the gesture inset. False while the keyboard is up,
+  /// which occupies that space itself.
+  final bool safeArea;
 
   @override
   State<AskComposer> createState() => _AskComposerState();
@@ -95,6 +100,7 @@ class _AskComposerState extends State<AskComposer> {
       border: Border(top: BorderSide(color: palette.line, width: 1)),
       child: SafeArea(
         top: false,
+        bottom: widget.safeArea,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             FluxSpace.x4,

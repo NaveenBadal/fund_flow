@@ -120,13 +120,33 @@ class _AskPageState extends ConsumerState<AskPage> {
       (message) => message.author == MessageAuthor.person,
     );
 
+    // The keyboard, as a height this page has to get out of the way of.
+    //
+    // `adjustResize` in the manifest stopped shrinking the window once Android
+    // went edge-to-edge; the keyboard now arrives as a view inset that every
+    // widget has to honour itself. Scaffold does this, and so does FluxSheet —
+    // but Ask is a bare Stack with the composer pinned to the bottom, so it did
+    // not, and the field went behind the keyboard the moment it opened. Typing
+    // a question you cannot see is the whole feature failing at the first step.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    // With the keyboard up, the tab bar is behind it and the gesture inset is
+    // already inside the keyboard's own height, so the composer sits directly
+    // on the keyboard. With it down, it sits on the tab bar as before.
+    final composerBottom = keyboard > 0
+        ? keyboard - safeBottom
+        : shellBottomInset(context) - safeBottom;
+
     return Stack(
       children: [
         Positioned.fill(
           child: FluxPage(
             title: 'Ask',
             controller: _scroll,
-            bottomInset: shellBottomInset(context) + 68,
+            // The list has to clear the composer and whatever is under it, or
+            // the newest answer sits behind the thing used to ask about it.
+            bottomInset:
+                (keyboard > 0 ? keyboard : shellBottomInset(context)) + 68,
             actions: [
               if (messages.isNotEmpty)
                 FluxIconButton(
@@ -258,14 +278,23 @@ class _AskPageState extends ConsumerState<AskPage> {
             ],
           ),
         ),
-        Positioned(
+        AnimatedPositioned(
+          // Rides the keyboard up rather than jumping ahead of it. Android
+          // reports the inset in steps as the keyboard animates, so a hard
+          // reposition lands the composer above a keyboard that is still on
+          // its way in.
+          duration: FluxMotion.duration(context, FluxMotion.quick),
+          curve: FluxMotion.emphasized,
           left: 0,
           right: 0,
-          bottom:
-              shellBottomInset(context) - MediaQuery.paddingOf(context).bottom,
+          bottom: composerBottom,
           child: AskComposer(
             controller: _composer,
             busy: asking,
+            // The composer's own bottom safe area is the gesture inset under
+            // the tab bar. With the keyboard up that space belongs to the
+            // keyboard, and keeping it would float the field above it.
+            safeArea: keyboard == 0,
             onSend: _send,
             onStop: () => ref.read(appControllerProvider.notifier).stopAgent(),
           ),

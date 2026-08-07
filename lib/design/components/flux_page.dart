@@ -208,6 +208,7 @@ class FluxDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.flux;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     return Stack(
       children: [
         Positioned.fill(
@@ -223,7 +224,7 @@ class FluxDetailPage extends StatelessWidget {
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ),
-            bottomInset: bottomBar == null ? 0 : 88,
+            bottomInset: bottomBar == null ? 0 : 88 + keyboard,
             slivers: slivers,
           ),
         ),
@@ -231,11 +232,17 @@ class FluxDetailPage extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0,
+            // Android stopped resizing the window for the keyboard when it went
+            // edge-to-edge, so a bar pinned to zero sits behind it. No page
+            // using this today puts a field above the bar, which is exactly why
+            // it is worth fixing here rather than in the first page that does.
+            bottom: keyboard,
             child: FluxGlass(
               border: Border(top: BorderSide(color: palette.line, width: 1)),
               child: SafeArea(
                 top: false,
+                // The gesture inset is inside the keyboard's own height.
+                bottom: keyboard == 0,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
                     FluxSpace.page,
