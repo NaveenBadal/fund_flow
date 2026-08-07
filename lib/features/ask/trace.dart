@@ -64,35 +64,52 @@ class _AnswerTraceRowState extends ConsumerState<AnswerTraceRow> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FluxPressable(
-          feedback: PressFeedback.none,
-          onTap: id == null ? null : () => setState(() => _open = !_open),
-          child: Row(
-            children: [
-              Icon(
-                verified ? Icons.verified_outlined : Icons.help_outline_rounded,
-                size: 13,
-                color: verified ? palette.textFaint : palette.attention,
-              ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  summary,
-                  style: FluxType.caption.copyWith(
+        Semantics(
+          button: id != null,
+          label: id == null
+              ? summary
+              : '$summary. ${_open ? 'Hide' : 'Show'} the working behind this '
+                    'answer',
+          excludeSemantics: true,
+          child: FluxPressable(
+            feedback: PressFeedback.none,
+            onTap: id == null ? null : () => setState(() => _open = !_open),
+            child: Padding(
+              // The row is one line of faint 12pt text; without padding its
+              // tap target is about a third of the minimum, and it is the
+              // control that opens an answer's provenance.
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    verified
+                        ? Icons.verified_outlined
+                        : Icons.help_outline_rounded,
+                    size: 13,
                     color: verified ? palette.textFaint : palette.attention,
-                    fontSize: 11,
                   ),
-                ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      summary,
+                      style: FluxType.caption.copyWith(
+                        color: verified ? palette.textFaint : palette.attention,
+                      ),
+                    ),
+                  ),
+                  if (id != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      _open
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 14,
+                      color: palette.textFaint,
+                    ),
+                  ],
+                ],
               ),
-              if (id != null) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  size: 14,
-                  color: palette.textFaint,
-                ),
-              ],
-            ],
+            ),
           ),
         ),
         AnimatedSize(
@@ -187,7 +204,6 @@ class _TraceBody extends ConsumerWidget {
                                 event['summary'].toString(),
                                 style: FluxType.caption.copyWith(
                                   color: palette.textMuted,
-                                  fontSize: 11,
                                 ),
                               ),
                           ],

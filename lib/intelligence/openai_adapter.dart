@@ -141,6 +141,7 @@ class OpenAiAgentProvider implements AgentProvider {
     required List<Map<String, Object?>> messages,
     required List<McpToolDefinition> tools,
     void Function(String delta)? onContentDelta,
+    void Function(String tool, String arguments)? onToolArguments,
     AgentCancellationToken? cancellation,
   }) async {
     final request = http.Request('POST', Uri.parse('$base/chat/completions'))
@@ -207,7 +208,12 @@ class OpenAiAgentProvider implements AgentProvider {
             final name = function['name'];
             if (name is String && name.isNotEmpty) draft.name = name;
             final args = function['arguments'];
-            if (args is String) draft.arguments.write(args);
+            if (args is String) {
+              draft.arguments.write(args);
+              if (draft.name != null) {
+                onToolArguments?.call(draft.name!, draft.arguments.toString());
+              }
+            }
           }
         }
       }

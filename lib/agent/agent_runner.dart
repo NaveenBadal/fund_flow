@@ -11,6 +11,13 @@ abstract interface class AgentProvider {
     required List<Map<String, Object?>> messages,
     required List<McpToolDefinition> tools,
     void Function(String delta)? onContentDelta,
+
+    /// The arguments of a tool call as they stream in, accumulated so far.
+    ///
+    /// Called with the tool's name and everything of its argument JSON that
+    /// has arrived. The answer itself is a tool call, so this is the only
+    /// place it can be seen before the turn ends.
+    void Function(String tool, String arguments)? onToolArguments,
     AgentCancellationToken? cancellation,
   });
 }
@@ -135,6 +142,9 @@ class AgentRunner {
     AgentCancellationToken? cancellation,
     void Function(String stage)? onStage,
     void Function(String delta)? onContentDelta,
+
+    /// The answer as it is composed, part by part.
+    void Function(List<AgentPart> parts)? onParts,
   }) async {
     final stopwatch = Stopwatch()..start();
     final messages = <Map<String, Object?>>[
@@ -168,10 +178,24 @@ class AgentRunner {
       onStage?.call(
         turn == 0 ? 'Understanding your question' : 'Building the answer',
       );
+      // Re-parsing the whole argument buffer on every delta is cheap next to
+      // the network, but emitting an identical list on every delta is not:
+      // it would rebuild the thread for each token. Only a change in the
+      // number of finished parts is worth painting.
+      var streamedParts = 0;
       final response = await _provider.nextTurn(
         messages: messages,
         tools: _server.tools,
         onContentDelta: onContentDelta,
+        onToolArguments: onParts == null
+            ? null
+            : (tool, arguments) {
+                if (tool != 'answer_compose') return;
+                final parts = AgentPresentation.partialParts(arguments);
+                if (parts.length <= streamedParts) return;
+                streamedParts = parts.length;
+                onParts(parts);
+              },
         cancellation: cancellation,
       );
       if (response.metrics != null) metrics.add(response.metrics!);

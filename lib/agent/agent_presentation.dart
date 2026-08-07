@@ -315,6 +315,45 @@ class AgentPresentation {
     return text.length > 600 ? '${text.substring(0, 600)}…' : text;
   }
 
+  /// Whatever parts have finished arriving in a half-written compose call.
+  ///
+  /// The answer is delivered as a tool call, so its arguments stream in as
+  /// text: `{"parts":[{"type":"conclusion",…},{"type":"metricRow",…` with the
+  /// tail still in flight. Every object whose braces have closed is a complete,
+  /// valid part, and showing those is the difference between reading the
+  /// answer as it is written and watching a progress bar until all of it
+  /// exists. Anything unparseable is simply not yet finished, so failures are
+  /// silent by design and the next delta tries again.
+  ///
+  /// Never used for the delivered answer — that always comes from the tool
+  /// call's real arguments, validated in full.
+  static List<AgentPart> partialParts(String arguments) {
+    if (!arguments.contains('"type"')) return const [];
+    final parts = <AgentPart>[];
+    final seen = <String>{};
+    for (final candidate in _jsonCandidates(arguments)) {
+      final Object? decoded;
+      try {
+        decoded = jsonDecode(candidate);
+      } catch (_) {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final type = decoded['type']?.toString();
+      if (type == null) continue;
+      if (!AgentPartKind.values.any((kind) => kind.name == type)) continue;
+      try {
+        final part = AgentPart.fromJson(Map<Object?, Object?>.from(decoded));
+        // _jsonCandidates walks every opening brace, so a part containing
+        // nested objects yields more than once.
+        if (seen.add(jsonEncode(part.toJson()))) parts.add(part);
+      } catch (_) {
+        continue;
+      }
+    }
+    return ordered(parts);
+  }
+
   static AgentPresentation? tryFromProviderContent(String content) {
     var text = content.trim();
     if (text.startsWith('```')) {

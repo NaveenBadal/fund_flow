@@ -262,6 +262,7 @@ class GeminiAgentProvider implements AgentProvider {
     required List<Map<String, Object?>> messages,
     required List<McpToolDefinition> tools,
     void Function(String delta)? onContentDelta,
+    void Function(String tool, String arguments)? onToolArguments,
     AgentCancellationToken? cancellation,
   }) async {
     final translated = translateContents(messages);
@@ -337,13 +338,18 @@ class GeminiAgentProvider implements AgentProvider {
         final functionCall = part['functionCall'];
         if (functionCall is Map) {
           final args = functionCall['args'];
+          final name = functionCall['name']?.toString() ?? '';
           toolCalls.add(
             McpToolCall(
               id: 'call_${callIndex++}',
-              name: functionCall['name']?.toString() ?? '',
+              name: name,
               arguments: args is Map ? Map<String, Object?>.from(args) : {},
             ),
           );
+          // Gemini sends a function call whole rather than in fragments, so
+          // this fires once with the finished arguments. The answer still
+          // appears a beat before the turn closes, which is all this is for.
+          if (args is Map) onToolArguments?.call(name, jsonEncode(args));
         }
       }
     }

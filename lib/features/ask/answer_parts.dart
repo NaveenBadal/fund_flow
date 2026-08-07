@@ -7,9 +7,11 @@ import '../../app/app_controller.dart';
 import '../../design/flux.dart';
 import '../../domain/money_format.dart';
 import '../../domain/transaction.dart';
+import '../activity/activity_filter.dart';
 import '../activity/transaction_page.dart';
 import '../activity/transaction_row.dart';
 import '../common/formatting.dart';
+import '../shell/shell.dart';
 
 /// Renders one typed answer part.
 ///
@@ -37,9 +39,12 @@ class AnswerPartView extends ConsumerWidget {
 
     return switch (part.kind) {
       // The answer itself: full width, no card, largest prose on the screen.
-      AgentPartKind.conclusion => Text(
-        text() ?? '',
-        style: FluxType.bodyLarge.copyWith(color: palette.text),
+      AgentPartKind.conclusion => Semantics(
+        header: true,
+        child: Text(
+          text() ?? '',
+          style: FluxType.bodyLarge.copyWith(color: palette.text),
+        ),
       ),
 
       AgentPartKind.redirect => _RedirectBlock(text: text() ?? ''),
@@ -78,9 +83,12 @@ class AnswerPartView extends ConsumerWidget {
       AgentPartKind.breakdown => _Breakdown(part: part, money: money),
       AgentPartKind.transactionList => _TransactionList(part: part),
 
-      AgentPartKind.sourceNote => Text(
-        text() ?? '',
-        style: FluxType.caption.copyWith(color: palette.textFaint),
+      AgentPartKind.sourceNote => Semantics(
+        label: 'How this was measured',
+        child: Text(
+          text() ?? '',
+          style: FluxType.caption.copyWith(color: palette.textFaint),
+        ),
       ),
 
       AgentPartKind.followUps => _FollowUps(part: part, onFollowUp: onFollowUp),
@@ -158,32 +166,47 @@ class _MetricRow extends StatelessWidget {
             final value = amount is num && isPlausibleCurrency(currency)
                 ? money(amount.round(), currency!)
                 : data['value']?.toString() ?? '—';
-            return FluxCard(
-              raised: true,
-              radius: FluxRadius.sm,
-              padding: const EdgeInsets.all(FluxSpace.x4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    data['label']?.toString() ?? '',
-                    style: FluxType.caption.copyWith(color: palette.textMuted),
-                  ),
-                  const SizedBox(height: FluxSpace.x1 + 2),
-                  Text(
-                    value,
-                    style: FluxType.moneySmall.copyWith(
-                      color: palette.text,
-                      fontSize: 20,
+            final label = data['label']?.toString() ?? '';
+            // A tile reads as one fact, so it is announced as one. Left to
+            // itself a screen reader walks the label, the figure and the delta
+            // as three unrelated fragments, and the delta — "12%" with no
+            // subject — is meaningless on its own.
+            return Semantics(
+              label: [
+                if (label.isNotEmpty) label,
+                value,
+                if (change is num)
+                  '${change.isNegative ? 'down' : 'up'} '
+                      '${(change.abs() * 100).round()} percent',
+              ].join(', '),
+              excludeSemantics: true,
+              child: FluxCard(
+                raised: true,
+                radius: FluxRadius.sm,
+                padding: const EdgeInsets.all(FluxSpace.x4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: FluxType.caption.copyWith(color: palette.textMuted),
                     ),
-                  ),
-                  if (change is num) ...[
-                    const SizedBox(height: FluxSpace.x2),
-                    FluxDelta(fraction: change.toDouble(), compact: true),
-                  ] else if (anyChange)
-                    const SizedBox(height: FluxSpace.x2 + 18),
-                ],
+                    const SizedBox(height: FluxSpace.x1 + 2),
+                    Text(
+                      value,
+                      style: FluxType.moneySmall.copyWith(
+                        color: palette.text,
+                        fontSize: 20,
+                      ),
+                    ),
+                    if (change is num) ...[
+                      const SizedBox(height: FluxSpace.x2),
+                      FluxDelta(fraction: change.toDouble(), compact: true),
+                    ] else if (anyChange)
+                      const SizedBox(height: FluxSpace.x2 + 18),
+                  ],
+                ),
               ),
             );
           }(),
@@ -239,15 +262,41 @@ class _Comparison extends StatelessWidget {
   }
 }
 
-class _Breakdown extends StatelessWidget {
+/// How many breakdown rows show before the card asks to be expanded.
+///
+/// A breakdown is a shape as much as a table: eight bars are read at a glance,
+/// and thirty turn the thread into a scroll past one answer. The rest are one
+/// tap away rather than gone.
+const _breakdownRowLimit = 8;
+
+class _Breakdown extends ConsumerStatefulWidget {
   const _Breakdown({required this.part, required this.money});
   final AgentPart part;
   final MoneyFormatter money;
 
   @override
+  ConsumerState<_Breakdown> createState() => _BreakdownState();
+}
+
+class _BreakdownState extends ConsumerState<_Breakdown> {
+  bool _expanded = false;
+
+  /// Opens Activity narrowed to [category], when the ledger actually has that
+  /// category. A row that names a group the model invented would otherwise
+  /// send someone to an empty list, which reads as the answer being wrong.
+  void _openCategory(String category) {
+    ref.read(activityFilterProvider.notifier).state = ActivityFilter(
+      category: category,
+      period: ActivityPeriod.last90,
+    );
+    ref.read(shellTabProvider.notifier).state = 1;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.flux;
-    final rows = part.data['rows'];
+    final money = widget.money;
+    final rows = widget.part.data['rows'];
     if (rows is! List || rows.isEmpty) return const SizedBox.shrink();
 
     final entries = [
@@ -262,57 +311,121 @@ class _Breakdown extends StatelessWidget {
           );
         }(),
     ];
+    // The bar is scaled against the largest row overall, not the largest one
+    // currently shown, so expanding the card never rescales the bars already
+    // on screen.
     final largest = entries.fold<double>(
       0,
       (highest, row) => row.value > highest ? row.value : highest,
     );
+    final categories = {
+      for (final item
+          in ref.watch(appControllerProvider).value?.transactions ??
+              const <MoneyTransaction>[])
+        item.category.toLowerCase(),
+    };
+    final hidden = entries.length - _breakdownRowLimit;
+    final shown = _expanded ? entries : entries.take(_breakdownRowLimit);
 
     return FluxCard(
       raised: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (part.data['title'] != null) ...[
+          if (widget.part.data['title'] != null) ...[
             Text(
-              part.data['title'].toString(),
+              widget.part.data['title'].toString(),
               style: FluxType.label.copyWith(color: palette.text),
             ),
             const SizedBox(height: FluxSpace.x4),
           ],
-          for (final row in entries)
+          for (final row in shown)
+            () {
+              final known = categories.contains(row.label.toLowerCase());
+              final content = Padding(
+                padding: const EdgeInsets.only(bottom: FluxSpace.x3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: ShapeDecoration(
+                            color: palette.forCategory(row.label),
+                            shape: const CircleBorder(),
+                          ),
+                        ),
+                        const SizedBox(width: FluxSpace.x2),
+                        Expanded(
+                          child: Text(
+                            row.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: FluxType.body.copyWith(color: palette.text),
+                          ),
+                        ),
+                        MoneyText(money(row.value.round(), row.currency)),
+                        if (known) ...[
+                          const SizedBox(width: FluxSpace.x1),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 16,
+                            color: palette.textFaint,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: FluxSpace.x2),
+                    FluxProportion(
+                      fraction: largest <= 0 ? 0 : row.value / largest,
+                      color: palette.forCategory(row.label),
+                    ),
+                  ],
+                ),
+              );
+              // A figure in a breakdown is a claim about a set of records, and
+              // the only way to check a claim is to see them. Rows the ledger
+              // recognises go through to Activity, filtered to that group.
+              return known
+                  ? Semantics(
+                      button: true,
+                      label:
+                          '${row.label}, '
+                          '${money(row.value.round(), row.currency)}, '
+                          'show transactions',
+                      excludeSemantics: true,
+                      child: FluxPressable(
+                        feedback: PressFeedback.wash,
+                        onTap: () => _openCategory(row.label),
+                        child: content,
+                      ),
+                    )
+                  : content;
+            }(),
+          if (hidden > 0)
             Padding(
-              padding: const EdgeInsets.only(bottom: FluxSpace.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: ShapeDecoration(
-                          color: palette.forCategory(row.label),
-                          shape: const CircleBorder(),
-                        ),
-                      ),
-                      const SizedBox(width: FluxSpace.x2),
-                      Expanded(
-                        child: Text(
-                          row.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: FluxType.body.copyWith(color: palette.text),
-                        ),
-                      ),
-                      MoneyText(money(row.value.round(), row.currency)),
-                    ],
-                  ),
-                  const SizedBox(height: FluxSpace.x2),
-                  FluxProportion(
-                    fraction: largest <= 0 ? 0 : row.value / largest,
-                    color: palette.forCategory(row.label),
-                  ),
-                ],
+              padding: const EdgeInsets.only(top: FluxSpace.x1),
+              child: FluxPressable(
+                feedback: PressFeedback.wash,
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(
+                  children: [
+                    Text(
+                      _expanded ? 'Show less' : 'Show all ${entries.length}',
+                      style: FluxType.caption.copyWith(color: palette.iris),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 15,
+                      color: palette.iris,
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -325,14 +438,25 @@ class _Breakdown extends StatelessWidget {
 ///
 /// Tappable through to the detail page, and from there to the SMS the figure
 /// came out of. This is what makes a claim checkable rather than merely stated.
-class _TransactionList extends ConsumerWidget {
+/// How many cited transactions show before the card asks to be expanded.
+const _transactionRowLimit = 6;
+
+class _TransactionList extends ConsumerStatefulWidget {
   const _TransactionList({required this.part});
   final AgentPart part;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TransactionList> createState() => _TransactionListState();
+}
+
+class _TransactionListState extends ConsumerState<_TransactionList> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final palette = context.flux;
     final money = ref.watch(moneyProvider);
+    final part = widget.part;
     final ids = part.data['transactionIds'];
     if (ids is! List || ids.isEmpty) return const SizedBox.shrink();
 
@@ -356,24 +480,63 @@ class _TransactionList extends ConsumerWidget {
       );
     }
 
+    // An answer may cite dozens of records. Rendering all of them inline turns
+    // one answer into a page of ledger the person has to scroll past to reach
+    // the next thing they said, so the tail is folded until asked for.
+    final hidden = items.length - _transactionRowLimit;
+    final shown = _expanded ? items : items.take(_transactionRowLimit).toList();
+
     return FluxCard(
       raised: true,
       padding: EdgeInsets.zero,
       clip: true,
       child: Column(
         children: [
-          for (var index = 0; index < items.length; index++) ...[
+          for (var index = 0; index < shown.length; index++) ...[
             if (index > 0) const FluxLine(indent: FluxSpace.x16),
             TransactionRow(
-              transaction: items[index],
+              transaction: shown[index],
               money: money,
               showDate: true,
-              onTap: items[index].id == null
+              onTap: shown[index].id == null
                   ? null
                   : () => fluxPush(
                       context,
-                      (context) => TransactionPage(id: items[index].id!),
+                      (context) => TransactionPage(id: shown[index].id!),
                     ),
+            ),
+          ],
+          if (hidden > 0) ...[
+            const FluxLine(),
+            FluxPressable(
+              feedback: PressFeedback.wash,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: FluxSpace.x4,
+                  vertical: FluxSpace.x3 + 2,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _expanded
+                          ? 'Show fewer'
+                          : 'Show $hidden more '
+                                '${hidden == 1 ? 'transaction' : 'transactions'}',
+                      style: FluxType.caption.copyWith(color: palette.iris),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 15,
+                      color: palette.iris,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ],

@@ -19,7 +19,7 @@ abstract final class ScopeGuard {
     for (final rule in _rules) {
       if (!rule.pattern.hasMatch(text)) continue;
       // A ledger question that happens to contain a trigger word stays a ledger
-      // question: "how much do I spend on my Java course" is about spending.
+      // question: "how much do I spend on my Python course" is about spending.
       if (rule.yieldsToLedger && _looksLikeALedgerQuestion(text)) continue;
       return rule.reason;
     }
@@ -32,22 +32,42 @@ abstract final class ScopeGuard {
 
   static final _ledgerSignals = RegExp(
     r'\b(i\s+(spend|spent|paid|pay|earn|earned|save|saved)|my\s+(spend|spending|'
-    r'transactions?|ledger|budget|limit|account|salary|income|money|expenses?)|'
+    r'transactions?|ledger|budget|limit|account|salary|income|money|expenses?|'
+    r'subscription|course|class|membership|plan|fees?)|'
     r'how much (did|do|have) i|this month|last month|my statement)\b',
   );
 
   static final _rules = <_Rule>[
     _Rule(
-      // Writing or explaining software. The user's own report of the old
-      // behaviour was that asking for a Python program worked.
+      // Writing or explaining software, asked for as such. The user's own
+      // report of the old behaviour was that asking for a Python program
+      // worked.
+      //
+      // `app` is deliberately absent from these nouns: how this app works is
+      // in scope, and the old list refused "explain how the app works" as a
+      // request to explain code. `class` and `query` are absent for the same
+      // reason — a yoga class is a category of spending.
       pattern: RegExp(
-        r'\b(write|generate|debug|fix|explain|refactor|implement)\b[^.?!]{0,40}'
-        r'\b(code|program|script|function|class|query|regex|app|api|algorithm)\b'
-        r'|\b(python|javascript|typescript|dart|kotlin|swift|golang|rust|c\+\+|'
-        r'sql|html|css|bash|shell script|leetcode|stack trace|compiler)\b',
+        r'\b(write|generate|debug|refactor|implement)\b[^.?!]{0,40}'
+        r'\b(code|program|script|function|regex|api|algorithm)\b'
+        r'|\b(explain|fix)\b[^.?!]{0,40}\b(code|regex|algorithm|this (function|'
+        r'script|error)|stack trace)\b'
+        r'|\b(leetcode|stack trace|compiler|null pointer)\b',
       ),
       reason: 'I only work on your money — I do not write or explain code.',
       yieldsToLedger: false,
+    ),
+    _Rule(
+      // A programming language named on its own is almost always a coding
+      // request — but not when it is the subject of a purchase. "How much did
+      // I spend on my Python course" is a ledger question, and refusing it was
+      // the guard contradicting its own contract.
+      pattern: RegExp(
+        r'\b(python|javascript|typescript|dart|kotlin|swift|golang|rust|c\+\+|'
+        r'sql|html|css|bash|shell script)\b',
+      ),
+      reason: 'I only work on your money — I do not write or explain code.',
+      yieldsToLedger: true,
     ),
     _Rule(
       // Investment and product advice. Describing their own figures is fine;

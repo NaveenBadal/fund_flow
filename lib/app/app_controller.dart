@@ -492,6 +492,7 @@ class AppController extends AsyncNotifier<AppState> {
         asking: false,
         askStage: null,
         clearAskDraft: true,
+        clearAskParts: true,
         clearError: true,
         clearPendingAgentProposal: true,
         clearLastAgentAction: true,
@@ -511,6 +512,7 @@ class AppController extends AsyncNotifier<AppState> {
         asking: false,
         askStage: null,
         clearAskDraft: true,
+        clearAskParts: true,
         clearError: true,
         clearPendingAgentProposal: true,
         clearLastAgentAction: true,
@@ -1185,15 +1187,38 @@ class AppController extends AsyncNotifier<AppState> {
         history: history,
         cancellation: token,
         onStage: (stage) {
-          // Each stage begins a fresh reasoning turn; drop the prior draft.
+          // Each stage begins a fresh reasoning turn; drop the prior draft and
+          // any parts it had started composing. A compose call that failed
+          // evidence checking is sent back to be written again, and leaving
+          // the rejected version on screen would show an answer the app has
+          // already decided not to deliver.
           draft.clear();
           structuredDraft = false;
           lastDraftPaint = DateTime.fromMillisecondsSinceEpoch(0);
           if (state.hasValue) {
             state = AsyncData(
-              _value.copyWith(askStage: stage, clearAskDraft: true),
+              _value.copyWith(
+                askStage: stage,
+                clearAskDraft: true,
+                clearAskParts: true,
+              ),
             );
           }
+        },
+        // The answer arrives as a tool call, so without this the whole wait is
+        // a stage label over empty space and then everything at once. These are
+        // the parts whose JSON has closed, rendered as they close.
+        onParts: (parts) {
+          if (!state.hasValue) return;
+          state = AsyncData(
+            _value.copyWith(
+              askParts: parts,
+              askStage: 'Writing the answer',
+              // A half-written compose call is exactly the raw JSON the draft
+              // line exists to suppress; the parts replace it.
+              clearAskDraft: true,
+            ),
+          );
         },
         onContentDelta: (delta) {
           draft.write(delta);
@@ -1261,6 +1286,7 @@ class AppController extends AsyncNotifier<AppState> {
           asking: false,
           askStage: null,
           clearAskDraft: true,
+          clearAskParts: true,
           pendingAgentProposal: proposal,
           clearPendingAgentProposal: proposal == null,
         ),
@@ -1272,6 +1298,7 @@ class AppController extends AsyncNotifier<AppState> {
           asking: false,
           askStage: null,
           clearAskDraft: true,
+          clearAskParts: true,
           error: 'The answer was stopped. Nothing was changed.',
         ),
       );
@@ -1305,6 +1332,7 @@ class AppController extends AsyncNotifier<AppState> {
           asking: false,
           askStage: null,
           clearAskDraft: true,
+          clearAskParts: true,
           error: message,
           // Hold the question so a failure costs a tap rather than retyping
           // it. Losing what someone just asked is its own small insult on
@@ -1343,6 +1371,7 @@ class AppController extends AsyncNotifier<AppState> {
         asking: false,
         askStage: null,
         clearAskDraft: true,
+        clearAskParts: true,
         clearError: true,
       ),
     );

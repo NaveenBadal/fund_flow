@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart'
     show Icons, InputBorder, InputDecoration, TextField;
-import 'package:flutter/services.dart' show TextInputAction;
+import 'package:flutter/services.dart'
+    show HardwareKeyboard, KeyDownEvent, LogicalKeyboardKey, TextInputAction;
 import 'package:flutter/widgets.dart';
 
+import '../../agent/agent_presentation.dart';
 import '../../design/flux.dart';
+import 'answer_parts.dart';
 
 /// The composer.
 ///
@@ -37,6 +40,30 @@ class _AskComposerState extends State<AskComposer> {
   void initState() {
     super.initState();
     _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
+    // Enter sends, shift-enter breaks the line. The soft keyboard's return key
+    // stays a newline — `TextInputAction.newline` below — so this only changes
+    // behaviour for a real keyboard, where having no way to send without
+    // reaching for the screen is the kind of thing that gets noticed once and
+    // then resented. Handled on the field's own node so it runs ahead of the
+    // default text-editing shortcuts rather than after them.
+    _focus.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent) return KeyEventResult.ignored;
+      if (event.logicalKey != LogicalKeyboardKey.enter &&
+          event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+        return KeyEventResult.ignored;
+      }
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        return KeyEventResult.ignored;
+      }
+      if (widget.controller.text.trim().isEmpty || widget.busy) {
+        return KeyEventResult.ignored;
+      }
+      // Off the key handler, which must return synchronously — the input
+      // dispatcher gives it a few seconds before declaring the app dead, and
+      // sending kicks off a database write and a scroll animation.
+      Future.microtask(() => _send(keepFocus: true));
+      return KeyEventResult.handled;
+    };
   }
 
   @override
@@ -45,11 +72,17 @@ class _AskComposerState extends State<AskComposer> {
     super.dispose();
   }
 
-  void _send() {
+  /// Sends what is typed.
+  ///
+  /// [keepFocus] is set when the send came from a keyboard: dropping focus
+  /// there would make someone click back into the field for every question,
+  /// whereas after a tap on the button dismissing the soft keyboard is exactly
+  /// what is wanted — it is covering the answer.
+  void _send({bool keepFocus = false}) {
     final text = widget.controller.text.trim();
     if (text.isEmpty || widget.busy) return;
     widget.controller.clear();
-    _focus.unfocus();
+    if (!keepFocus) _focus.unfocus();
     widget.onSend(text);
   }
 
@@ -158,21 +191,109 @@ class _AskComposerState extends State<AskComposer> {
 }
 
 /// The live "working" line: the stage the run is actually in, with a gradient
-/// sweeping along the top edge.
+/// sweeping along the top edge, and the answer appearing beneath it as it is
+/// written.
 ///
 /// The stage text comes from the agent's own tool loop rather than a generic
 /// "Thinking…", because a person waiting eight seconds deserves to know whether
 /// it is reading their ledger or composing an answer.
-class WorkingIndicator extends StatefulWidget {
-  const WorkingIndicator({super.key, required this.stage, this.draft});
+class WorkingIndicator extends StatelessWidget {
+  const WorkingIndicator({
+    super.key,
+    required this.stage,
+    this.draft,
+    this.parts = const [],
+  });
+  final String stage;
+  final String? draft;
+
+  /// Parts of the answer that have finished arriving.
+  final List<AgentPart> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.flux;
+    // Once the answer starts arriving it is the thing to look at, and the
+    // sweeping bar above a real conclusion reads as the app still deciding
+    // when it has already decided. The stage line stays as the marker that
+    // there is more to come.
+    if (parts.isEmpty) {
+      return _Sweep(stage: stage, draft: draft);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < parts.length; index++) ...[
+          if (index > 0) const SizedBox(height: FluxSpace.x4),
+          // Follow-ups cannot be tapped until the answer is delivered and the
+          // real message takes over a frame later; the wiring belongs to that
+          // message, not to this preview of it.
+          AnswerPartView(part: parts[index], onFollowUp: (_) {}),
+        ],
+        const SizedBox(height: FluxSpace.x4),
+        Row(
+          children: [
+            _Dot(palette: palette),
+            const SizedBox(width: FluxSpace.x2),
+            Text(
+              stage,
+              style: FluxType.caption.copyWith(color: palette.textFaint),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The pulsing mark that says the answer is still being written.
+class _Dot extends StatefulWidget {
+  const _Dot({required this.palette});
+  final FluxPalette palette;
+
+  @override
+  State<_Dot> createState() => _DotState();
+}
+
+class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) => Opacity(
+      opacity: 0.35 + 0.65 * _controller.value,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: ShapeDecoration(
+          gradient: FluxPalette.ai,
+          shape: const CircleBorder(),
+        ),
+      ),
+    ),
+  );
+}
+
+class _Sweep extends StatefulWidget {
+  const _Sweep({required this.stage, this.draft});
   final String stage;
   final String? draft;
 
   @override
-  State<WorkingIndicator> createState() => _WorkingIndicatorState();
+  State<_Sweep> createState() => _WorkingIndicatorState();
 }
 
-class _WorkingIndicatorState extends State<WorkingIndicator>
+class _WorkingIndicatorState extends State<_Sweep>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,

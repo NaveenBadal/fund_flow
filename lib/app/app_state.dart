@@ -1,4 +1,5 @@
 import '../domain/conversation.dart';
+import '../agent/agent_presentation.dart';
 import '../agent/agent_proposal.dart';
 import '../domain/preferences.dart';
 import '../domain/transaction.dart';
@@ -60,6 +61,7 @@ class AppState {
     this.asking = false,
     this.askStage,
     this.askDraft,
+    this.askParts = const [],
     this.error,
     this.locked = false,
     this.pendingAgentProposal,
@@ -82,6 +84,16 @@ class AppState {
   final bool asking;
   final String? askStage;
   final String? askDraft;
+
+  /// The answer being composed, as far as it has arrived.
+  ///
+  /// An answer is delivered by a tool call, so until it completes there is
+  /// nothing to show and the wait — five to fifteen seconds — was spent
+  /// looking at a stage label above empty space. These are the parts whose
+  /// JSON has closed in the stream, rendered with the same widgets the
+  /// finished answer uses, so the conclusion is readable while the breakdown
+  /// under it is still arriving.
+  final List<AgentPart> askParts;
   final String? error;
   final bool locked;
   final AgentProposal? pendingAgentProposal;
@@ -111,6 +123,8 @@ class AppState {
     String? askStage,
     String? askDraft,
     bool clearAskDraft = false,
+    List<AgentPart>? askParts,
+    bool clearAskParts = false,
     String? error,
     bool clearError = false,
     bool? locked,
@@ -134,6 +148,10 @@ class AppState {
     asking: asking ?? this.asking,
     askStage: askStage ?? this.askStage,
     askDraft: clearAskDraft ? null : askDraft ?? this.askDraft,
+    // Cleared on its own flag, not with the draft: the moment the parts start
+    // arriving is exactly the moment the draft has to go, and one flag for
+    // both would have the parts wipe themselves as they were set.
+    askParts: clearAskParts ? const [] : askParts ?? this.askParts,
     error: clearError ? null : error ?? this.error,
     locked: locked ?? this.locked,
     pendingAgentProposal: clearPendingAgentProposal

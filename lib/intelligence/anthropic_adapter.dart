@@ -229,6 +229,7 @@ class AnthropicAgentProvider implements AgentProvider {
     required List<Map<String, Object?>> messages,
     required List<McpToolDefinition> tools,
     void Function(String delta)? onContentDelta,
+    void Function(String tool, String arguments)? onToolArguments,
     AgentCancellationToken? cancellation,
   }) async {
     final translated = translateMessages(messages);
@@ -297,7 +298,11 @@ class AnthropicAgentProvider implements AgentProvider {
           } else if (delta['type'] == 'input_json_delta') {
             final partial = delta['partial_json'];
             if (partial is String) {
-              (blocks[index] ??= _BlockDraft()).arguments.write(partial);
+              final block = blocks[index] ??= _BlockDraft();
+              block.arguments.write(partial);
+              if (block.name != null) {
+                onToolArguments?.call(block.name!, block.arguments.toString());
+              }
             }
           }
         case 'message_delta':

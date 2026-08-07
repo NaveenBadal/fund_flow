@@ -352,6 +352,7 @@ class _OllamaAiProvider implements AgentProvider {
     required List<Map<String, Object?>> messages,
     required List<McpToolDefinition> tools,
     void Function(String delta)? onContentDelta,
+    void Function(String tool, String arguments)? onToolArguments,
     AgentCancellationToken? cancellation,
   }) async {
     final request = http.Request('POST', _uri)
@@ -409,7 +410,19 @@ class _OllamaAiProvider implements AgentProvider {
         final calls = rawMessage['tool_calls'];
         if (calls is List) {
           for (final call in calls) {
-            if (call is Map) rawCalls.add(Map<Object?, Object?>.from(call));
+            if (call is! Map) continue;
+            rawCalls.add(Map<Object?, Object?>.from(call));
+            // Ollama emits a tool call as one complete object rather than in
+            // fragments, so this fires once with finished arguments.
+            final function = call['function'];
+            if (function is! Map) continue;
+            final name = function['name']?.toString();
+            final args = function['arguments'];
+            if (name == null || args == null) continue;
+            onToolArguments?.call(
+              name,
+              args is String ? args : jsonEncode(args),
+            );
           }
         }
       }
