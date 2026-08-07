@@ -1,10 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../design/flux.dart';
 import '../domain/preferences.dart';
-import '../ui/theme/precision_theme.dart';
 import 'app_controller.dart';
 import 'app_experience.dart';
+
+/// Matches the status and navigation bar glyphs to the theme.
+///
+/// Edge-to-edge means system bars sit over app content, so dark glyphs on a dark
+/// background is a real legibility failure rather than a cosmetic mismatch.
+class _SystemBars extends StatelessWidget {
+  const _SystemBars({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: const Color(0x00000000),
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: const Color(0x00000000),
+        systemNavigationBarIconBrightness: dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+      child: child,
+    );
+  }
+}
 
 class FundFlowApp extends ConsumerWidget {
   const FundFlowApp({super.key});
@@ -17,8 +44,8 @@ class FundFlowApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Fund Flow',
       debugShowCheckedModeBanner: false,
-      theme: PrecisionTheme.lightTheme,
-      darkTheme: PrecisionTheme.darkTheme,
+      theme: FluxTheme.light,
+      darkTheme: FluxTheme.dark,
       themeMode: switch (appearance) {
         AppearancePreference.system => ThemeMode.system,
         AppearancePreference.light => ThemeMode.light,
@@ -29,7 +56,14 @@ class FundFlowApp extends ConsumerWidget {
       // real accessibility need.
       builder: (context, child) => MediaQuery.withClampedTextScaling(
         maxScaleFactor: 1.4,
-        child: child!,
+        // Flux pages are built from plain surfaces rather than Scaffolds, so
+        // nothing else in the tree supplies a Material. Without one, text
+        // inherits Flutter's fallback style and every label renders with a
+        // yellow debug underline.
+        child: Material(
+          type: MaterialType.transparency,
+          child: _SystemBars(child: child!),
+        ),
       ),
       home: const AppExperience(),
     );

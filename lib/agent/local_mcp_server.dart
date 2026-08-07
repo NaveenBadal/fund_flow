@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../domain/analytics.dart';
+import '../domain/budget.dart';
 import '../domain/finance_summary.dart';
 import '../domain/conversation.dart';
 import '../domain/insight_engine.dart';
@@ -17,6 +19,7 @@ typedef ConversationReader = List<ConversationMessage> Function();
 typedef FinancialMemoryReader = Future<List<Map<String, Object?>>> Function();
 typedef AgentTelemetryReader =
     Future<List<Map<String, Object?>>> Function(int limit);
+typedef BudgetsReader = Future<List<CategoryBudget>> Function();
 
 class McpExecution {
   const McpExecution({required this.result, this.proposal, this.presentation});
@@ -33,7 +36,9 @@ class LocalMcpServer {
     ConversationReader? conversation,
     FinancialMemoryReader? financialMemory,
     AgentTelemetryReader? agentTelemetry,
+    BudgetsReader? budgets,
   }) : _transactions = transactions,
+       _budgets = budgets,
        _preferences = preferences,
        _updateStatus = updateStatus,
        _conversation = conversation,
@@ -46,6 +51,7 @@ class LocalMcpServer {
   final ConversationReader? _conversation;
   final FinancialMemoryReader? _financialMemory;
   final AgentTelemetryReader? _agentTelemetry;
+  final BudgetsReader? _budgets;
 
   static const _directions = ['incoming', 'outgoing'];
   static const _sources = ['message', 'notification', 'manual'];
@@ -199,6 +205,54 @@ class LocalMcpServer {
       ),
       McpRisk.read,
     ),
+    _tool(
+      'budgets_get',
+      'Read the monthly category limits this person set, with what has been '
+          'spent against each one this calendar month and a straight-line '
+          'projection to month end. Use this for any question about limits, '
+          'budgets, or whether they are on track.',
+      McpSchema.object(),
+      McpRisk.read,
+    ),
+    _tool(
+      'review_queue',
+      'List transactions the extraction was not confident about and that the '
+          'person has not confirmed yet. These are already counted in every total.',
+      McpSchema.object(
+        properties: {'limit': McpSchema.integer(minimum: 1, maximum: 50)},
+      ),
+      McpRisk.read,
+    ),
+    _tool(
+      'subscriptions_list',
+      'List merchants that charge on a repeating cycle, worked out locally from '
+          'three or more similar charges about a month apart. These are candidates, '
+          'never confirmed subscriptions; say so.',
+      McpSchema.object(),
+      McpRisk.read,
+    ),
+    _proposalTool(
+      'budgets_set',
+      'Propose one monthly spending limit for one category. Only when the '
+          'person asks for a limit or agrees to one you offered. limitMinor is in '
+          'the smallest currency unit.',
+      McpSchema.object(
+        properties: {
+          'category': McpSchema.string(),
+          'limitMinor': McpSchema.integer(minimum: 1),
+          'currency': McpSchema.string(),
+        },
+        required: ['category', 'limitMinor'],
+      ),
+    ),
+    _proposalTool(
+      'budgets_clear',
+      'Propose removing the monthly limit on one category.',
+      McpSchema.object(
+        properties: {'category': McpSchema.string()},
+        required: ['category'],
+      ),
+    ),
     _proposalTool(
       'memory_set',
       'Propose saving or replacing one durable financial fact. Never infer or save memory without explicit user intent and approval.',
@@ -323,6 +377,9 @@ class LocalMcpServer {
         'app_update_status' => await _update(call),
         'conversation_search' => _conversationSearch(call),
         'memory_list' => await _memoryList(call),
+        'budgets_get' => await _budgetsGet(call),
+        'review_queue' => _reviewQueue(call),
+        'subscriptions_list' => _subscriptions(call),
         'agent_performance' => await _agentPerformance(call),
         'answer_compose' => _compose(call),
         _ => _proposal(call),
@@ -844,6 +901,8 @@ class LocalMcpServer {
       'settings_update' => AgentProposalKind.updateSettings,
       'security_set_app_lock' => AgentProposalKind.setAppLock,
       'conversation_clear' => AgentProposalKind.clearConversation,
+      'budgets_set' => AgentProposalKind.setBudget,
+      'budgets_clear' => AgentProposalKind.deleteBudget,
       'memory_set' => AgentProposalKind.setMemory,
       'memory_delete' => AgentProposalKind.deleteMemory,
       _ => throw const McpProtocolException('Unsupported proposal.'),
@@ -861,6 +920,8 @@ class LocalMcpServer {
       AgentProposalKind.clearConversation => 'Clear this conversation',
       AgentProposalKind.setMemory => 'Save a financial memory',
       AgentProposalKind.deleteMemory => 'Delete a financial memory',
+      AgentProposalKind.setBudget => 'Set a monthly limit',
+      AgentProposalKind.deleteBudget => 'Remove a monthly limit',
     };
     final reversible = kind != AgentProposalKind.clearConversation;
     final requiresAuthentication =
@@ -975,7 +1036,130 @@ class LocalMcpServer {
       AgentProposalKind.deleteMemory => [
         if (field('key') case final value?) 'Forget: $value',
       ],
+      AgentProposalKind.setBudget => [
+        if (field('category') case final value?) 'Category: $value',
+        // Rendered as money here, not as the raw minor-unit integer the model
+        // supplied: the whole purpose of the card is that someone can see the
+        // amount they are agreeing to.
+        if (arguments['limitMinor'] case final int value)
+          'Monthly limit: '
+              '${formatMoney(value, (arguments['currency'] ?? _preferences().currency).toString())}',
+      ],
+      AgentProposalKind.deleteBudget => [
+        if (field('category') case final value?) 'Remove the limit on $value',
+      ],
     };
+  }
+
+  Future<McpExecution> _budgetsGet(McpToolCall call) async {
+    final budgets = await _budgets?.call() ?? const <CategoryBudget>[];
+    final now = DateTime.now();
+    final (from, to) = Analytics.monthOf(now);
+    return _ok(call, {
+      'month': _date(from),
+      'budgets': [
+        for (final budget in budgets)
+          () {
+            final spent = _transactions()
+                .where(
+                  (item) =>
+                      item.direction == TransactionDirection.outgoing &&
+                      item.currency == budget.currency &&
+                      item.category.toLowerCase() ==
+                          budget.category.toLowerCase() &&
+                      !item.occurredAt.isBefore(from) &&
+                      item.occurredAt.isBefore(to),
+                )
+                .fold<int>(0, (sum, item) => sum + item.amountMinor);
+            final status = BudgetStatus(
+              budget: budget,
+              spentMinor: spent,
+              transactionCount: 0,
+            );
+            return {
+              'category': budget.category,
+              'currency': budget.currency,
+              'limitMinor': budget.limitMinor,
+              'limitDisplay': formatMoney(budget.limitMinor, budget.currency),
+              'spentMinor': spent,
+              'spentDisplay': formatMoney(spent, budget.currency),
+              'remainingMinor': status.remainingMinor,
+              'remainingDisplay': formatMoney(
+                status.remainingMinor.abs(),
+                budget.currency,
+              ),
+              'over': status.over,
+              'fraction': double.parse(status.fraction.toStringAsFixed(3)),
+              'projectedMinor': status.projectedMinor(now),
+              'projectedDisplay': formatMoney(
+                status.projectedMinor(now),
+                budget.currency,
+              ),
+            };
+          }(),
+      ],
+      if (budgets.isEmpty)
+        'note':
+            'No limits are set. Offer to set one only if they ask about '
+            'budgets or being on track.',
+    });
+  }
+
+  McpExecution _reviewQueue(McpToolCall call) {
+    final limit = (call.arguments['limit'] as int?) ?? 20;
+    final queue =
+        _transactions()
+            .where((item) => item.reviewState == ReviewState.needsReview)
+            .toList()
+          ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+    return _ok(call, {
+      'count': queue.length,
+      'items': [
+        for (final item in queue.take(limit))
+          {
+            'id': item.id,
+            'merchant': item.merchant,
+            'amountMinor': item.amountMinor,
+            'amountDisplay': formatMoney(item.amountMinor, item.currency),
+            'currency': item.currency,
+            'category': item.category,
+            'occurredAt': _date(item.occurredAt),
+            'confidence': item.confidence,
+          },
+      ],
+      'note':
+          'Confirming or correcting these is the person\'s job, not '
+          'yours. Point them at Home > review rather than proposing edits '
+          'one by one.',
+    });
+  }
+
+  McpExecution _subscriptions(McpToolCall call) {
+    final now = DateTime.now();
+    final charges = Analytics.recurring(
+      transactions: _transactions(),
+      now: now,
+    );
+    return _ok(call, {
+      'method':
+          'Three or more charges at one merchant, within 25% of the same '
+          'amount, averaging 21-45 days apart.',
+      'candidates': [
+        for (final charge in charges)
+          {
+            'merchant': charge.merchant,
+            'currency': charge.currency,
+            'typicalMinor': charge.typicalMinor,
+            'typicalDisplay': formatMoney(charge.typicalMinor, charge.currency),
+            'occurrences': charge.occurrences,
+            'averageGapDays': charge.averageGapDays,
+            'lastCharged': _date(charge.lastCharged),
+            'nextExpected': _date(charge.nextExpected),
+            'category': charge.category,
+            'transactionIds': charge.transactionIds,
+          },
+      ],
+    });
   }
 
   /// Appended to a period tool's result when nothing matched.

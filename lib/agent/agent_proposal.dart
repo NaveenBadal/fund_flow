@@ -8,6 +8,8 @@ enum AgentProposalKind {
   clearConversation,
   setMemory,
   deleteMemory,
+  setBudget,
+  deleteBudget,
 }
 
 enum AgentProposalStatus { pending, approved, rejected, expired, stale }

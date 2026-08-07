@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../ui/screens/onboarding.dart';
-import '../ui/screens/shell.dart';
-import '../ui/widgets/precision_components.dart';
-import '../ui/tokens/precision_tokens.dart';
+import '../design/flux.dart';
+import '../features/onboarding/onboarding_page.dart';
+import '../features/shell/shell.dart';
 import 'app_controller.dart';
 
 class AppExperience extends ConsumerStatefulWidget {
@@ -57,7 +56,7 @@ class _AppExperienceState extends ConsumerState<AppExperience>
       ),
       data: (app) {
         if (!app.preferences.onboardingComplete) {
-          return const OnboardingScreen();
+          return const OnboardingPage();
         }
         if (app.locked) {
           if (!_unlockScheduled) {
@@ -71,7 +70,7 @@ class _AppExperienceState extends ConsumerState<AppExperience>
             onUnlock: () => ref.read(appControllerProvider.notifier).unlock(),
           );
         }
-        return const PrecisionShell();
+        return const FluxShell();
       },
     );
   }
@@ -82,16 +81,21 @@ class _Opening extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? PrecisionTokens.backgroundDark : PrecisionTokens.backgroundLight,
-      body: Center(
+    final palette = context.flux;
+    return ColoredBox(
+      color: palette.background,
+      child: Center(
         child: Semantics(
           label: 'Opening Fund Flow',
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isDark ? PrecisionTokens.textPrimaryDark : PrecisionTokens.textPrimaryLight,
+          // The wordmark rather than a spinner: the database opens in well under
+          // a second on a warm start, and a spinner that flashes for 200ms reads
+          // as a stutter.
+          child: ShaderMask(
+            shaderCallback: (bounds) => FluxPalette.ai.createShader(bounds),
+            blendMode: BlendMode.srcIn,
+            child: Text(
+              'Fund Flow',
+              style: FluxType.display.copyWith(color: const Color(0xFFFFFFFF)),
             ),
           ),
         ),
@@ -106,29 +110,36 @@ class _Locked extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: isDark ? PrecisionTokens.backgroundDark : PrecisionTokens.backgroundLight,
-      body: SafeArea(
+    final palette = context.flux;
+    return ColoredBox(
+      color: palette.background,
+      child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(PrecisionTokens.space24),
+          padding: const EdgeInsets.all(FluxSpace.page),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
-              const PrecisionHeader(
-                title: 'Locked',
-                subtitle: 'Authenticate with this device to open your records.',
+              Icon(Icons.lock_rounded, size: 30, color: palette.textMuted),
+              const SizedBox(height: FluxSpace.x5),
+              Text(
+                'Locked',
+                style: FluxType.display.copyWith(color: palette.text),
+              ),
+              const SizedBox(height: FluxSpace.x2),
+              Text(
+                'Your records are on this device and stay closed until you '
+                'unlock them.',
+                style: FluxType.body.copyWith(color: palette.textMuted),
               ),
               const Spacer(),
-              PrecisionButton(
+              FluxButton(
                 label: 'Unlock',
+                icon: Icons.fingerprint_rounded,
                 onPressed: onUnlock,
               ),
-              const SizedBox(height: PrecisionTokens.space24),
+              const SizedBox(height: FluxSpace.x6),
             ],
           ),
         ),
@@ -144,36 +155,41 @@ class _Failed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: isDark ? PrecisionTokens.surfaceDark : PrecisionTokens.surfaceLight,
-      body: SafeArea(
+    final palette = context.flux;
+    return ColoredBox(
+      color: palette.background,
+      child: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(PrecisionTokens.space24),
+          padding: const EdgeInsets.all(FluxSpace.page),
           children: [
-            const SizedBox(height: PrecisionTokens.space64),
-            const PrecisionHeader(
-              title: 'Could not open',
-              subtitle: 'Your records have not been changed. Try opening the app again.',
+            const SizedBox(height: FluxSpace.x16),
+            Text(
+              'Could not open',
+              style: FluxType.display.copyWith(color: palette.text),
             ),
-            const SizedBox(height: PrecisionTokens.space32),
-            PrecisionButton(
-              label: 'Try again',
-              onPressed: onRetry,
+            const SizedBox(height: FluxSpace.x2),
+            Text(
+              'Nothing has been changed. Opening the app again is safe.',
+              style: FluxType.body.copyWith(color: palette.textMuted),
             ),
-            const SizedBox(height: PrecisionTokens.space48),
-            PrecisionSurface(
-              elevated: true,
+            const SizedBox(height: FluxSpace.x6),
+            FluxButton(label: 'Try again', onPressed: onRetry),
+            const SizedBox(height: FluxSpace.x8),
+            FluxCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Technical detail', style: theme.textTheme.labelMedium),
-                  const SizedBox(height: PrecisionTokens.space12),
+                  Text(
+                    'TECHNICAL DETAIL',
+                    style: FluxType.overline.copyWith(color: palette.textMuted),
+                  ),
+                  const SizedBox(height: FluxSpace.x3),
                   SelectableText(
                     '$error',
-                    style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    style: FluxType.caption.copyWith(
+                      color: palette.textMuted,
+                      height: 1.6,
+                    ),
                   ),
                 ],
               ),

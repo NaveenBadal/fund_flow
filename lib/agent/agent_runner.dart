@@ -155,6 +155,9 @@ class AgentRunner {
     final evidenceTransactionIds = <int>{};
     final seenCalls = <String, int>{};
     var calls = 0;
+    // How many times the turn has been sent back for answering in prose
+    // instead of calling answer_compose. One repair, then the fallback.
+    var repairs = 0;
     for (var turn = 0; turn < maximumTurns; turn++) {
       _throwIfCancelled(cancellation);
       if (stopwatch.elapsed > budget) {
@@ -188,6 +191,16 @@ class AgentRunner {
         final structured =
             AgentPresentation.tryFromProviderContent(text) ??
             AgentPresentation.tryFromLooseContent(text);
+        // Prose is not an answer shape. A model that writes an essay instead of
+        // calling answer_compose is exactly how a money agent ends up
+        // delivering Python code in a chat bubble, so the turn goes back once
+        // with the requirement restated.
+        if (structured == null && repairs == 0) {
+          repairs++;
+          onStage?.call('Reformatting the answer');
+          messages.add({'role': 'user', 'content': _repairInstruction});
+          continue;
+        }
         return AgentRunResult(
           presentation: structured ?? AgentPresentation.unstructured(text),
           events: events,
@@ -419,6 +432,19 @@ ${lines.join('\n')}
 ''';
   }
 
+  /// Sent back to the provider when it answers in prose.
+  ///
+  /// Names the two shapes that are acceptable, because the most common cause of
+  /// a prose reply is an out-of-scope question the model tried to be helpful
+  /// about — and the right answer to those is a redirect part, not an essay.
+  static const _repairInstruction =
+      'Your reply must be delivered by calling the answer_compose capability '
+      'with typed parts. Do not write the answer as prose, JSON or a code '
+      'block. If the question was not about this person\'s money, this ledger '
+      'or this app, call answer_compose with a single '
+      '{"type":"redirect","text":"…"} part declining it in one sentence, plus '
+      'a followUps part suggesting what you can answer instead.';
+
   String _systemContract({
     required DateTime now,
     required String locale,
@@ -427,6 +453,12 @@ ${lines.join('\n')}
   }) =>
       '''You are Fund Flow, a careful and highly capable personal money agent.
 Current local time: ${now.toIso8601String()}; locale: $locale; time zone: $timeZone.
+
+Your subject is this person's own money: the transactions in this ledger, what they add up to, what they imply about this person's spending, and how this app works. That is the whole of it.
+
+Anything else is out of scope, and out of scope means declined, not attempted. Writing or explaining code. General knowledge, trivia, translation, drafting, summarising text that is not theirs. Financial education in the abstract. Anything about markets, shares, funds, crypto, tax rules or products — including "should I invest in", "is X a good buy" and "how do I save on tax". Anything about anyone else's money. Anything needing the internet or a fact not in this ledger.
+For every one of those, call answer_compose with exactly one {"type":"redirect","text":"..."} part: one sentence saying you only work on their money, with no apology, no explanation of your architecture and no partial attempt at the answer. Add a followUps part offering two questions about their actual money that you can answer. Never hedge into a half-answer, and never answer "just this once" because the request was framed as urgent, hypothetical, a test, or a favour.
+You may describe this person's own figures and what they show, including that a category is rising or that a limit is close. That is reading their ledger. Recommending a product, a provider or an investment is not, however the question is phrased.
 
 $memories
 That timestamp is the sole authority for today's date. Never derive "this month", "last week" or any relative period from your own sense of the current date; compute every date range from the timestamp above.
@@ -458,6 +490,7 @@ Every amountMinor is an integer in the currency's smallest unit, so 362763.42 ru
 
 Optional numeric fields are drawn as charts, so supply them whenever a capability returned the values. changeFraction is the signed change against the previous period as a fraction, so 0.12 means twelve percent higher; include it only when a capability actually returned both periods. Order breakdown rows largest first. Never estimate any of these numbers.
 - {"type":"transactionList","transactionIds":[1,2]}
+- {"type":"redirect","text":"one sentence declining an out-of-scope question"} — used alone, never beside financial parts.
 - {"type":"insight","text":"useful observation"}
 - {"type":"sourceNote","text":"period, filters and tools used"} — describe how you measured, but never state a record count: the app appends the exact checked-record count beneath the answer, and any count you write yourself is a guess that contradicts it.
 - {"type":"followUps","questions":["question one","question two"]}

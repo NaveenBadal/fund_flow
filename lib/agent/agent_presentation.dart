@@ -4,6 +4,15 @@ import '../domain/money_format.dart';
 
 enum AgentPartKind {
   conclusion,
+
+  /// The answer to a question this agent does not answer.
+  ///
+  /// Fund Flow's agent works on one person's own money and nothing else. Asked
+  /// to write code, explain an unrelated topic or recommend an investment, it
+  /// says so in one sentence and offers something it can actually do — rather
+  /// than becoming a worse general assistant, which is what a money agent
+  /// answering trivia is.
+  redirect,
   narrative,
   metricRow,
   comparison,
@@ -95,6 +104,7 @@ class AgentPart {
 
     return switch (kind) {
       AgentPartKind.conclusion ||
+      AgentPartKind.redirect ||
       AgentPartKind.narrative ||
       AgentPartKind.insight ||
       AgentPartKind.sourceNote ||
@@ -141,7 +151,14 @@ class AgentPresentation {
     final parts = raw
         .map((item) => AgentPart.fromJson(item as Map<Object?, Object?>))
         .toList();
-    if (!parts.any((part) => part.kind == AgentPartKind.conclusion)) {
+    // A redirect satisfies this in place of a conclusion: declining is a
+    // complete answer, and demanding a conclusion alongside it would force the
+    // model to invent a financial statement it was never asked for.
+    if (!parts.any(
+      (part) =>
+          part.kind == AgentPartKind.conclusion ||
+          part.kind == AgentPartKind.redirect,
+    )) {
       throw const AgentPresentationException(
         'An answer requires a conclusion.',
       );
@@ -159,6 +176,8 @@ class AgentPresentation {
   static List<AgentPart> ordered(List<AgentPart> parts) {
     int rank(AgentPartKind kind) => switch (kind) {
       AgentPartKind.conclusion => 0,
+      // A redirect is that turn's conclusion, so it takes the same position.
+      AgentPartKind.redirect => 0,
       AgentPartKind.warning => 1,
       AgentPartKind.narrative => 2,
       AgentPartKind.metricRow => 3,

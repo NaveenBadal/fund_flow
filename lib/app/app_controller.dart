@@ -21,6 +21,7 @@ import '../ingestion/sms_source.dart';
 import '../intelligence/ai_client.dart';
 import '../update/app_updater.dart';
 import 'app_state.dart';
+import 'budgets_controller.dart';
 
 const _maximumIngestionMessages = 12;
 
@@ -154,6 +155,26 @@ class AppController extends AsyncNotifier<AppState> {
     } finally {
       _refreshingNotifications = false;
     }
+  }
+
+  /// Pull-to-refresh: re-read the ledger, drain anything the notification
+  /// listener captured while the app was away, and start a message sync if one
+  /// has not run recently.
+  ///
+  /// Deliberately does not force a full re-import. A refresh gesture means
+  /// "catch me up", and re-reading a month of SMS through a model on every pull
+  /// would spend someone's tokens for results the cooldown already has.
+  Future<void> refreshFromSources() async {
+    if (!state.hasValue || _value.locked) return;
+    final store = ref.read(storeProvider);
+    state = AsyncData(
+      _value.copyWith(
+        transactions: await store.transactions(),
+        clearError: true,
+      ),
+    );
+    await _refreshPendingNotifications();
+    await _maybeAutoSync();
   }
 
   AppState get _value => state.requireValue;
@@ -510,6 +531,30 @@ class AppController extends AsyncNotifier<AppState> {
   }
 
   /// Clears the thread being read, which is what the agent proposal offers.
+  /// Deletes every record this app holds, including the provider key.
+  ///
+  /// The key goes too: leaving a working key behind after someone asked to erase
+  /// everything means the next launch quietly starts importing their messages
+  /// again, which is the opposite of what they asked for.
+  Future<void> eraseAllData() async {
+    await ref.read(storeProvider).eraseEverything();
+    await ref.read(securePreferencesProvider).writeApiKey('');
+    ref.invalidate(budgetsProvider);
+    state = AsyncData(
+      _value.copyWith(
+        transactions: const [],
+        conversation: const [],
+        threads: const [],
+        clearActiveThreadId: true,
+        aiConnection: AiConnection.disconnected,
+        clearPendingAgentProposal: true,
+        clearLastAgentAction: true,
+        clearRetryQuestion: true,
+        clearError: true,
+      ),
+    );
+  }
+
   Future<void> clearConversation() async {
     final threadId = _value.activeThreadId;
     if (threadId == null) {
@@ -1024,6 +1069,7 @@ class AppController extends AsyncNotifier<AppState> {
         preferences: () => _value.preferences,
         conversation: () => _value.conversation,
         financialMemory: () => ref.read(storeProvider).financialMemory(),
+        budgets: () => ref.read(storeProvider).budgets(),
         agentTelemetry: (limit) =>
             ref.read(storeProvider).recentAgentRuns(limit: limit),
         updateStatus: () async {
@@ -1507,6 +1553,32 @@ class AppController extends AsyncNotifier<AppState> {
         );
         await ref.read(storeProvider).setFinancialMemory(key, value);
         return (applied: true, undoId: memoryUndoId);
+      case AgentProposalKind.setBudget:
+        final category = proposal.arguments['category']?.toString().trim();
+        final limit = proposal.arguments['limitMinor'];
+        if (category == null ||
+            category.isEmpty ||
+            limit is! int ||
+            limit <= 0) {
+          return (applied: false, undoId: null);
+        }
+        await ref
+            .read(budgetsProvider.notifier)
+            .setLimit(
+              category: category,
+              limitMinor: limit,
+              currency:
+                  proposal.arguments['currency']?.toString() ??
+                  _value.preferences.currency,
+            );
+        return (applied: true, undoId: null);
+      case AgentProposalKind.deleteBudget:
+        final category = proposal.arguments['category']?.toString().trim();
+        if (category == null || category.isEmpty) {
+          return (applied: false, undoId: null);
+        }
+        await ref.read(budgetsProvider.notifier).remove(category);
+        return (applied: true, undoId: null);
       case AgentProposalKind.deleteMemory:
         final key = arguments['key']?.toString().trim() ?? '';
         if (key.isEmpty) return refused;

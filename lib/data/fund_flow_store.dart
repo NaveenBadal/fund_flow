@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../agent/agent_proposal.dart';
 import '../agent/agent_runner.dart';
+import '../domain/budget.dart';
 import '../domain/conversation.dart';
 import '../domain/import_audit.dart';
 import '../domain/transaction.dart';
@@ -14,7 +15,7 @@ import '../ingestion/message_candidate.dart';
 class FundFlowStore {
   FundFlowStore({Database? database}) : _database = database;
   Database? _database;
-  static const schemaVersion = 6;
+  static const schemaVersion = 7;
 
   Future<Database> get database async => _database ??= await openDatabase(
     path.join(await getDatabasesPath(), 'fund_flow_greenfield.db'),
@@ -47,6 +48,7 @@ class FundFlowStore {
       await _createAgentTelemetryTable(db);
       await _createFinancialMemoryTable(db);
       await _createConversationThreads(db);
+      await _createBudgetsTable(db);
     },
     onUpgrade: (db, oldVersion, _) async {
       if (oldVersion < 2) {
@@ -62,6 +64,7 @@ class FundFlowStore {
       if (oldVersion < 4) await _createAgentTelemetryTable(db);
       if (oldVersion < 5) await _createFinancialMemoryTable(db);
       if (oldVersion < 6) await _migrateToConversationThreads(db);
+      if (oldVersion < 7) await _createBudgetsTable(db);
     },
   );
 
@@ -148,6 +151,36 @@ class FundFlowStore {
       'thread_id': threadId,
     }, where: 'thread_id IS NULL');
   }
+
+  /// Monthly ceilings, keyed by category.
+  ///
+  /// The category is the primary key rather than an autoincrement id: there is
+  /// exactly one live limit per category, and letting two rows exist for
+  /// "Food" would mean the app has to decide which one is real every time it
+  /// draws a ring.
+  static Future<void> _createBudgetsTable(Database db) async {
+    await db.execute('''CREATE TABLE IF NOT EXISTS budgets(
+      category TEXT PRIMARY KEY, limit_minor INTEGER NOT NULL,
+      currency TEXT NOT NULL, created_at TEXT NOT NULL)''');
+  }
+
+  Future<List<CategoryBudget>> budgets() async {
+    final rows = await (await database).query('budgets', orderBy: 'category');
+    return rows.map(CategoryBudget.fromMap).toList();
+  }
+
+  Future<void> saveBudget(CategoryBudget value) async =>
+      (await database).insert(
+        'budgets',
+        value.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+  Future<void> deleteBudget(String category) async => (await database).delete(
+    'budgets',
+    where: 'category = ?',
+    whereArgs: [category],
+  );
 
   static Future<void> _createFinancialMemoryTable(Database db) async {
     await db.execute('''CREATE TABLE IF NOT EXISTS financial_memory(
@@ -869,6 +902,36 @@ class FundFlowStore {
         'key': key,
         'value': value,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  /// Deletes everything this app holds about someone.
+  ///
+  /// One statement per table rather than deleting the file: the database handle
+  /// stays valid, so the app keeps working afterwards instead of needing a
+  /// restart. The provider key is not here — it lives in the keystore and is
+  /// cleared separately by the caller.
+  Future<void> eraseEverything() async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      for (final table in const [
+        'transactions',
+        'conversation',
+        'conversation_threads',
+        'agent_proposals',
+        'tool_calls',
+        'undo_records',
+        'import_attempts',
+        'import_runs',
+        'import_batches',
+        'import_items',
+        'agent_runs',
+        'financial_memory',
+        'budgets',
+      ]) {
+        await transaction.delete(table);
+      }
+    });
+  }
+
   Future<void> close() async {
     await _database?.close();
     _database = null;
